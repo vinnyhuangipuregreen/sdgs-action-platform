@@ -41,20 +41,23 @@ def init_db():
     with get_db() as conn:
         cursor = conn.cursor()
         
+        # Users table with unit_code and unit_name
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
-            email TEXT NOT NULL UNIQUE,
+            email TEXT NOT NULL,
             email_backup TEXT,
             phone TEXT NOT NULL,
+            unit_code TEXT DEFAULT '',
+            unit_name TEXT DEFAULT '佛光學員',
             password_hash TEXT NOT NULL,
             role TEXT NOT NULL DEFAULT 'student',
-            unit_name TEXT DEFAULT '佛光學員',
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
         """)
         
+        # SDGs Goals table
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS sdgs_goals (
             id INTEGER PRIMARY KEY,
@@ -68,6 +71,7 @@ def init_db():
         );
         """)
         
+        # SDGs Targets table
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS sdgs_targets (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -79,6 +83,7 @@ def init_db():
         );
         """)
         
+        # Worksheets table
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS worksheets (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -102,6 +107,7 @@ def init_db():
         );
         """)
         
+        # Game Scores table with game_type
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS game_scores (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -118,6 +124,7 @@ def init_db():
         );
         """)
 
+        # Email Logs table
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS system_email_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -133,6 +140,7 @@ def init_db():
         """)
         
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_worksheets_user ON worksheets(user_id);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_game_scores_score ON game_scores(score DESC);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_targets_goal ON sdgs_targets(goal_id);")

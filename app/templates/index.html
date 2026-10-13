@@ -4,11 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SDGs 與氣候行動—連動分析與學習平台</title>
-  <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Chart.js CDN -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <!-- Custom Styles -->
   <link rel="stylesheet" href="/static/css/style.css">
   <script>
     tailwind.config = {
@@ -30,14 +27,12 @@
 </head>
 <body class="bg-slate-100 text-slate-800 antialiased min-h-screen flex flex-col">
 
-  <!-- Toast Container -->
   <div id="toastContainer" class="fixed top-5 right-5 z-50 flex flex-col gap-2"></div>
 
-  <!-- Top Global Header -->
+  <!-- Header -->
   <header class="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="flex justify-between items-center h-16">
-        <!-- Logo & Title -->
         <div class="flex items-center space-x-3">
           <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white font-black text-xl shadow-md">
             🌏
@@ -48,7 +43,6 @@
           </div>
         </div>
 
-        <!-- User Info & Logout -->
         <div class="flex items-center space-x-3">
           <div class="text-right">
             <div id="currentUserName" class="text-xs font-bold text-slate-800">未登入</div>
@@ -61,7 +55,7 @@
       </div>
     </div>
 
-    <!-- Navigation Tabs Bar -->
+    <!-- Navigation Tabs -->
     <nav class="bg-slate-50 border-t border-slate-200 px-4 sm:px-8 overflow-x-auto">
       <div class="max-w-7xl mx-auto flex space-x-1 sm:space-x-3">
         <button data-nav-tab="worksheet" class="px-3.5 py-2.5 text-xs sm:text-sm font-bold border-b-2 border-emerald-600 text-emerald-700 bg-emerald-50/50 flex items-center gap-1.5 transition-colors whitespace-nowrap">
@@ -70,21 +64,17 @@
         <button data-nav-tab="sdgs" class="px-3.5 py-2.5 text-xs sm:text-sm font-bold text-slate-600 hover:text-emerald-700 flex items-center gap-1.5 transition-colors whitespace-nowrap">
           <span>🔍</span> 17目標169細項速查表
         </button>
-        <!-- Game 1: Left Game (Memory Match) -->
         <button data-nav-tab="memory_game" class="px-3.5 py-2.5 text-xs sm:text-sm font-bold text-slate-600 hover:text-sky-700 flex items-center gap-1.5 transition-colors whitespace-nowrap">
           <span>🃏</span> SDG 永續翻牌大考驗
           <span class="text-[10px] bg-sky-500 text-white px-1.5 py-0.2 rounded-full font-black">NEW</span>
         </button>
-        <!-- Game 2: Right Game (Rebuilt Combo Blast) -->
         <button data-nav-tab="combo_game" class="px-3.5 py-2.5 text-xs sm:text-sm font-bold text-slate-600 hover:text-emerald-700 flex items-center gap-1.5 transition-colors whitespace-nowrap">
           <span>🎮</span> SDG 連鎖修復師挑戰
           <span class="text-[10px] bg-red-500 text-white px-1.5 py-0.2 rounded-full font-black animate-pulse">HOT</span>
         </button>
-        <!-- Leaderboard -->
         <button data-nav-tab="leaderboard" class="px-3.5 py-2.5 text-xs sm:text-sm font-bold text-slate-600 hover:text-amber-700 flex items-center gap-1.5 transition-colors whitespace-nowrap">
           <span>🏆</span> 天梯排行榜
         </button>
-        <!-- Admin Panel: Right of Leaderboard -->
         <button data-nav-tab="admin" class="px-3.5 py-2.5 text-xs sm:text-sm font-bold text-purple-700 hover:text-purple-900 bg-purple-50/70 hover:bg-purple-100 rounded-lg flex items-center gap-1.5 transition-colors whitespace-nowrap border border-purple-200">
           <span>⚙️</span> 管理後台
         </button>
@@ -92,11 +82,11 @@
     </nav>
   </header>
 
-  <!-- Main Container -->
+  <!-- Main Content -->
   <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
 
     <!-- ======================================================================= -->
-    <!-- TAB 1: 連動分析練習單 (Worksheet Form) -->
+    <!-- TAB 1: 連動分析練習單 -->
     <!-- ======================================================================= -->
     <section id="tabPane_worksheet" class="tab-pane space-y-6">
       <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -122,19 +112,18 @@
       </div>
 
       <div class="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-sm space-y-8">
-        <!-- Basic Info -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-6 border-b border-slate-200">
           <div>
             <label class="block text-xs font-bold text-slate-700 mb-1">學員姓名</label>
             <input type="text" id="ws_userName" class="w-full text-sm bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-medium" readonly>
           </div>
           <div>
-            <label class="block text-xs font-bold text-slate-700 mb-1">分會／單位</label>
-            <input type="text" id="ws_unitName" class="w-full text-sm border border-slate-300 rounded-xl px-3 py-2 focus:ring-emerald-500 focus:border-emerald-500" placeholder="例如：佛光會宜蘭分會、應科院三年級">
+            <label class="block text-xs font-bold text-slate-700 mb-1">所屬分會／分團／童軍團</label>
+            <input type="text" id="ws_unitName" class="w-full text-sm border border-slate-300 rounded-xl px-3 py-2 focus:ring-emerald-500 focus:border-emerald-500" placeholder="例如：大慈佛光童軍團、北投第一分會">
           </div>
         </div>
 
-        <!-- Section 1 & 2: Center Action -->
+        <!-- Center action -->
         <div class="space-y-4">
           <div class="flex items-center gap-2">
             <span class="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-black text-sm">二</span>
@@ -163,7 +152,7 @@
           </div>
         </div>
 
-        <!-- Section 3: Radial Analysis -->
+        <!-- Radial Analysis -->
         <div class="space-y-4">
           <div class="flex justify-between items-center">
             <div class="flex items-center gap-2">
@@ -180,7 +169,7 @@
           <div id="radialLinesContainer" class="space-y-3"></div>
         </div>
 
-        <!-- Section 4: Trade-off Analysis -->
+        <!-- Trade-off Analysis -->
         <div class="space-y-4">
           <div class="flex justify-between items-center">
             <div class="flex items-center gap-2">
@@ -197,7 +186,7 @@
           <div id="tradeoffContainer" class="space-y-3"></div>
         </div>
 
-        <!-- Section 5: Chat Snippet -->
+        <!-- Chat Snippet -->
         <div class="bg-gradient-to-r from-emerald-50 to-teal-50 p-5 rounded-2xl border border-emerald-200 space-y-3">
           <div class="flex justify-between items-center">
             <div class="flex items-center gap-2">
@@ -212,7 +201,7 @@
           <p class="text-[11px] text-teal-700">格式範例：A｜淨灘｜14、12、3｜風險：清出的垃圾沒有妥善處理</p>
         </div>
 
-        <!-- Section 6: Causal Chain -->
+        <!-- Causal Chain -->
         <div class="space-y-4">
           <div class="flex items-center gap-2">
             <span class="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-black text-sm">六</span>
@@ -240,7 +229,7 @@
           </div>
         </div>
 
-        <!-- Section 7: Self-check -->
+        <!-- Self-check -->
         <div class="space-y-3 bg-slate-50 p-5 rounded-2xl border border-slate-200">
           <div class="flex items-center gap-2">
             <span class="w-7 h-7 rounded-lg bg-emerald-700 text-white flex items-center justify-center font-black text-sm">七</span>
@@ -261,12 +250,12 @@
             </label>
             <label class="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-200 cursor-pointer">
               <input type="checkbox" id="ws_check4" class="rounded text-emerald-600 focus:ring-emerald-500">
-              <span class="text-slate-700 font-medium">我提出了做到的改善方法。</span>
+              <span class="text-slate-700 font-medium">我提出了做得到改善方法。</span>
             </label>
           </div>
         </div>
 
-        <!-- Section 8: Commitment -->
+        <!-- Commitment -->
         <div class="space-y-4">
           <div class="flex items-center gap-2">
             <span class="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-black text-sm">八</span>
@@ -298,7 +287,7 @@
     </section>
 
     <!-- ======================================================================= -->
-    <!-- TAB 2: SDGs 17目標169細項速查表 (Quick Reference & Search) -->
+    <!-- TAB 2: SDGs 17目標169細項速查表 -->
     <!-- ======================================================================= -->
     <section id="tabPane_sdgs" class="tab-pane hidden space-y-6">
       <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
@@ -328,7 +317,7 @@
     </section>
 
     <!-- ======================================================================= -->
-    <!-- TAB 3: 🃏 遊戲一：SDG 永續翻牌大考驗 (Memory Match - Left Game) -->
+    <!-- TAB 3: 🃏 遊戲一：SDG 永續翻牌大考驗 -->
     <!-- ======================================================================= -->
     <section id="tabPane_memory_game" class="tab-pane hidden space-y-6">
       <div id="memoryIntroCard" class="bg-slate-900 text-white p-8 rounded-3xl shadow-xl text-center space-y-4">
@@ -343,7 +332,6 @@
       </div>
 
       <div id="memoryMainScreen" class="hidden space-y-6">
-        <!-- HUD -->
         <div class="bg-slate-900 text-white p-5 rounded-2xl border border-slate-800 shadow-md flex justify-between items-center">
           <div class="flex items-center gap-6">
             <div>
@@ -364,12 +352,9 @@
             <span id="memoryScoreVal" class="text-2xl font-black text-sky-400 font-mono">0</span>
           </div>
         </div>
-
-        <!-- 4x3 Grid (12 Cards) -->
         <div id="memoryGridContainer" class="grid grid-cols-3 sm:grid-cols-4 gap-3 sm:gap-4 max-w-4xl mx-auto"></div>
       </div>
 
-      <!-- Victory Screen -->
       <div id="memoryGameOverScreen" class="hidden bg-slate-900 text-white p-8 rounded-3xl text-center space-y-6 shadow-2xl border border-sky-500/30">
         <span class="text-5xl inline-block animate-bounce">🏆</span>
         <h2 class="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-indigo-300">
@@ -405,7 +390,7 @@
     </section>
 
     <!-- ======================================================================= -->
-    <!-- TAB 4: 🎮 遊戲二：SDG 永續連鎖消消樂 (Combo Blast - Right Game) -->
+    <!-- TAB 4: 🎮 遊戲二：SDG 永續連鎖消消樂 -->
     <!-- ======================================================================= -->
     <section id="tabPane_combo_game" class="tab-pane hidden space-y-6">
       <div id="comboIntroCard" class="bg-slate-900 text-white p-8 rounded-3xl shadow-xl text-center space-y-4">
@@ -420,11 +405,10 @@
       </div>
 
       <div id="comboMainScreen" class="hidden space-y-6">
-        <!-- HUD -->
         <div class="bg-slate-900 text-white p-5 rounded-2xl border border-slate-800 shadow-md flex justify-between items-center">
           <div class="flex items-center gap-6">
             <div>
-              <span class="text-[10px] text-slate-400 block font-bold">剩餘步數 (Moves)</span>
+              <span class="text-[10px] text-slate-400 block font-bold">剩餘步數</span>
               <span id="comboMovesVal" class="text-2xl font-black text-amber-400 font-mono">15</span>
             </div>
             <div>
@@ -438,13 +422,11 @@
           </div>
         </div>
 
-        <!-- 5x5 Gems Grid -->
         <div class="flex justify-center p-4 bg-slate-900/60 rounded-3xl border border-slate-800 max-w-md mx-auto">
           <div id="comboGridContainer" class="grid grid-cols-5 gap-2 sm:gap-3"></div>
         </div>
       </div>
 
-      <!-- Victory Screen -->
       <div id="comboGameOverScreen" class="hidden bg-slate-900 text-white p-8 rounded-3xl text-center space-y-6 shadow-2xl border border-emerald-500/30">
         <span class="text-5xl inline-block animate-bounce">🏆</span>
         <h2 class="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-300">
@@ -476,7 +458,7 @@
     </section>
 
     <!-- ======================================================================= -->
-    <!-- TAB 5: 🏆 天梯榮譽排行榜 (Leaderboard) -->
+    <!-- TAB 5: 🏆 天梯榮譽排行榜 -->
     <!-- ======================================================================= -->
     <section id="tabPane_leaderboard" class="tab-pane hidden space-y-6">
       <div id="myLeaderboardCard" class="hidden bg-gradient-to-r from-emerald-600 to-teal-600 text-white p-5 rounded-2xl shadow-md flex justify-between items-center">
@@ -532,11 +514,11 @@
     </section>
 
     <!-- ======================================================================= -->
-    <!-- TAB 6: ⚙️ 管理後台 (Admin Dashboard, Review, Batch Management) -->
+    <!-- TAB 6: ⚙️ 管理後台 (Full CRUD, Import, Export, Grading) -->
     <!-- ======================================================================= -->
     <section id="tabPane_admin" class="tab-pane hidden space-y-6">
       
-      <!-- Stats Cards -->
+      <!-- Stats Summary -->
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
           <span class="text-xs font-bold text-slate-500 block">全體註冊學員</span>
@@ -583,7 +565,7 @@
         <div class="p-5 border-b border-slate-100 flex justify-between items-center">
           <div>
             <h3 class="font-black text-base text-slate-900">學員練習單審核與評分管理</h3>
-            <p class="text-xs text-slate-500">點選 [詳情] 檢視完整內容並可匯出 Word 檔；評分完成自動發信通知學員</p>
+            <p class="text-xs text-slate-500">點選 [詳情] 檢視完整內容並可匯出 Word 檔；評分完成自動發信通知該學員信箱</p>
           </div>
           <button onclick="exportWorksheetsCSV()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition-colors">
             📥 批次匯出 CSV
@@ -607,20 +589,26 @@
         </div>
       </div>
 
-      <!-- Students Directory Table with Batch CRUD -->
+      <!-- Students Directory Table with 6 Columns + Full CRUD/Import/Export -->
       <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
         <div class="p-5 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <div>
-            <h3 class="font-black text-base text-slate-900">學員帳號與權限名冊維護</h3>
-            <p class="text-xs text-slate-500">支援資料修改、批次選取刪除與批次匯入名冊</p>
+            <h3 class="font-black text-base text-slate-900">學員帳號與權限名冊維護 (完整 6 欄位架構)</h3>
+            <p class="text-xs text-slate-500">支援【新增】、【修改】、【刪除】、【瀏覽】、【匯入】與【匯出】學員名單</p>
           </div>
           <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-            <input type="text" id="adminStudentSearch" oninput="loadAdminStudents(this.value)" class="text-xs border border-slate-300 rounded-xl px-3 py-1.5 w-48" placeholder="搜尋姓名 / Email / 電話">
-            <button type="button" onclick="openBatchImportModal()" class="px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-bold">
-              📥 批次匯入名單
+            <input type="text" id="adminStudentSearch" oninput="loadAdminStudents(this.value)" class="text-xs border border-slate-300 rounded-xl px-3 py-1.5 w-40" placeholder="搜尋姓名/Email/分會">
+            <button type="button" onclick="openAddStudentModal()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm">
+              ＋ 新增學員
+            </button>
+            <button type="button" onclick="openBatchImportModal()" class="px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-bold shadow-sm">
+              📥 匯入名單
+            </button>
+            <button type="button" onclick="exportStudentsCSV()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold shadow-sm">
+              📤 匯出名單 (CSV)
             </button>
             <button type="button" id="batchDeleteBtn" onclick="executeBatchDeleteStudents()" disabled class="px-3 py-1.5 bg-red-600 hover:bg-red-700 disabled:bg-slate-200 text-white rounded-xl text-xs font-bold">
-              🗑️ 批次刪除選取 (<span id="selectedStudentCount">0</span>)
+              🗑️ 刪除選取 (<span id="selectedStudentCount">0</span>)
             </button>
           </div>
         </div>
@@ -628,14 +616,16 @@
           <table class="w-full text-left text-xs">
             <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold">
               <tr>
-                <th class="p-3 text-center w-10">
+                <th class="p-3 text-center w-8">
                   <input type="checkbox" id="masterStudentCb" onclick="toggleSelectAllStudents(this)">
                 </th>
                 <th class="p-3">ID</th>
-                <th class="p-3">姓名</th>
-                <th class="p-3">Email</th>
-                <th class="p-3">聯絡電話</th>
-                <th class="p-3">分會單位</th>
+                <th class="p-3">學員姓名</th>
+                <th class="p-3">Email（帳號）</th>
+                <th class="p-3">Email（補課平台）</th>
+                <th class="p-3">聯絡電話（密碼）</th>
+                <th class="p-3">分會編號</th>
+                <th class="p-3">所屬分會／童軍團（完整名稱）</th>
                 <th class="p-3 text-right">操作</th>
               </tr>
             </thead>
@@ -652,7 +642,7 @@
   <!-- MODALS -->
   <!-- ======================================================================= -->
 
-  <!-- 1. Student Login Modal (Clean, No Demo Dropdown!) -->
+  <!-- 1. Student Login Modal with Disambiguation Picker -->
   <div id="loginModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
     <div class="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-slate-100">
       <div class="text-center mb-6">
@@ -660,18 +650,24 @@
           🌏
         </div>
         <h3 class="text-xl font-extrabold text-slate-900">學員登入平台</h3>
-        <p class="text-xs text-slate-500 mt-1">請輸入 Email 或手機號碼（預設密碼為手機號碼）</p>
+        <p class="text-xs text-slate-500 mt-1">請輸入 Email（帳號）或電話（預設密碼為手機號碼）</p>
       </div>
 
       <div id="loginError" class="hidden mb-4 p-3 rounded-xl bg-red-50 text-red-700 text-xs font-semibold text-center"></div>
 
+      <!-- Disambiguation Picker for Shared Emails -->
+      <div id="studentPickerBox" class="hidden mb-4 p-4 rounded-2xl bg-emerald-50/80 border border-emerald-300">
+        <p class="text-xs font-bold text-emerald-900 mb-2">📌 此帳號對應多名學員，請點選您的姓名以完成登入：</p>
+        <div id="studentPickerList" class="space-y-1.5 max-h-48 overflow-y-auto pr-1"></div>
+      </div>
+
       <form id="loginForm" class="space-y-4">
         <div>
-          <label class="block text-xs font-bold text-slate-700 mb-1">帳號 (Email 或 手機)</label>
-          <input type="text" id="loginAccount" required class="w-full text-sm border border-slate-300 rounded-xl px-3 py-2.5 focus:ring-emerald-500" placeholder="例如：test001@gmail.com 或 0920111111">
+          <label class="block text-xs font-bold text-slate-700 mb-1">Email（帳號）或電話</label>
+          <input type="text" id="loginAccount" required class="w-full text-sm border border-slate-300 rounded-xl px-3 py-2.5 focus:ring-emerald-500" placeholder="例如：vinnyhuang.ipuregreen@gmail.com 或 0920111111">
         </div>
         <div>
-          <label class="block text-xs font-bold text-slate-700 mb-1">登入密碼</label>
+          <label class="block text-xs font-bold text-slate-700 mb-1">登入密碼（預設為手機號碼）</label>
           <input type="password" id="loginPassword" required class="w-full text-sm border border-slate-300 rounded-xl px-3 py-2.5 focus:ring-emerald-500" placeholder="輸入密碼">
         </div>
         <button type="submit" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm rounded-xl shadow-md transition-colors">
@@ -681,7 +677,7 @@
     </div>
   </div>
 
-  <!-- 2. Admin Dedicated Login Modal (admin / sdgs2030admin) -->
+  <!-- 2. Admin Login Modal -->
   <div id="adminLoginModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4">
     <div class="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-purple-200">
       <div class="flex justify-between items-center mb-4">
@@ -711,7 +707,7 @@
     </div>
   </div>
 
-  <!-- 3. Worksheet Detail View Modal (Full Contents + Download DOCX) -->
+  <!-- 3. Worksheet Detail Modal (View Full Content + Word .docx Download) -->
   <div id="worksheetDetailModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
     <div class="bg-white rounded-3xl max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
       <div class="p-5 border-b border-slate-200 flex justify-between items-center bg-slate-50">
@@ -730,7 +726,7 @@
     </div>
   </div>
 
-  <!-- 4. Worksheet Grading Modal (Triggers Email to vinnyhuang.ipuregreen@gmail.com) -->
+  <!-- 4. Worksheet Grading Modal (Sends to Student's Email) -->
   <div id="gradeModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
     <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4">
       <div class="flex justify-between items-center">
@@ -739,7 +735,7 @@
       </div>
       <p id="gradeModalTargetName" class="text-xs font-bold text-purple-700"></p>
       <div class="bg-amber-50 p-2.5 rounded-xl border border-amber-200 text-[11px] text-amber-800">
-        📧 評分完成後，系統將自動寄送指導講評通知信至：<strong>vinnyhuang.ipuregreen@gmail.com</strong>
+        📧 評分完成後，系統將自動寄發專業審查通知信至該學員信箱。
       </div>
       <div>
         <label class="block text-xs font-bold text-slate-700 mb-1">評分 (0 ~ 100 分)</label>
@@ -756,33 +752,87 @@
     </div>
   </div>
 
-  <!-- 5. Edit Student Modal -->
-  <div id="editStudentModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-    <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4">
+  <!-- 5. Add Student Modal (6 columns) -->
+  <div id="addStudentModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-3">
       <div class="flex justify-between items-center">
-        <h3 class="font-extrabold text-base text-slate-900">修改學員基本資料</h3>
+        <h3 class="font-extrabold text-base text-slate-900">新增學員帳號</h3>
+        <button onclick="document.getElementById('addStudentModal').classList.add('hidden')" class="text-slate-400 hover:text-slate-600 text-lg">✕</button>
+      </div>
+      <div>
+        <label class="block text-[11px] font-bold text-slate-700 mb-0.5">學員姓名 *</label>
+        <input type="text" id="addStudentName" required class="w-full text-xs border border-slate-300 rounded-xl p-2" placeholder="例如：王小明">
+      </div>
+      <div>
+        <label class="block text-[11px] font-bold text-slate-700 mb-0.5">Email（帳號）*</label>
+        <input type="email" id="addStudentEmail" required class="w-full text-xs border border-slate-300 rounded-xl p-2" placeholder="student@gmail.com">
+      </div>
+      <div>
+        <label class="block text-[11px] font-bold text-slate-700 mb-0.5">Email（補課平台）</label>
+        <input type="email" id="addStudentEmailBackup" class="w-full text-xs border border-slate-300 rounded-xl p-2" placeholder="選填">
+      </div>
+      <div>
+        <label class="block text-[11px] font-bold text-slate-700 mb-0.5">聯絡電話（預設密碼）*</label>
+        <input type="text" id="addStudentPhone" required class="w-full text-xs border border-slate-300 rounded-xl p-2" placeholder="0920111111">
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label class="block text-[11px] font-bold text-slate-700 mb-0.5">分會／分團編號</label>
+          <input type="text" id="addStudentUnitCode" class="w-full text-xs border border-slate-300 rounded-xl p-2" placeholder="A102 / 童軍團">
+        </div>
+        <div>
+          <label class="block text-[11px] font-bold text-slate-700 mb-0.5">所屬分會完整名稱</label>
+          <input type="text" id="addStudentUnitName" class="w-full text-xs border border-slate-300 rounded-xl p-2" placeholder="北投第一分會">
+        </div>
+      </div>
+      <div>
+        <label class="block text-[11px] font-bold text-slate-700 mb-0.5">自訂密碼（若留空預設為電話）</label>
+        <input type="password" id="addStudentPassword" class="w-full text-xs border border-slate-300 rounded-xl p-2" placeholder="留空即以電話為密碼">
+      </div>
+      <div class="flex justify-end gap-2 pt-2">
+        <button onclick="document.getElementById('addStudentModal').classList.add('hidden')" class="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-bold rounded-xl">取消</button>
+        <button onclick="saveNewStudent()" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl">確認新增</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6. Edit Student Modal (6 columns) -->
+  <div id="editStudentModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-3">
+      <div class="flex justify-between items-center">
+        <h3 class="font-extrabold text-base text-slate-900">修改學員資料</h3>
         <button onclick="document.getElementById('editStudentModal').classList.add('hidden')" class="text-slate-400 hover:text-slate-600 text-lg">✕</button>
       </div>
       <input type="hidden" id="editStudentId">
       <div>
-        <label class="block text-xs font-bold text-slate-700 mb-1">學員姓名</label>
-        <input type="text" id="editStudentName" class="w-full text-xs border border-slate-300 rounded-xl p-2.5">
+        <label class="block text-[11px] font-bold text-slate-700 mb-0.5">學員姓名</label>
+        <input type="text" id="editStudentName" class="w-full text-xs border border-slate-300 rounded-xl p-2">
       </div>
       <div>
-        <label class="block text-xs font-bold text-slate-700 mb-1">登入 Email</label>
-        <input type="email" id="editStudentEmail" class="w-full text-xs border border-slate-300 rounded-xl p-2.5">
+        <label class="block text-[11px] font-bold text-slate-700 mb-0.5">Email（帳號）</label>
+        <input type="email" id="editStudentEmail" class="w-full text-xs border border-slate-300 rounded-xl p-2">
       </div>
       <div>
-        <label class="block text-xs font-bold text-slate-700 mb-1">聯絡電話</label>
-        <input type="text" id="editStudentPhone" class="w-full text-xs border border-slate-300 rounded-xl p-2.5">
+        <label class="block text-[11px] font-bold text-slate-700 mb-0.5">Email（補課平台）</label>
+        <input type="email" id="editStudentEmailBackup" class="w-full text-xs border border-slate-300 rounded-xl p-2">
       </div>
       <div>
-        <label class="block text-xs font-bold text-slate-700 mb-1">分會／所屬單位</label>
-        <input type="text" id="editStudentUnit" class="w-full text-xs border border-slate-300 rounded-xl p-2.5">
+        <label class="block text-[11px] font-bold text-slate-700 mb-0.5">聯絡電話（密碼）</label>
+        <input type="text" id="editStudentPhone" class="w-full text-xs border border-slate-300 rounded-xl p-2">
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label class="block text-[11px] font-bold text-slate-700 mb-0.5">分會／分團編號</label>
+          <input type="text" id="editStudentUnitCode" class="w-full text-xs border border-slate-300 rounded-xl p-2">
+        </div>
+        <div>
+          <label class="block text-[11px] font-bold text-slate-700 mb-0.5">所屬分會完整名稱</label>
+          <input type="text" id="editStudentUnitName" class="w-full text-xs border border-slate-300 rounded-xl p-2">
+        </div>
       </div>
       <div>
-        <label class="block text-xs font-bold text-slate-700 mb-1">重設新密碼（若不變更請留空）</label>
-        <input type="password" id="editStudentPassword" class="w-full text-xs border border-slate-300 rounded-xl p-2.5" placeholder="輸入新密碼">
+        <label class="block text-[11px] font-bold text-slate-700 mb-0.5">重設新密碼（若不變更請留空）</label>
+        <input type="password" id="editStudentPassword" class="w-full text-xs border border-slate-300 rounded-xl p-2" placeholder="輸入新密碼">
       </div>
       <div class="flex justify-end gap-2 pt-2">
         <button onclick="document.getElementById('editStudentModal').classList.add('hidden')" class="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-bold rounded-xl">取消</button>
@@ -791,14 +841,16 @@
     </div>
   </div>
 
-  <!-- 6. Batch Import Students Modal -->
+  <!-- 7. Batch Import Modal -->
   <div id="batchImportModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
     <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-4">
       <div class="flex justify-between items-center">
         <h3 class="font-extrabold text-base text-slate-900">📥 批次匯入學員名冊</h3>
         <button onclick="document.getElementById('batchImportModal').classList.add('hidden')" class="text-slate-400 hover:text-slate-600 text-lg">✕</button>
       </div>
-      <p class="text-xs text-slate-500">可上傳 CSV/Excel 檔案，或直接在下方貼上文字名單（格式：姓名, Email, 電話, 單位，一行一位）。</p>
+      <p class="text-xs text-slate-500">
+        標準 6 欄位格式：<code class="bg-slate-100 text-slate-700 px-1 py-0.5 rounded font-mono">學員姓名, Email（帳號）, Email（補課平台）, 聯絡電話（密碼）, 分會編號, 所屬分會完整名稱</code>
+      </p>
       
       <div>
         <label class="block text-xs font-bold text-slate-700 mb-1">方式一：上傳 CSV 檔案</label>
@@ -807,7 +859,7 @@
 
       <div>
         <label class="block text-xs font-bold text-slate-700 mb-1">方式二：直接貼上名冊內容</label>
-        <textarea id="importTextarea" rows="4" class="w-full text-xs border border-slate-300 rounded-xl p-2.5 font-mono" placeholder="王小明, test888@gmail.com, 0920888888, 宜蘭青年團&#10;李小華, test889@gmail.com, 0920999999, 台北分會"></textarea>
+        <textarea id="importTextarea" rows="4" class="w-full text-xs border border-slate-300 rounded-xl p-2.5 font-mono" placeholder="王小明, test888@gmail.com, backup888@gmail.com, 0920111111, A102, 北投第一分會&#10;李小華, test889@gmail.com, backup889@gmail.com, 0920111111, A104, 內湖第一分會"></textarea>
       </div>
 
       <div class="flex justify-end gap-2 pt-2">
@@ -817,7 +869,7 @@
     </div>
   </div>
 
-  <!-- 7. My Worksheets History Modal -->
+  <!-- 8. My Worksheets History Modal -->
   <div id="myWorksheetsModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
     <div class="bg-white rounded-3xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl border border-slate-100 overflow-hidden">
       <div class="p-5 border-b border-slate-200 flex justify-between items-center">

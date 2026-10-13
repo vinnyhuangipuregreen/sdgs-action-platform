@@ -1,4 +1,4 @@
-// SDGs and Climate Action Platform - Comprehensive Frontend Core v2.0
+// SDGs and Climate Action Platform - Comprehensive Frontend Core v3.0
 const API_BASE = "/api";
 
 const state = {
@@ -38,7 +38,6 @@ const state = {
     colors: ["#0284c7", "#10b981", "#f59e0b", "#8b5cf6", "#ef4444", "#14b8a6"]
   },
 
-  // Selected students for batch actions
   selectedStudentIds: new Set()
 };
 
@@ -52,7 +51,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 });
 
 function initUIEvents() {
-  // Navigation tabs
   document.querySelectorAll("[data-nav-tab]").forEach(btn => {
     btn.addEventListener("click", () => {
       const tab = btn.getAttribute("data-nav-tab");
@@ -64,21 +62,17 @@ function initUIEvents() {
     });
   });
 
-  // Login form submit
   const loginForm = document.getElementById("loginForm");
   if (loginForm) loginForm.addEventListener("submit", handleLogin);
 
   const adminLoginForm = document.getElementById("adminLoginForm");
   if (adminLoginForm) adminLoginForm.addEventListener("submit", handleAdminLogin);
 
-  // Logout button
   const logoutBtn = document.getElementById("logoutBtn");
   if (logoutBtn) logoutBtn.addEventListener("click", handleLogout);
 
-  // Worksheet events
   initWorksheetEvents();
 
-  // Search input in SDGs lookup
   const sdgSearchInput = document.getElementById("sdgSearchInput");
   if (sdgSearchInput) sdgSearchInput.addEventListener("input", filterSDGsDisplay);
 }
@@ -87,7 +81,6 @@ function handleAdminAccess() {
   if (state.user && ['admin', 'teacher'].includes(state.user.role)) {
     switchTab("admin");
   } else {
-    // Show admin login modal with default credentials prefilled/hinted
     const modal = document.getElementById("adminLoginModal");
     if (modal) {
       modal.classList.remove("hidden");
@@ -121,7 +114,7 @@ function switchTab(tabId) {
 }
 
 // ==============================================================================
-// 2. Auth Module
+// 2. Auth Module (With Disambiguation for Shared Email Accounts)
 // ==============================================================================
 async function checkAuth() {
   if (!state.token) {
@@ -145,18 +138,23 @@ async function checkAuth() {
   }
 }
 
-async function handleLogin(e) {
-  e.preventDefault();
+async function handleLogin(e, explicitStudentId = null) {
+  if (e) e.preventDefault();
   const account = document.getElementById("loginAccount").value.trim();
   const password = document.getElementById("loginPassword").value.trim();
   const errorEl = document.getElementById("loginError");
+  const pickerBox = document.getElementById("studentPickerBox");
   errorEl.classList.add("hidden");
+  pickerBox.classList.add("hidden");
 
   try {
+    const payload = { account, password };
+    if (explicitStudentId) payload.student_id = explicitStudentId;
+
     const res = await fetch(`${API_BASE}/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ account, password })
+      body: JSON.stringify(payload)
     });
     const data = await res.json();
     if (!res.ok) {
@@ -164,6 +162,26 @@ async function handleLogin(e) {
       errorEl.classList.remove("hidden");
       return;
     }
+
+    // Handle shared email disambiguation
+    if (data.multiple_matches && data.students) {
+      pickerBox.classList.remove("hidden");
+      const listEl = document.getElementById("studentPickerList");
+      listEl.innerHTML = "";
+      data.students.forEach(s => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "w-full text-left p-2.5 rounded-xl bg-slate-50 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-400 text-xs font-semibold text-slate-800 flex justify-between items-center transition-colors";
+        btn.innerHTML = `
+          <span>👤 ${s.name}</span>
+          <span class="text-[11px] text-slate-500 font-normal">[${s.unit_code || ''}] ${s.unit_name}</span>
+        `;
+        btn.onclick = () => handleLogin(null, s.id);
+        listEl.appendChild(btn);
+      });
+      return;
+    }
+
     state.token = data.token;
     state.user = data.user;
     localStorage.setItem("sdgs_token", data.token);
@@ -241,12 +259,15 @@ function updateUserUI() {
     const formName = document.getElementById("ws_userName");
     const formUnit = document.getElementById("ws_unitName");
     if (formName) formName.value = state.user.name;
-    if (formUnit && !formUnit.value) formUnit.value = state.user.unit_name || "佛光學員";
+    if (formUnit) {
+      const displayUnit = state.user.unit_name || "佛光學員";
+      formUnit.value = displayUnit;
+    }
   }
 }
 
 // ==============================================================================
-// 3. SDGs Reference & Smart Quote Module (Requirement 1 Implementation)
+// 3. SDGs Reference & Smart Quote Module
 // ==============================================================================
 async function loadSDGsData() {
   try {
@@ -341,15 +362,12 @@ window.toggleGoalTargets = function(goalId) {
   }
 };
 
-/**
- * Requirement 1: Smart Quote Target Algorithm
- */
 window.quoteTargetToWorksheet = function(goalText, targetText) {
   const radialRows = document.querySelectorAll(".radial-line-row");
-  const normGoal = goalText.split(" ")[0].trim(); // e.g. "SDG 14"
+  const normGoal = goalText.split(" ")[0].trim();
   const normMech = targetText.trim();
 
-  // 1. Check for duplicates (both Goal and Mechanism matching)
+  // 1. Check duplicate
   for (let idx = 0; idx < radialRows.length; idx++) {
     const r = radialRows[idx];
     const rGoal = r.querySelector(".radial-goal-select")?.value || "";
@@ -366,7 +384,7 @@ window.quoteTargetToWorksheet = function(goalText, targetText) {
     }
   }
 
-  // 2. Check for empty/unselected slot
+  // 2. Empty slot check
   let targetRow = null;
   let targetIndex = -1;
   for (let idx = 0; idx < radialRows.length; idx++) {
@@ -379,7 +397,7 @@ window.quoteTargetToWorksheet = function(goalText, targetText) {
     }
   }
 
-  // 3. If no empty slot and no duplicates, automatically add new line
+  // 3. Auto add new line
   if (!targetRow) {
     addRadialLineRow();
     const updatedRows = document.querySelectorAll(".radial-line-row");
@@ -387,7 +405,6 @@ window.quoteTargetToWorksheet = function(goalText, targetText) {
     targetIndex = updatedRows.length;
   }
 
-  // Populate goal and mechanism
   const goalSelect = targetRow.querySelector(".radial-goal-select");
   const mechInput = targetRow.querySelector(".radial-mech-input");
 
@@ -881,7 +898,7 @@ window.createNewWorksheet = function() {
 };
 
 // ==============================================================================
-// 5. Game 1: 【SDG 永續翻牌大考驗 (Eco-Memory Match)】(Left Game)
+// 5. Game 1: 【SDG 永續翻牌大考驗】(Left Game)
 // ==============================================================================
 async function initNewMemoryGame() {
   const mg = state.memoryGame;
@@ -898,7 +915,6 @@ async function initNewMemoryGame() {
   document.getElementById("memoryMainScreen").classList.remove("hidden");
   document.getElementById("memoryGameOverScreen").classList.add("hidden");
 
-  // Fetch 6 pairs (12 cards)
   try {
     const res = await fetch(`${API_BASE}/game/memory-cards`);
     if (res.ok) {
@@ -942,7 +958,6 @@ function handleMemoryCardClick(idx, cardEl) {
   if (!mg.active || mg.flipped.length >= 2) return;
   if (cardEl.classList.contains("matched") || cardEl.classList.contains("is-flipped")) return;
 
-  // Flip card
   cardEl.classList.add("is-flipped", "border-emerald-400", "bg-slate-900");
   cardEl.querySelector(".card-back").classList.add("hidden");
   cardEl.querySelector(".card-front").classList.remove("hidden");
@@ -953,7 +968,6 @@ function handleMemoryCardClick(idx, cardEl) {
   if (mg.flipped.length === 2) {
     const [c1, c2] = mg.flipped;
     if (c1.card.pair_id === c2.card.pair_id) {
-      // Match success!
       mg.combo += 1;
       if (mg.combo > mg.maxCombo) mg.maxCombo = mg.combo;
       mg.matchedPairs += 1;
@@ -969,7 +983,6 @@ function handleMemoryCardClick(idx, cardEl) {
         endMemoryGame(true);
       }
     } else {
-      // Mismatch
       mg.combo = 0;
       updateMemoryStatsUI();
       setTimeout(() => {
@@ -1015,7 +1028,7 @@ function endMemoryGame(isWin) {
   clearInterval(mg.timer);
 
   if (isWin) {
-    mg.score += (mg.timeLeft * 50); // Time bonus
+    mg.score += (mg.timeLeft * 50);
   }
 
   document.getElementById("memoryMainScreen").classList.add("hidden");
@@ -1038,7 +1051,7 @@ function endMemoryGame(isWin) {
 }
 
 // ==============================================================================
-// 6. Game 2: 【SDG 永續連鎖消消樂 (Eco-Combo Blast)】(Right Game - Rebuilt)
+// 6. Game 2: 【SDG 永續連鎖消消樂】(Right Game)
 // ==============================================================================
 const COMBO_BLAST_ICONS = ["🌊", "🌳", "☀️", "🥗", "👕", "🤝"];
 
@@ -1098,7 +1111,6 @@ function handleGemClick(r, c) {
   const targetColor = cg.grid[r][c];
   if (targetColor === null) return;
 
-  // Find connected gems using flood-fill
   const visited = Array.from({ length: cg.rows }, () => Array(cg.cols).fill(false));
   const connected = [];
 
@@ -1120,21 +1132,17 @@ function handleGemClick(r, c) {
     return;
   }
 
-  // Deduct 1 move
   cg.movesLeft -= 1;
   cg.combo += 1;
   if (cg.combo > cg.maxCombo) cg.maxCombo = cg.combo;
 
-  // Calculate blast points
   const points = (connected.length * 150) * cg.combo;
   cg.score += points;
 
-  // Remove gems
   connected.forEach(([row, col]) => {
     cg.grid[row][col] = null;
   });
 
-  // Gravity fall
   applyGravityAndRefill();
   renderComboBlastGrid();
   updateComboBlastStatsUI();
@@ -1149,7 +1157,6 @@ function handleGemClick(r, c) {
 function applyGravityAndRefill() {
   const cg = state.comboGame;
   for (let c = 0; c < cg.cols; c++) {
-    // Drop downwards
     let emptyRow = cg.rows - 1;
     for (let r = cg.rows - 1; r >= 0; r--) {
       if (cg.grid[r][c] !== null) {
@@ -1158,7 +1165,6 @@ function applyGravityAndRefill() {
         emptyRow--;
       }
     }
-    // Refill from top
     for (let r = emptyRow; r >= 0; r--) {
       cg.grid[r][c] = Math.floor(Math.random() * cg.colors.length);
     }
@@ -1232,7 +1238,7 @@ async function submitGameScoreToBackend(score, combo, health, solved, title, gam
 async function loadLeaderboard(typeFilter = "") {
   const container = document.getElementById("leaderboardTableBody");
   if (!container) return;
-  container.innerHTML = '<tr><td colspan="6" class="p-6 text-center text-slate-400">排行榜載入中...</td></tr>';
+  container.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-slate-400">排行榜載入中...</td></tr>';
 
   try {
     const url = typeFilter ? `${API_BASE}/game/leaderboard?game_type=${typeFilter}` : `${API_BASE}/game/leaderboard`;
@@ -1244,7 +1250,7 @@ async function loadLeaderboard(typeFilter = "") {
       renderLeaderboardTable(data.leaderboard, data.my_best);
     }
   } catch (err) {
-    container.innerHTML = '<tr><td colspan="6" class="p-6 text-center text-red-400">無法讀取排行榜</td></tr>';
+    container.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-red-400">無法讀取排行榜</td></tr>';
   }
 }
 
@@ -1265,7 +1271,7 @@ function renderLeaderboardTable(list, myBest) {
   }
 
   if (list.length === 0) {
-    container.innerHTML = '<tr><td colspan="6" class="p-6 text-center text-slate-400">目前尚無戰績，成為第一位上榜者吧！</td></tr>';
+    container.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-slate-400">目前尚無戰績，成為第一位上榜者吧！</td></tr>';
     return;
   }
 
@@ -1294,7 +1300,7 @@ function renderLeaderboardTable(list, myBest) {
 }
 
 // ==============================================================================
-// 8. Admin Dashboard & Review Module (Requirements 6 & 7 Implementation)
+// 8. Admin Dashboard & Review Module
 // ==============================================================================
 let chartRadar = null;
 let chartPie = null;
@@ -1412,9 +1418,6 @@ async function loadAdminWorksheets() {
   }
 }
 
-/**
- * Requirement 6: Full Worksheet Details View Modal
- */
 window.viewWorksheetDetailModal = async function(id) {
   try {
     const res = await fetch(`${API_BASE}/worksheets/${id}`, {
@@ -1430,7 +1433,6 @@ window.viewWorksheetDetailModal = async function(id) {
     document.getElementById("detailModalHeader").textContent = `學員：${ws.user_name} ｜ 分會單位：${ws.unit_name} (練習單 #${ws.id})`;
     document.getElementById("detailDownloadDocxBtn").href = `${API_BASE}/worksheets/${ws.id}/export-docx`;
 
-    // Radial lines HTML
     const radialHtml = (ws.radial_data || []).map((r, i) => `
       <tr class="border-b border-slate-100">
         <td class="p-2 font-bold text-emerald-800">#${i+1} ${r.goal || ''}</td>
@@ -1439,7 +1441,6 @@ window.viewWorksheetDetailModal = async function(id) {
       </tr>
     `).join("");
 
-    // Tradeoff lines HTML
     const tradeoffHtml = (ws.tradeoff_data || []).map((t, i) => `
       <tr class="border-b border-slate-100">
         <td class="p-2 font-bold text-amber-900">${t.who || ''}</td>
@@ -1511,9 +1512,6 @@ window.openGradeModal = function(id, name, curScore, curComment) {
   document.getElementById("gradeSubmitBtn").onclick = () => submitGrade(id);
 };
 
-/**
- * Requirement 6: Submit Grade & Send Email Notification
- */
 async function submitGrade(id) {
   const score = parseInt(document.getElementById("gradeScoreInput").value, 10);
   const comment = document.getElementById("gradeCommentInput").value.trim();
@@ -1533,7 +1531,7 @@ async function submitGrade(id) {
     const d = await res.json();
     if (res.ok) {
       document.getElementById("gradeModal").classList.add("hidden");
-      showToast(`✓ 批閱完成！已記錄 ${score} 分，並發送指導通知信至 ${d.email_target}！`, "success");
+      showToast(`✓ 批閱完成！已記錄 ${score} 分，並發送指導通知信至學員信箱 (${d.email_target})！`, "success");
       loadAdminWorksheets();
     }
   } catch (err) {
@@ -1542,17 +1540,17 @@ async function submitGrade(id) {
 }
 
 // ==============================================================================
-// 9. Student Management (Requirement 7: Edit, Batch Delete & Batch Import)
+// 9. Student Management (Full CRUD, Batch Delete, Batch Import & Export)
 // ==============================================================================
 async function loadAdminStudents(search = "") {
   const container = document.getElementById("adminStudentsTableBody");
   if (!container) return;
-  container.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-slate-400">載入學員名單...</td></tr>';
+  container.innerHTML = '<tr><td colspan="9" class="p-6 text-center text-slate-400">載入學員名單...</td></tr>';
   state.selectedStudentIds.clear();
   updateSelectedCountUI();
 
   try {
-    const url = search ? `${API_BASE}/admin/students?search=${encodeURIComponent(search)}&limit=200` : `${API_BASE}/admin/students?limit=100`;
+    const url = search ? `${API_BASE}/admin/students?search=${encodeURIComponent(search)}&limit=300` : `${API_BASE}/admin/students?limit=150`;
     const res = await fetch(url, {
       headers: { "Authorization": `Bearer ${state.token}` }
     });
@@ -1569,20 +1567,27 @@ async function loadAdminStudents(search = "") {
           <td class="p-3 font-mono text-slate-500">#${s.id}</td>
           <td class="p-3 font-bold text-slate-800">${s.name}</td>
           <td class="p-3 text-slate-600">${s.email}</td>
+          <td class="p-3 text-slate-500">${s.email_backup || '-'}</td>
           <td class="p-3 text-slate-600 font-mono">${s.phone}</td>
-          <td class="p-3 text-slate-500">${s.unit_name || '佛光學員'}</td>
-          <td class="p-3 text-right">
-            <button class="px-2.5 py-1 bg-amber-50 text-amber-800 hover:bg-amber-100 rounded font-semibold text-[11px]" 
-              onclick="openEditStudentModal(${s.id}, '${s.name}', '${s.email}', '${s.phone}', '${s.unit_name || '佛光學員'}', '${s.role}')">
+          <td class="p-3 font-mono text-slate-600 font-bold">${s.unit_code || '-'}</td>
+          <td class="p-3 text-slate-700 font-medium">${s.unit_name || '佛光學員'}</td>
+          <td class="p-3 text-right space-x-1">
+            <button class="px-2 py-1 bg-amber-50 text-amber-800 hover:bg-amber-100 rounded font-semibold text-[11px]" 
+              onclick="openEditStudentModal(${s.id}, '${s.name}', '${s.email}', '${s.email_backup || ''}', '${s.phone}', '${s.unit_code || ''}', '${s.unit_name || '佛光學員'}', '${s.role}')">
               修改
             </button>
+            ${s.role !== 'admin' ? `
+            <button class="px-2 py-1 bg-red-50 text-red-700 hover:bg-red-100 rounded font-semibold text-[11px]" 
+              onclick="deleteSingleStudent(${s.id}, '${s.name}')">
+              刪除
+            </button>` : ''}
           </td>
         `;
         container.appendChild(tr);
       });
     }
   } catch (err) {
-    container.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-red-400">無法讀取名單</td></tr>';
+    container.innerHTML = '<tr><td colspan="9" class="p-6 text-center text-red-400">無法讀取名單</td></tr>';
   }
 }
 
@@ -1609,15 +1614,57 @@ function updateSelectedCountUI() {
   if (btn) btn.disabled = state.selectedStudentIds.size === 0;
 }
 
-window.openEditStudentModal = function(id, name, email, phone, unit, role) {
+window.openAddStudentModal = function() {
+  document.getElementById("addStudentModal")?.classList.remove("hidden");
+};
+
+window.saveNewStudent = async function() {
+  const name = document.getElementById("addStudentName").value.trim();
+  const email = document.getElementById("addStudentEmail").value.trim();
+  const email_backup = document.getElementById("addStudentEmailBackup").value.trim();
+  const phone = document.getElementById("addStudentPhone").value.trim();
+  const unit_code = document.getElementById("addStudentUnitCode").value.trim();
+  const unit_name = document.getElementById("addStudentUnitName").value.trim();
+  const password = document.getElementById("addStudentPassword").value.trim();
+
+  if (!name || !email || !phone) {
+    showToast("學員姓名、Email與電話為必填欄位！", "error");
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/admin/students`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${state.token}`
+      },
+      body: JSON.stringify({ name, email, email_backup, phone, unit_code, unit_name, password })
+    });
+    const d = await res.json();
+    if (res.ok) {
+      showToast(d.message || "學員新增成功！", "success");
+      document.getElementById("addStudentModal").classList.add("hidden");
+      loadAdminStudents();
+    } else {
+      showToast(d.detail || "新增失敗", "error");
+    }
+  } catch (err) {
+    showToast("連線異常", "error");
+  }
+};
+
+window.openEditStudentModal = function(id, name, email, email_backup, phone, unit_code, unit_name, role) {
   const modal = document.getElementById("editStudentModal");
   if (!modal) return;
   modal.classList.remove("hidden");
   document.getElementById("editStudentId").value = id;
   document.getElementById("editStudentName").value = name;
   document.getElementById("editStudentEmail").value = email;
+  document.getElementById("editStudentEmailBackup").value = email_backup || "";
   document.getElementById("editStudentPhone").value = phone;
-  document.getElementById("editStudentUnit").value = unit;
+  document.getElementById("editStudentUnitCode").value = unit_code || "";
+  document.getElementById("editStudentUnitName").value = unit_name || "";
   document.getElementById("editStudentPassword").value = "";
 };
 
@@ -1625,12 +1672,14 @@ window.saveStudentEdit = async function() {
   const id = document.getElementById("editStudentId").value;
   const name = document.getElementById("editStudentName").value.trim();
   const email = document.getElementById("editStudentEmail").value.trim();
+  const email_backup = document.getElementById("editStudentEmailBackup").value.trim();
   const phone = document.getElementById("editStudentPhone").value.trim();
-  const unit_name = document.getElementById("editStudentUnit").value.trim();
+  const unit_code = document.getElementById("editStudentUnitCode").value.trim();
+  const unit_name = document.getElementById("editStudentUnitName").value.trim();
   const password = document.getElementById("editStudentPassword").value.trim();
 
-  if (!name || !email) {
-    showToast("姓名與 Email 為必填欄位", "error");
+  if (!name || !email || !phone) {
+    showToast("姓名、Email與電話為必填欄位", "error");
     return;
   }
 
@@ -1641,7 +1690,7 @@ window.saveStudentEdit = async function() {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${state.token}`
       },
-      body: JSON.stringify({ name, email, phone, unit_name, password })
+      body: JSON.stringify({ name, email, email_backup, phone, unit_code, unit_name, password })
     });
     const d = await res.json();
     if (res.ok) {
@@ -1654,10 +1703,26 @@ window.saveStudentEdit = async function() {
   }
 };
 
+window.deleteSingleStudent = async function(id, name) {
+  if (!confirm(`確定要刪除學員 ${name} 嗎？此操作將同時刪除該學員的練習單。`)) return;
+  try {
+    const res = await fetch(`${API_BASE}/admin/students/${id}`, {
+      method: "DELETE",
+      headers: { "Authorization": `Bearer ${state.token}` }
+    });
+    if (res.ok) {
+      showToast(`學員 ${name} 已成功刪除！`, "success");
+      loadAdminStudents();
+    }
+  } catch (err) {
+    showToast("刪除失敗", "error");
+  }
+};
+
 window.executeBatchDeleteStudents = async function() {
   const ids = Array.from(state.selectedStudentIds);
   if (ids.length === 0) return;
-  if (!confirm(`確定要批次刪除選取的 ${ids.length} 位學員嗎？此操作將同時刪除這些學員的練習單與紀錄。`)) return;
+  if (!confirm(`確定要批次刪除選取的 ${ids.length} 位學員嗎？此操作無法復原。`)) return;
 
   try {
     const res = await fetch(`${API_BASE}/admin/students/batch-delete`, {
@@ -1688,42 +1753,41 @@ window.executeBatchImport = async function() {
 
   let parsedStudents = [];
 
-  // Parse text area lines (Format: 姓名, Email, 電話, 分會單位)
+  function parseCSVLine(line) {
+    const parts = line.split(",").map(p => p.trim());
+    if (parts.length >= 2 && parts[0] && parts[1] && parts[0] !== "學員姓名") {
+      return {
+        name: parts[0],
+        email: parts[1],
+        email_backup: parts[2] || "",
+        phone: parts[3] || "0920111111",
+        unit_code: parts[4] || "",
+        unit_name: parts[5] || parts[4] || "佛光學員"
+      };
+    }
+    return null;
+  }
+
   if (textVal) {
     const lines = textVal.split("\n");
-    for (let line of lines) {
-      const parts = line.split(",").map(p => p.trim());
-      if (parts.length >= 2 && parts[0] && parts[1]) {
-        parsedStudents.push({
-          name: parts[0],
-          email: parts[1],
-          phone: parts[2] || "0920111111",
-          unit_name: parts[3] || "佛光學員"
-        });
-      }
+    for (let l of lines) {
+      const s = parseCSVLine(l);
+      if (s) parsedStudents.push(s);
     }
   }
 
-  // Parse file if selected
   if (fileInput.files.length > 0) {
     const file = fileInput.files[0];
     const text = await file.text();
     const rows = text.split("\n");
     for (let r of rows) {
-      const parts = r.split(",").map(p => p.trim());
-      if (parts.length >= 2 && parts[0] && parts[1] && parts[0] !== "學員姓名" && parts[0] !== "姓名") {
-        parsedStudents.push({
-          name: parts[0],
-          email: parts[1],
-          phone: parts[2] || "0920111111",
-          unit_name: parts[3] || "佛光學員"
-        });
-      }
+      const s = parseCSVLine(r);
+      if (s) parsedStudents.push(s);
     }
   }
 
   if (parsedStudents.length === 0) {
-    showToast("未偵測到有效的名冊資料，請確認格式（姓名, Email, 電話, 單位）", "error");
+    showToast("未偵測到有效名冊資料，請確認格式（學員姓名, Email, 補課Email, 電話, 分會編號, 分會名稱）", "error");
     return;
   }
 
@@ -1747,6 +1811,11 @@ window.executeBatchImport = async function() {
   } catch (err) {
     showToast("匯入失敗", "error");
   }
+};
+
+window.exportStudentsCSV = function() {
+  if (!state.token) return;
+  window.open(`${API_BASE}/admin/students/export-csv`, "_blank");
 };
 
 window.exportWorksheetsCSV = function() {

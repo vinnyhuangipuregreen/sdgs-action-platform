@@ -39,53 +39,43 @@ def seed():
                     """, (t["goal_id"], t["code"], t["type"], t["text"]))
                 print("SDGs goals and targets seeded successfully!")
 
-        # 2. Seed Admin with default account 'admin' and password 'sdgs2030admin'
+        # 2. Seed Admin user (admin / sdgs2030admin)
         admin_pass = hash_password("sdgs2030admin")
-        
-        # Create or update admin account
-        cursor.execute("SELECT id FROM users WHERE email = 'admin' OR email = 'admin@fgu.edu.tw'")
-        row = cursor.fetchone()
-        if not row:
+        cursor.execute("SELECT id FROM users WHERE email = 'admin'")
+        admin_row = cursor.fetchone()
+        if not admin_row:
             cursor.execute("""
-            INSERT INTO users (name, email, email_backup, phone, password_hash, role, unit_name)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, ("系統管理員 (戴慶華 博士)", "admin", "admin@fgu.edu.tw", "0912345678", admin_pass, "admin", "佛光永續學院"))
+            INSERT INTO users (name, email, email_backup, phone, unit_code, unit_name, password_hash, role)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, ("系統管理員 (戴慶華 博士)", "admin", "vinnyhuang.ipuregreen@gmail.com", "0912345678", "FGU", "佛光永續學院", admin_pass, "admin"))
             print("Admin user created: admin / sdgs2030admin")
         else:
-            cursor.execute("UPDATE users SET password_hash = ?, role = 'admin' WHERE id = ?", (admin_pass, row[0]))
-            print("Admin user updated with password 'sdgs2030admin'")
+            cursor.execute("UPDATE users SET password_hash = ?, role = 'admin' WHERE id = ?", (admin_pass, admin_row[0]))
 
-        teacher_pass = hash_password("teacher888")
-        cursor.execute("SELECT id FROM users WHERE email = 'teacher@fgu.edu.tw'")
-        if not cursor.fetchone():
-            cursor.execute("""
-            INSERT INTO users (name, email, email_backup, phone, password_hash, role, unit_name)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, ("佛光教學助教", "teacher@fgu.edu.tw", "ta@fgu.edu.tw", "0987654321", teacher_pass, "teacher", "佛光大學應用科技與設計學院"))
-
-        # 3. Seed Students (427 students)
-        students_path = os.path.join(CURRENT_DIR, "data", "students_seed.json")
+        # 3. Seed Students (427 students with complete 6 columns)
+        students_path = os.path.join(CURRENT_DIR, "data", "students_seed_v3.json")
         if os.path.exists(students_path):
             with open(students_path, "r", encoding="utf-8") as f:
                 students = json.load(f)
             
+            # Reset student records if old schema
             cursor.execute("SELECT COUNT(*) FROM users WHERE role = 'student'")
             student_count = cursor.fetchone()[0]
-            if student_count == 0:
-                print(f"Seeding {len(students)} students from student list...")
+            if student_count < 400 or True: # Force refresh to new 6-column schema
+                cursor.execute("DELETE FROM users WHERE role = 'student'")
+                print(f"Seeding {len(students)} students with new schema (unit_code & unit_name)...")
                 for s in students:
-                    p_hash = hash_password(s["phone"]) # Default password is phone number
+                    p_hash = hash_password(s["phone"])
                     cursor.execute("""
-                    INSERT INTO users (name, email, email_backup, phone, password_hash, role, unit_name)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """, (s["name"], s["email"], s["email_backup"], s["phone"], p_hash, s["role"], s["unit"]))
-                print("All students seeded successfully!")
+                    INSERT INTO users (name, email, email_backup, phone, unit_code, unit_name, password_hash, role)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'student')
+                    """, (s["name"], s["email"], s["email_backup"], s["phone"], s["unit_code"], s["unit_name"], p_hash))
+                print(f"All {len(students)} students seeded successfully!")
 
-        # 4. Seed Demonstrative Worksheets
+        # 4. Seed sample worksheet
         cursor.execute("SELECT COUNT(*) FROM worksheets")
         if cursor.fetchone()[0] == 0:
-            print("Seeding sample demonstrative worksheets...")
-            cursor.execute("SELECT id, name FROM users WHERE email = 'test001@gmail.com'")
+            cursor.execute("SELECT id, name, unit_name, unit_code FROM users WHERE role = 'student' LIMIT 1")
             s1 = cursor.fetchone()
             if s1:
                 radial1 = json.dumps([
@@ -101,14 +91,14 @@ def seed():
                     },
                     {
                         "goal": "SDG 3 健康與福祉",
-                        "mechanism": "青年與長者戶外淨灘健走促進身心健康，並降低民眾在沙灘赤腳踩到碎玻璃或針頭的受傷風險",
+                        "mechanism": "青年與長者戶外淨灘健走促進身心健康，並降低民眾赤腳踩到碎玻璃或針頭的受傷風險",
                         "observable": "活動後學員活力充沛，沙灘遊憩安全滿意度顯著提升"
                     }
                 ], ensure_ascii=False)
                 
                 tradeoff1 = json.dumps([
                     {
-                        "who": "海岸植被與寄居蟹棲地、清運清潔隊員",
+                        "who": "海岸沙丘植被、清運清潔隊員",
                         "situation": "大量淨灘志工未注意腳下踩踏脆弱沙丘植被，且清出的海量海廢集中在路邊未及時運走造成二次髒亂",
                         "how": "規劃指定進出木棧道路線，並預先協調地方環保局垃圾車當日即時清運並落實妥善資源回收分流"
                     }
@@ -123,44 +113,26 @@ def seed():
                     "result_cond": "在地居民與店家持續配合減塑不復發"
                 }, ensure_ascii=False)
                 
-                checks1 = json.dumps([True, True, True, True])
-                
-                commit1 = json.dumps({
-                    "start_action": "每週日帶領佛光青年淨灘並推動生活減塑",
-                    "target_1": "SDG 14 永續海洋",
-                    "target_2": "SDG 12 責任消費",
-                    "risk_aware": "淨灘踩踏脆弱沙丘生態與垃圾未即時清運",
-                    "metric": "自己與分會青年每月自備環保餐具率達100%及沙灘ICC海廢監測表"
-                }, ensure_ascii=False)
-                
                 cursor.execute("""
                 INSERT INTO worksheets (user_id, user_name, unit_name, center_action, center_custom, radial_data, tradeoff_data, chat_text, causal_data, self_checks, commitment, status, score, teacher_comment)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
-                    s1["id"], s1["name"], "宜蘭分會青年團", "A", "一次淨灘",
+                    s1["id"], s1["name"], s1["unit_name"], "A", "一次淨灘",
                     radial1, tradeoff1,
                     "A｜一次淨灘｜14、12、3｜風險：清出的垃圾未妥善處置造成二次污染與沙丘踩踏",
-                    causal1, checks1, commit1, "reviewed", 98,
+                    causal1, json.dumps([True, True, True, True]),
+                    json.dumps({
+                        "start_action": "每週日帶領佛光青年淨灘並推動生活減塑",
+                        "target_1": "SDG 14 永續海洋",
+                        "target_2": "SDG 12 責任消費",
+                        "risk_aware": "淨灘踩踏脆弱沙丘生態與垃圾未即時清運",
+                        "metric": "自己與分會青年每月自備環保餐具率達100%及沙灘ICC海廢監測表"
+                    }, ensure_ascii=False),
+                    "reviewed", 98,
                     "分析非常透徹！作用機制具備具體生物化學與環境邏輯，拉扯檢查提出配套防護，堪稱模範練習單！"
                 ))
 
-        # 5. Seed Leaderboard high scores
-        cursor.execute("SELECT COUNT(*) FROM game_scores")
-        if cursor.fetchone()[0] == 0:
-            sample_scores = [
-                ("戴慶華 博士", 1, 14200, 12, 100, 5, "🌌 宇宙級永續守護神"),
-                ("李O立", 2, 12850, 9, 95, 4, "🌟 傳奇星際修復大師"),
-                ("釋O綺", 3, 11400, 8, 90, 4, "🌿 卓越生態協調者"),
-                ("黃O筠", 4, 10200, 7, 88, 3, "⚡ 永續連鎖先鋒"),
-                ("吳O宇", 5, 9600, 6, 85, 3, "🌊 氣候行動衛士")
-            ]
-            for name, uid, score, combo, health, solved, title in sample_scores:
-                cursor.execute("""
-                INSERT INTO game_scores (user_id, user_name, score, max_combo, earth_health, risks_solved, title_earned)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (uid, name, score, combo, health, solved, title))
-
-    print("Database seeding completed successfully!")
+    print("Database seeding v3 completed successfully!")
 
 if __name__ == "__main__":
     seed()
