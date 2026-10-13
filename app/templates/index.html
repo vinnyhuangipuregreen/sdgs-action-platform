@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SDGs 與氣候行動—連動分析與互動學習平台</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Custom Styles -->
+  <link rel="stylesheet" href="/static/css/style.css">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#ecfdf5',
+              500: '#10b981',
+              600: '#059669',
+              700: '#047857',
+              800: '#065f46'
+            }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-slate-100 text-slate-800 antialiased min-h-screen flex flex-col">
+
+  <!-- Toast Container -->
+  <div id="toastContainer" class="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- Top Global Header -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between items-center h-16">
+        <!-- Logo & Title -->
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white font-black text-xl shadow-md">
+            🌏
+          </div>
+          <div>
+            <h1 class="text-base font-extrabold text-slate-900 leading-tight">SDGs 與氣候行動｜連動分析平台</h1>
+            <p class="text-[11px] text-slate-500 font-medium">佛光永續學院 × 佛光大學應用科技與設計學院 ｜ 講師：戴慶華 Dr. ANDERSON</p>
+          </div>
+        </div>
+
+        <!-- Quick Login Demo Bar & User Info -->
+        <div class="flex items-center space-x-3">
+          <div class="hidden md:block">
+            <select id="quickAccountSelect" class="text-xs bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 focus:ring-emerald-500 focus:border-emerald-500 text-slate-700">
+              <option value="">-- 快速示範身分切換 (1-Click Switch) --</option>
+            </select>
+          </div>
+
+          <div class="flex items-center space-x-2 pl-2 border-l border-slate-200">
+            <div class="text-right">
+              <div id="currentUserName" class="text-xs font-bold text-slate-800">未登入</div>
+              <div id="currentUserRole" class="text-[10px] text-slate-400">訪客模式</div>
+            </div>
+            <button id="logoutBtn" class="text-xs px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-lg transition-colors">
+              切換登入
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs Bar -->
+    <nav class="bg-slate-50 border-t border-slate-200 px-4 sm:px-8 overflow-x-auto">
+      <div class="max-w-7xl mx-auto flex space-x-1 sm:space-x-4">
+        <button data-nav-tab="worksheet" class="px-4 py-2.5 text-xs sm:text-sm font-bold border-b-2 border-emerald-600 text-emerald-700 bg-emerald-50/50 flex items-center gap-1.5 transition-colors whitespace-nowrap">
+          <span>📝</span> 連動分析練習單
+        </button>
+        <button data-nav-tab="sdgs" class="px-4 py-2.5 text-xs sm:text-sm font-bold text-slate-600 hover:text-emerald-700 flex items-center gap-1.5 transition-colors whitespace-nowrap">
+          <span>🔍</span> 17目標169細項速查表
+        </button>
+        <button data-nav-tab="game" class="px-4 py-2.5 text-xs sm:text-sm font-bold text-slate-600 hover:text-emerald-700 flex items-center gap-1.5 transition-colors whitespace-nowrap">
+          <span>🎮</span> SDG 連鎖修復師挑戰
+          <span class="text-[10px] bg-red-500 text-white px-1.5 py-0.2 rounded-full font-black animate-pulse">HOT</span>
+        </button>
+        <button data-nav-tab="leaderboard" class="px-4 py-2.5 text-xs sm:text-sm font-bold text-slate-600 hover:text-emerald-700 flex items-center gap-1.5 transition-colors whitespace-nowrap">
+          <span>🏆</span> 天梯排行榜
+        </button>
+        <button id="navTabAdmin" data-nav-tab="admin" class="hidden px-4 py-2.5 text-xs sm:text-sm font-bold text-purple-700 hover:text-purple-900 flex items-center gap-1.5 transition-colors whitespace-nowrap bg-purple-50/50">
+          <span>⚙️</span> 後台管理系統
+        </button>
+      </div>
+    </nav>
+  </header>
+
+  <!-- Main Container -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+    <!-- ======================================================================= -->
+    <!-- TAB 1: 連動分析練習單 (Worksheet Form) -->
+    <!-- ======================================================================= -->
+    <section id="tabPane_worksheet" class="tab-pane space-y-6">
+      <!-- Worksheet Top Action Bar -->
+      <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <span class="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">佛光永續學院專用教材</span>
+          <h2 class="text-xl font-black text-slate-900 mt-1">SDGs 與氣候行動｜連動分析練習單</h2>
+          <p class="text-xs text-slate-500">今天的練習：不只列出 SDGs 編號，而是說清楚「這個行動怎麼產生影響」。</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <button type="button" onclick="createNewWorksheet()" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors">
+            ＋ 新開空白表單
+          </button>
+          <button type="button" id="viewMyWorksheetsBtn" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1 transition-colors">
+            📜 歷史練習單 (<span id="myWorksheetsCountBadge">0</span>)
+          </button>
+          <button type="button" id="saveDraftBtn" class="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-xl text-xs font-bold transition-colors">
+            💾 儲存為草稿
+          </button>
+          <button type="button" id="submitWorksheetBtn" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black shadow-md shadow-emerald-600/20 transition-all">
+            🚀 正式提交練習單
+          </button>
+        </div>
+      </div>
+
+      <!-- Main Worksheet Card -->
+      <div class="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-sm space-y-8">
+        
+        <!-- Header Info -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-6 border-b border-slate-200">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">學員姓名</label>
+            <input type="text" id="ws_userName" class="w-full text-sm bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-medium" readonly>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">分會／單位</label>
+            <input type="text" id="ws_unitName" class="w-full text-sm border border-slate-300 rounded-xl px-3 py-2 focus:ring-emerald-500 focus:border-emerald-500" placeholder="例如：佛光會宜蘭分會、應科院三年級">
+          </div>
+        </div>
+
+        <!-- Section 1 & 2: 中心行動選擇 -->
+        <div class="space-y-4">
+          <div class="flex items-center gap-2">
+            <span class="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-black text-sm">二</span>
+            <h3 class="font-extrabold text-base text-slate-900">選擇你的中心行動</h3>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+            <label class="flex items-center p-3.5 rounded-xl border border-slate-200 hover:border-emerald-500 bg-slate-50 cursor-pointer transition-all">
+              <input type="radio" name="center_action" value="A" checked class="text-emerald-600 focus:ring-emerald-500">
+              <span class="ml-2.5 text-xs sm:text-sm font-bold text-slate-800">A．一次淨灘</span>
+            </label>
+            <label class="flex items-center p-3.5 rounded-xl border border-slate-200 hover:border-emerald-500 bg-slate-50 cursor-pointer transition-all">
+              <input type="radio" name="center_action" value="B" class="text-emerald-600 focus:ring-emerald-500">
+              <span class="ml-2.5 text-xs sm:text-sm font-bold text-slate-800">B．社區二手衣物交換</span>
+            </label>
+            <label class="flex items-center p-3.5 rounded-xl border border-slate-200 hover:border-emerald-500 bg-slate-50 cursor-pointer transition-all">
+              <input type="radio" name="center_action" value="C" class="text-emerald-600 focus:ring-emerald-500">
+              <span class="ml-2.5 text-xs sm:text-sm font-bold text-slate-800">C．道場或家裡改用太陽能</span>
+            </label>
+            <label class="flex items-center p-3.5 rounded-xl border border-slate-200 hover:border-emerald-500 bg-slate-50 cursor-pointer transition-all">
+              <input type="radio" name="center_action" value="D" class="text-emerald-600 focus:ring-emerald-500">
+              <span class="ml-2.5 text-xs sm:text-sm font-bold text-slate-800">D．自選佛光活動</span>
+            </label>
+          </div>
+          <div id="centerCustomBox" class="hidden mt-2">
+            <input type="text" id="ws_centerCustom" class="w-full text-xs sm:text-sm border border-emerald-300 rounded-xl p-2.5 bg-emerald-50/40 focus:ring-emerald-500" placeholder="請自訂佛光活動名稱（例：佛光蔬食A計畫、綠色公益捐血市集）">
+          </div>
+        </div>
+
+        <!-- Section 3: 放射型分析 -->
+        <div class="space-y-4">
+          <div class="flex justify-between items-center">
+            <div class="flex items-center gap-2">
+              <span class="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-black text-sm">三</span>
+              <div>
+                <h3 class="font-extrabold text-base text-slate-900">放射型分析（至少寫三條線，第四條可選）</h3>
+                <p class="text-xs text-slate-500">寫法提示：不要只寫「很環保」，要寫出「種適合當地的原生植物，讓動植物的棲地慢慢恢復」。</p>
+              </div>
+            </div>
+            <button type="button" id="addRadialLineBtn" class="px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg text-xs font-bold border border-emerald-300">
+              ＋ 增加一條連動線
+            </button>
+          </div>
+
+          <!-- Dynamic Radial Lines -->
+          <div id="radialLinesContainer" class="space-y-3"></div>
+        </div>
+
+        <!-- Section 4: 拉扯檢查 -->
+        <div class="space-y-4">
+          <div class="flex justify-between items-center">
+            <div class="flex items-center gap-2">
+              <span class="w-7 h-7 rounded-lg bg-amber-600 text-white flex items-center justify-center font-black text-sm">四</span>
+              <div>
+                <h3 class="font-extrabold text-base text-slate-900">拉扯檢查：善意可能帶來什麼負面影響？</h3>
+                <p class="text-xs text-slate-500">分析四問：做了什麼？連動什麼？犧牲什麼？如何改善？</p>
+              </div>
+            </div>
+            <button type="button" id="addTradeoffBtn" class="px-3 py-1.5 bg-amber-50 text-amber-800 hover:bg-amber-100 rounded-lg text-xs font-bold border border-amber-300">
+              ＋ 增加一項拉扯檢查
+            </button>
+          </div>
+
+          <!-- Dynamic Tradeoff Lines -->
+          <div id="tradeoffContainer" class="space-y-3"></div>
+        </div>
+
+        <!-- Section 5: 聊天室提交 (一鍵複製) -->
+        <div class="bg-gradient-to-r from-emerald-50 to-teal-50 p-5 rounded-2xl border border-emerald-200 space-y-3">
+          <div class="flex justify-between items-center">
+            <div class="flex items-center gap-2">
+              <span class="w-7 h-7 rounded-lg bg-teal-600 text-white flex items-center justify-center font-black text-sm">五</span>
+              <h3 class="font-extrabold text-sm text-slate-900">聊天室提交格式（一行就好，等倒數一起送出）</h3>
+            </div>
+            <button type="button" id="copyChatSnippetBtn" class="px-3 py-1 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-bold shadow-sm transition-colors">
+              📋 一鍵複製字串
+            </button>
+          </div>
+          <div class="flex gap-2">
+            <input type="text" id="ws_chatSnippet" class="w-full text-xs sm:text-sm font-mono bg-white border border-teal-300 rounded-xl px-3 py-2 text-teal-900 font-bold" readonly>
+          </div>
+          <p class="text-[11px] text-teal-700">格式範例：A｜淨灘｜14、12、3｜風險：清出的垃圾沒有妥善處理</p>
+        </div>
+
+        <!-- Section 6: 課後進階：因果鏈 -->
+        <div class="space-y-4">
+          <div class="flex items-center gap-2">
+            <span class="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-black text-sm">六</span>
+            <div>
+              <h3 class="font-extrabold text-base text-slate-900">課後進階：畫一條真正的「因果鏈」</h3>
+              <p class="text-xs text-slate-500">提醒：「有關聯」不等於「有因果」；「可能影響」不等於「已經達成」。</p>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+            <div class="space-y-2">
+              <span class="text-xs font-bold px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded">A 起點</span>
+              <textarea id="ws_causalA" class="w-full text-xs p-2 rounded-lg border-slate-300" rows="2" placeholder="發生了什麼？（例：連日豪雨）"></textarea>
+              <textarea id="ws_causalACond" class="w-full text-xs p-2 rounded-lg border-slate-300 bg-white" rows="2" placeholder="這一步要成立，需要什麼條件？（例：上游已有崩塌堰塞湖蓄水）"></textarea>
+            </div>
+            <div class="space-y-2">
+              <span class="text-xs font-bold px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded">B 中介</span>
+              <textarea id="ws_causalB" class="w-full text-xs p-2 rounded-lg border-slate-300" rows="2" placeholder="發生了什麼？（例：堰塞湖溢流）"></textarea>
+              <textarea id="ws_causalBCond" class="w-full text-xs p-2 rounded-lg border-slate-300 bg-white" rows="2" placeholder="這一步要成立，需要什麼條件？（例：溢流量超過下游堤防承載）"></textarea>
+            </div>
+            <div class="space-y-2">
+              <span class="text-xs font-bold px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded">C 結果</span>
+              <textarea id="ws_causalC" class="w-full text-xs p-2 rounded-lg border-slate-300" rows="2" placeholder="結果是什麼？（例：泥流進入市區）"></textarea>
+              <textarea id="ws_causalCCond" class="w-full text-xs p-2 rounded-lg border-slate-300 bg-white" rows="2" placeholder="受到影響的是哪些人或環境？"></textarea>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 7: 自我檢核 -->
+        <div class="space-y-3 bg-slate-50 p-5 rounded-2xl border border-slate-200">
+          <div class="flex items-center gap-2">
+            <span class="w-7 h-7 rounded-lg bg-emerald-700 text-white flex items-center justify-center font-black text-sm">七</span>
+            <h3 class="font-extrabold text-sm text-slate-900">自我檢核（送出前請親自勾選確認）</h3>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+            <label class="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-200 cursor-pointer">
+              <input type="checkbox" id="ws_check1" class="rounded text-emerald-600 focus:ring-emerald-500">
+              <span class="text-slate-700 font-medium">我沒有只列 SDGs 編號，每一條線都說得出「怎麼影響」。</span>
+            </label>
+            <label class="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-200 cursor-pointer">
+              <input type="checkbox" id="ws_check2" class="rounded text-emerald-600 focus:ring-emerald-500">
+              <span class="text-slate-700 font-medium">我分得清「可能的效益」和「已經證實的成果」。</span>
+            </label>
+            <label class="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-200 cursor-pointer">
+              <input type="checkbox" id="ws_check3" class="rounded text-emerald-600 focus:ring-emerald-500">
+              <span class="text-slate-700 font-medium">我找出至少一項負面影響，或可能被遺漏的人。</span>
+            </label>
+            <label class="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-200 cursor-pointer">
+              <input type="checkbox" id="ws_check4" class="rounded text-emerald-600 focus:ring-emerald-500">
+              <span class="text-slate-700 font-medium">我提出了做得到的改善方法。</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Section 8: 我的連動承諾 -->
+        <div class="space-y-4">
+          <div class="flex items-center gap-2">
+            <span class="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-black text-sm">八</span>
+            <h3 class="font-extrabold text-base text-slate-900">我的連動承諾宣言</h3>
+          </div>
+          <div class="p-5 rounded-2xl bg-gradient-to-r from-emerald-50/80 to-teal-50/80 border border-emerald-300 space-y-3 text-xs sm:text-sm text-slate-800 leading-loose">
+            <div class="flex flex-wrap items-center gap-2">
+              <span>我願意從</span>
+              <input type="text" id="ws_commitStart" class="border-b-2 border-emerald-600 bg-white px-2 py-1 rounded text-xs font-bold text-emerald-900 flex-1 min-w-[200px]" placeholder="具體個人日常或社群行動">
+              <span>開始，</span>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <span>希望促進</span>
+              <input type="text" id="ws_commitT1" class="border-b-2 border-emerald-600 bg-white px-2 py-1 rounded text-xs font-bold text-emerald-900 w-36" placeholder="目標或效益一">
+              <span>與</span>
+              <input type="text" id="ws_commitT2" class="border-b-2 border-emerald-600 bg-white px-2 py-1 rounded text-xs font-bold text-emerald-900 w-36" placeholder="目標或效益二">
+              <span>，也會留意</span>
+              <input type="text" id="ws_commitRisk" class="border-b-2 border-emerald-600 bg-white px-2 py-1 rounded text-xs font-bold text-amber-900 flex-1 min-w-[180px]" placeholder="需小心的拉扯風險">
+              <span>的風險。</span>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <span>一個月後，我會用</span>
+              <input type="text" id="ws_commitMetric" class="border-b-2 border-emerald-600 bg-white px-2 py-1 rounded text-xs font-bold text-emerald-900 flex-1 min-w-[240px]" placeholder="可檢核的具體量化或質性指標">
+              <span>來確認自己有沒有做到。</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ======================================================================= -->
+    <!-- TAB 2: SDGs 17目標169細項速查表 (Quick Reference & Search) -->
+    <!-- ======================================================================= -->
+    <section id="tabPane_sdgs" class="tab-pane hidden space-y-6">
+      <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
+        <div>
+          <h2 class="text-xl font-black text-slate-900">SDGs 17項目標 × 169項細項目標速查表</h2>
+          <p class="text-xs text-slate-500">依據聯合國永續承諾與全球目標中文網教材版本，17個目標是方向，169項細項才是可以檢核的具體承諾。</p>
+        </div>
+
+        <!-- Filter Controls -->
+        <div class="flex flex-col md:flex-row gap-3 justify-between items-stretch md:items-center pt-2">
+          <!-- Keyword Search -->
+          <div class="relative flex-1">
+            <input type="text" id="sdgSearchInput" class="w-full text-xs sm:text-sm pl-9 pr-3 py-2 rounded-xl border border-slate-300 focus:ring-emerald-500 focus:border-emerald-500" placeholder="輸入關鍵字全文搜尋（例：海洋、貧窮、再生能源、塑膠、水資源...）">
+            <span class="absolute left-3 top-2.5 text-slate-400 text-sm">🔍</span>
+          </div>
+
+          <!-- Wedding Cake Filters -->
+          <div class="flex flex-wrap gap-1 items-center text-xs">
+            <span class="text-slate-400 text-[11px] font-bold mr-1">婚禮蛋糕模型:</span>
+            <button type="button" class="tier-filter-btn active px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-bold" data-tier="all" onclick="setTierFilter('all', this)">全部</button>
+            <button type="button" class="tier-filter-btn px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold" data-tier="生物圈" onclick="setTierFilter('生物圈', this)">🌿 生物圈(地基)</button>
+            <button type="button" class="tier-filter-btn px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold" data-tier="社會" onclick="setTierFilter('社會', this)">👥 社會(中間)</button>
+            <button type="button" class="tier-filter-btn px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold" data-tier="經濟" onclick="setTierFilter('經濟', this)">💼 經濟(上層)</button>
+            <button type="button" class="tier-filter-btn px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold" data-tier="頂端" onclick="setTierFilter('頂端', this)">🤝 頂端夥伴</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- SDGs Grid -->
+      <div id="sdgsGridContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+    </section>
+
+    <!-- ======================================================================= -->
+    <!-- TAB 3: 🎮 青年瘋迷遊戲「SDG 連鎖修復師：星際永續挑戰」 -->
+    <!-- ======================================================================= -->
+    <section id="tabPane_game" class="tab-pane hidden space-y-6">
+      
+      <!-- Intro Card -->
+      <div id="gameIntroCard" class="bg-slate-900 text-white p-8 rounded-3xl shadow-xl text-center space-y-4">
+        <span class="text-4xl animate-bounce inline-block">🚀</span>
+        <h2 class="text-2xl font-black text-emerald-400">SDG 連鎖修復師：星際永續 Roguelike</h2>
+        <p class="text-xs sm:text-sm text-slate-300 max-w-xl mx-auto leading-relaxed">
+          結合年輕世代最愛的卡牌構建與元素連鎖機制！打出永續行動卡，觸發婚禮蛋糕跨層級大共鳴（最高 2.5 倍乘數），並在 10 秒內化解隨機出現的「善意拉扯危機」，修復地球生態並登錄天梯排行榜！
+        </p>
+        <button type="button" onclick="initNewGame()" class="px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-black text-sm rounded-2xl shadow-lg shadow-emerald-500/30 transform hover:-translate-y-0.5 transition-all">
+          🔥 立即開始挑戰
+        </button>
+      </div>
+
+      <!-- Main Game Arena -->
+      <div id="gameMainScreen" class="hidden space-y-6">
+        <!-- HUD Status Bar -->
+        <div class="bg-slate-900 text-white p-5 rounded-2xl border border-slate-800 shadow-md flex flex-wrap justify-between items-center gap-4">
+          <!-- Earth Health -->
+          <div class="flex-1 min-w-[200px]">
+            <div class="flex justify-between text-xs font-bold mb-1">
+              <span class="text-emerald-400">🌍 地球生態健康度</span>
+              <span id="gameHealthVal" class="font-mono text-emerald-300">35%</span>
+            </div>
+            <div class="w-full h-3 bg-slate-800 rounded-full overflow-hidden border border-slate-700">
+              <div id="gameHealthBar" class="h-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-500" style="width: 35%;"></div>
+            </div>
+          </div>
+
+          <!-- Stats -->
+          <div class="flex items-center gap-6 text-center">
+            <div>
+              <span class="text-[10px] text-slate-400 block font-bold">目前回合</span>
+              <span id="gameRoundVal" class="text-base font-black text-slate-100 font-mono">1/5</span>
+            </div>
+            <div>
+              <span class="text-[10px] text-slate-400 block font-bold">連擊倍率</span>
+              <span id="gameComboVal" class="text-base font-black text-amber-400 font-mono">0x</span>
+            </div>
+            <div>
+              <span class="text-[10px] text-slate-400 block font-bold">總修復積分</span>
+              <span id="gameScoreVal" class="text-xl font-black text-emerald-400 font-mono">0</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Hand Deck Area -->
+        <div class="space-y-3">
+          <div class="flex justify-between items-center">
+            <h3 class="font-extrabold text-sm text-slate-800">🎴 本回合派遣手牌（請點選 2~3 張啟動連動反應）：</h3>
+            <button id="playCardsBtn" onclick="executeTurnPlay()" disabled class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-extrabold text-xs rounded-xl shadow-md transition-all">
+              請挑選卡牌
+            </button>
+          </div>
+          <div id="gameHandContainer" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"></div>
+        </div>
+      </div>
+
+      <!-- Game Over & Victory Screen -->
+      <div id="gameOverScreen" class="hidden bg-slate-900 text-white p-8 rounded-3xl text-center space-y-6 shadow-2xl border border-emerald-500/30">
+        <span class="text-5xl inline-block animate-bounce">🏆</span>
+        <h2 class="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-amber-300">
+          星際修復任務完成！
+        </h2>
+        
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-2xl mx-auto py-4">
+          <div class="bg-slate-800/80 p-4 rounded-xl border border-slate-700">
+            <span class="text-xs text-slate-400 block">最終得分</span>
+            <span id="finalScoreVal" class="text-2xl font-black text-emerald-400 font-mono">0</span>
+          </div>
+          <div class="bg-slate-800/80 p-4 rounded-xl border border-slate-700">
+            <span class="text-xs text-slate-400 block">最高連擊</span>
+            <span id="finalMaxComboVal" class="text-2xl font-black text-amber-400 font-mono">0x</span>
+          </div>
+          <div class="bg-slate-800/80 p-4 rounded-xl border border-slate-700">
+            <span class="text-xs text-slate-400 block">地球修復率</span>
+            <span id="finalHealthVal" class="text-2xl font-black text-teal-300 font-mono">0%</span>
+          </div>
+          <div class="bg-slate-800/80 p-4 rounded-xl border border-slate-700">
+            <span class="text-xs text-slate-400 block">化解拉扯危機</span>
+            <span id="finalRisksSolvedVal" class="text-2xl font-black text-purple-400 font-mono">0 次</span>
+          </div>
+        </div>
+
+        <div class="bg-emerald-950/60 p-4 rounded-2xl border border-emerald-500/40 max-w-md mx-auto">
+          <span class="text-xs text-emerald-300 block font-bold">解鎖星際榮譽頭銜：</span>
+          <span id="finalTitleVal" class="text-xl font-extrabold text-white mt-1 block">🌌 宇宙級永續守護神</span>
+        </div>
+
+        <div class="flex justify-center gap-3">
+          <button id="submitScoreLeaderboardBtn" class="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm rounded-xl shadow-lg transition-all">
+            🥇 登錄全校天梯排行榜
+          </button>
+          <button onclick="initNewGame()" class="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-sm rounded-xl transition-all">
+            🔄 再玩一局
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================================= -->
+    <!-- TAB 4: 🏆 天梯榮譽排行榜 (Leaderboard) -->
+    <!-- ======================================================================= -->
+    <section id="tabPane_leaderboard" class="tab-pane hidden space-y-6">
+      
+      <!-- My Score Card -->
+      <div id="myLeaderboardCard" class="hidden bg-gradient-to-r from-emerald-600 to-teal-600 text-white p-5 rounded-2xl shadow-md flex justify-between items-center">
+        <div>
+          <span class="text-xs font-bold uppercase tracking-wider bg-white/20 px-2 py-0.5 rounded-full">個人最佳戰績</span>
+          <h3 id="myBestTitle" class="text-lg font-black mt-1">永續守護者</h3>
+        </div>
+        <div class="flex items-center gap-6 text-right">
+          <div>
+            <span class="text-xs opacity-80 block">目前排名</span>
+            <span id="myBestRank" class="text-xl font-black">第 -- 名</span>
+          </div>
+          <div>
+            <span class="text-xs opacity-80 block">最高分</span>
+            <span id="myBestScore" class="text-xl font-black font-mono">0</span>
+          </div>
+          <div>
+            <span class="text-xs opacity-80 block">最高連擊</span>
+            <span id="myBestCombo" class="text-xl font-black font-mono">0x</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Leaderboard Table Card -->
+      <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="p-5 border-b border-slate-100 flex justify-between items-center">
+          <div>
+            <h3 class="font-black text-lg text-slate-900">全體學員即時榮譽天梯 (Top 30)</h3>
+            <p class="text-xs text-slate-500">依據總積分、連擊數與拉扯危機化解率動態排名</p>
+          </div>
+          <button onclick="loadLeaderboard()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition-colors">
+            🔄 刷新榜單
+          </button>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs sm:text-sm">
+            <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold">
+              <tr>
+                <th class="p-3 text-center w-16">排名</th>
+                <th class="p-3">學員姓名</th>
+                <th class="p-3 text-right">總得分</th>
+                <th class="p-3 text-center">最高連擊</th>
+                <th class="p-3 text-center">獲得榮譽稱號</th>
+                <th class="p-3 text-right">遊玩時間</th>
+              </tr>
+            </thead>
+            <tbody id="leaderboardTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================================= -->
+    <!-- TAB 5: ⚙️ 後台管理系統 (Admin Dashboard & Review) -->
+    <!-- ======================================================================= -->
+    <section id="tabPane_admin" class="tab-pane hidden space-y-6">
+      
+      <!-- Stats Summary Grid -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+          <span class="text-xs font-bold text-slate-500 block">全體註冊學員</span>
+          <span id="adminStatStudents" class="text-2xl font-black text-slate-900 font-mono">0</span>
+          <span class="text-[11px] text-slate-400 block mt-1">427 位預載學員名單</span>
+        </div>
+        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+          <span class="text-xs font-bold text-slate-500 block">累計提交練習單</span>
+          <span id="adminStatWorksheets" class="text-2xl font-black text-emerald-600 font-mono">0</span>
+          <span class="text-[11px] text-emerald-600 block mt-1">含草稿與正式送出</span>
+        </div>
+        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+          <span class="text-xs font-bold text-slate-500 block">遊戲挑戰總人次</span>
+          <span id="adminStatGames" class="text-2xl font-black text-indigo-600 font-mono">0</span>
+          <span class="text-[11px] text-indigo-500 block mt-1">星際連擊遊戲紀錄</span>
+        </div>
+        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+          <span class="text-xs font-bold text-slate-500 block">全校天梯最高分</span>
+          <span id="adminStatMaxScore" class="text-2xl font-black text-amber-500 font-mono">0</span>
+          <span class="text-[11px] text-amber-600 block mt-1">當前王者紀錄</span>
+        </div>
+      </div>
+
+      <!-- Charts Row -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
+          <h4 class="font-extrabold text-sm text-slate-800 mb-2">📊 17 項 SDGs 被選取次數分佈 (雷達圖)</h4>
+          <p class="text-xs text-slate-400 mb-4">掌握學員最常連動之核心目標熱區</p>
+          <div class="h-64 flex items-center justify-center">
+            <canvas id="adminRadarChart"></canvas>
+          </div>
+        </div>
+        <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
+          <h4 class="font-extrabold text-sm text-slate-800 mb-2">🎯 中心行動選擇比例 (甜甜圈圖)</h4>
+          <p class="text-xs text-slate-400 mb-4">A淨灘 vs B二手衣 vs C太陽能 vs D自選活動</p>
+          <div class="h-64 flex items-center justify-center">
+            <canvas id="adminPieChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Worksheets Review Table -->
+      <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="p-5 border-b border-slate-100 flex justify-between items-center">
+          <div>
+            <h3 class="font-black text-base text-slate-900">學員練習單審核與評分管理</h3>
+            <p class="text-xs text-slate-500">線上審閱連動機制、拉扯檢核與因果鏈推導</p>
+          </div>
+          <button onclick="exportWorksheetsCSV()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition-colors">
+            📥 批次匯出全部練習單 (CSV)
+          </button>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold">
+              <tr>
+                <th class="p-3">編號</th>
+                <th class="p-3">學員姓名</th>
+                <th class="p-3">分會單位</th>
+                <th class="p-3">中心行動</th>
+                <th class="p-3">狀態</th>
+                <th class="p-3">成績</th>
+                <th class="p-3 text-right">操作</th>
+              </tr>
+            </thead>
+            <tbody id="adminWorksheetsTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Students Directory Table -->
+      <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="p-5 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+          <div>
+            <h3 class="font-black text-base text-slate-900">427 位學員帳號與權限名冊</h3>
+            <p class="text-xs text-slate-500">支援快速重設密碼為手機、查詢與學員資料維護</p>
+          </div>
+          <div class="flex items-center gap-2 w-full sm:w-auto">
+            <input type="text" id="adminStudentSearch" oninput="loadAdminStudents(this.value)" class="text-xs border border-slate-300 rounded-xl px-3 py-1.5 w-full sm:w-64" placeholder="搜尋姓名 / Email / 電話">
+          </div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold">
+              <tr>
+                <th class="p-3">ID</th>
+                <th class="p-3">姓名</th>
+                <th class="p-3">Email</th>
+                <th class="p-3">聯絡電話 (預設密碼)</th>
+                <th class="p-3">分會單位</th>
+                <th class="p-3 text-right">管理操作</th>
+              </tr>
+            </thead>
+            <tbody id="adminStudentsTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- ======================================================================= -->
+  <!-- MODALS -->
+  <!-- ======================================================================= -->
+
+  <!-- 1. Login Modal -->
+  <div id="loginModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-slate-100 relative">
+      <div class="text-center mb-6">
+        <div class="w-12 h-12 rounded-2xl bg-emerald-600 text-white font-black text-2xl flex items-center justify-center mx-auto mb-3 shadow-md shadow-emerald-600/30">
+          🌏
+        </div>
+        <h3 class="text-xl font-extrabold text-slate-900">學員登入平台</h3>
+        <p class="text-xs text-slate-500 mt-1">請使用學員清單之 Email 或電話登入（預設密碼為手機號碼）</p>
+      </div>
+
+      <div id="loginError" class="hidden mb-4 p-3 rounded-xl bg-red-50 text-red-700 text-xs font-semibold border border-red-200 text-center"></div>
+
+      <form id="loginForm" class="space-y-4">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">帳號 (Email 或 手機號碼)</label>
+          <input type="text" id="loginAccount" required class="w-full text-sm border border-slate-300 rounded-xl px-3 py-2.5 focus:ring-emerald-500 focus:border-emerald-500" placeholder="例如：test001@gmail.com 或 0920111111">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">登入密碼 (預設為手機號碼)</label>
+          <input type="password" id="loginPassword" required class="w-full text-sm border border-slate-300 rounded-xl px-3 py-2.5 focus:ring-emerald-500 focus:border-emerald-500" placeholder="輸入密碼">
+        </div>
+        <button type="submit" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm rounded-xl shadow-md shadow-emerald-600/20 transition-colors">
+          登入系統
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 2. Crisis Event Pop-up Modal -->
+  <div id="crisisModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4">
+    <div class="bg-slate-900 text-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-amber-500/50 space-y-4">
+      <!-- 10s Timer -->
+      <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+        <div id="crisisTimerBar" class="h-full bg-amber-400 transition-all duration-1000" style="width: 100%;"></div>
+      </div>
+      <div>
+        <span class="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold">倒數 10 秒即時抉擇</span>
+        <h3 id="crisisTitle" class="text-lg font-black text-amber-300 mt-2">⚠️ 善意拉扯危機事件！</h3>
+        <p id="crisisDesc" class="text-xs text-slate-300 mt-1 leading-relaxed"></p>
+      </div>
+      <div id="crisisOptionsContainer" class="space-y-2 pt-2"></div>
+    </div>
+  </div>
+
+  <!-- 3. My Worksheets History Modal -->
+  <div id="myWorksheetsModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+    <div class="bg-white rounded-3xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl border border-slate-100 overflow-hidden">
+      <div class="p-5 border-b border-slate-200 flex justify-between items-center">
+        <div>
+          <h3 class="font-black text-base text-slate-900">我的連動練習單歷史紀錄</h3>
+          <p class="text-xs text-slate-500">點選即可載入並隨時進行編輯修改或刪除</p>
+        </div>
+        <button onclick="document.getElementById('myWorksheetsModal').classList.add('hidden')" class="text-slate-400 hover:text-slate-600 text-xl font-bold">✕</button>
+      </div>
+      <div id="myWorksheetsList" class="p-5 overflow-y-auto space-y-3 flex-1"></div>
+    </div>
+  </div>
+
+  <!-- 4. Teacher Grading Modal -->
+  <div id="gradeModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4">
+      <div class="flex justify-between items-center">
+        <h3 class="font-extrabold text-base text-slate-900">線上批閱與成績評語</h3>
+        <button onclick="document.getElementById('gradeModal').classList.add('hidden')" class="text-slate-400 hover:text-slate-600 text-lg">✕</button>
+      </div>
+      <p id="gradeModalTargetName" class="text-xs font-bold text-purple-700"></p>
+      <div>
+        <label class="block text-xs font-bold text-slate-700 mb-1">評分 (0 ~ 100 分)</label>
+        <input type="number" id="gradeScoreInput" min="0" max="100" class="w-full text-sm border border-slate-300 rounded-xl p-2.5 focus:ring-purple-500" placeholder="例如：95">
+      </div>
+      <div>
+        <label class="block text-xs font-bold text-slate-700 mb-1">講師講評與回饋</label>
+        <textarea id="gradeCommentInput" rows="3" class="w-full text-xs border border-slate-300 rounded-xl p-2.5 focus:ring-purple-500" placeholder="針對連動作用機制、拉扯檢核或因果鏈給予學員實質回饋..."></textarea>
+      </div>
+      <div class="flex justify-end gap-2 pt-2">
+        <button onclick="document.getElementById('gradeModal').classList.add('hidden')" class="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-bold rounded-xl">取消</button>
+        <button id="gradeSubmitBtn" class="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl shadow-md">儲存評語與成績</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="bg-white border-t border-slate-200 mt-12 py-6 text-center text-xs text-slate-400">
+    <div class="max-w-7xl mx-auto px-4">
+      <p>佛光永續學院 × 佛光大學應用科技與設計學院 ｜ SDGs 與氣候行動連動分析教學專案</p>
+      <p class="text-[11px] mt-1">延伸學習資源：全球目標中文網 (globalgoals.tw) ｜ 聯合國 SDGs 官網 (sdgs.un.org/goals) ｜ 綠色公益基金會 (ipuregreen.org)</p>
+    </div>
+  </footer>
+
+  <!-- Core App JS -->
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
