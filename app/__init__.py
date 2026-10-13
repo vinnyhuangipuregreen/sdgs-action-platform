@@ -14,4 +14,6 @@ def _ensure_module(subname):
 
 database = _ensure_module("database")
 auth = _ensure_module("auth")
+docx_exporter = _ensure_module("docx_exporter")
+mailer = _ensure_module("mailer")
 main = _ensure_module("main")

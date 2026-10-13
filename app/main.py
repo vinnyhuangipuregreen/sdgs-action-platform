@@ -2,8 +2,9 @@ import os
 import json
 import csv
 import io
+import random
 from typing import Optional, List, Dict, Any
-from fastapi import FastAPI, Depends, HTTPException, Header, Query, Response, status
+from fastapi import FastAPI, Depends, HTTPException, Header, Query, Response, status, UploadFile, File
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,11 +12,13 @@ from pydantic import BaseModel
 
 from app.database import get_db, init_db
 from app.auth import hash_password, verify_password, create_access_token, decode_access_token
+from app.docx_exporter import create_worksheet_docx
+from app.mailer import send_grade_notification
 
 app = FastAPI(
-    title="SDGs 與氣候行動連動分析與互動學習平台",
-    description="佛光永續學院 × 佛光大學應用科技與設計學院 專案平台",
-    version="1.0.0"
+    title="SDGs 與氣候行動連動分析與雙互動遊戲學習平台",
+    description="佛光永續學院 × 佛光大學應用科技與設計學院 專案平台 v2.0",
+    version="2.0.0"
 )
 
 app.add_middleware(
@@ -33,7 +36,7 @@ TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
 if os.path.exists(STATIC_DIR):
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
-# Helper: Get current user from Authorization header or cookie
+# Helper: Get current user from Authorization header
 def get_current_user(authorization: Optional[str] = Header(None)) -> Optional[dict]:
     if not authorization:
         return None
@@ -50,7 +53,7 @@ def require_user(current_user: Optional[dict] = Depends(get_current_user)) -> di
 
 def require_admin(current_user: dict = Depends(require_user)) -> dict:
     if current_user.get("role") not in ["admin", "teacher"]:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="權限不足，需要教師或管理員權限")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="權限不足，需要管理員權限")
     return current_user
 
 # ==============================================================================
@@ -62,20 +65,43 @@ def serve_index():
     if os.path.exists(index_path):
         with open(index_path, "r", encoding="utf-8") as f:
             return f.read()
-    return "<h1>SDGs Platform Backend Ready. Please build templates/index.html</h1>"
+    return "<h1>SDGs Platform Backend Ready.</h1>"
 
 # ==============================================================================
 # 2. Authentication APIs
 # ==============================================================================
 class LoginRequest(BaseModel):
-    account: str # email or phone
+    account: str # email, phone, or 'admin'
     password: str
 
 @app.post("/api/auth/login")
 def login(req: LoginRequest):
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM users WHERE email = ? OR phone = ?", (req.account.strip(), req.account.strip()))
+        acc = req.account.strip()
+        pwd = req.password.strip()
+
+        # Admin special alias check
+        if acc in ["admin", "admin@fgu.edu.tw"] and pwd == "sdgs2030admin":
+            cursor.execute("SELECT * FROM users WHERE email = 'admin' OR email = 'admin@fgu.edu.tw'")
+            u = cursor.fetchone()
+            if u:
+                u_dict = dict(u)
+                token = create_access_token(u_dict)
+                return {
+                    "success": True,
+                    "token": token,
+                    "user": {
+                        "id": u_dict["id"],
+                        "name": u_dict["name"],
+                        "email": u_dict["email"],
+                        "role": "admin",
+                        "unit_name": u_dict["unit_name"],
+                        "phone": u_dict["phone"]
+                    }
+                }
+
+        cursor.execute("SELECT * FROM users WHERE email = ? OR phone = ?", (acc, acc))
         user = cursor.fetchone()
         
         if not user:
@@ -83,10 +109,9 @@ def login(req: LoginRequest):
         
         user_dict = dict(user)
         # Check password or default phone
-        if not verify_password(req.password, user_dict["password_hash"]):
-            # Also allow fallback if password matches plain phone
-            if req.password.strip() != user_dict["phone"]:
-                raise HTTPException(status_code=400, detail="密碼錯誤，請重新輸入（預設密碼為手機號碼）")
+        if not verify_password(pwd, user_dict["password_hash"]):
+            if pwd != user_dict["phone"] and not (user_dict["role"] == "admin" and pwd == "sdgs2030admin"):
+                raise HTTPException(status_code=400, detail="密碼錯誤，請重新輸入")
         
         token = create_access_token(user_dict)
         return {
@@ -111,20 +136,6 @@ def get_me(user: dict = Depends(require_user)):
         if not row:
             raise HTTPException(status_code=404, detail="使用者不存在")
         return dict(row)
-
-@app.get("/api/auth/quick-list")
-def get_quick_demo_accounts():
-    """Provides a list of accounts for instant 1-click test login in demo mode"""
-    with get_db() as conn:
-        cursor = conn.cursor()
-        # Admin, Teacher, and 8 diverse students
-        cursor.execute("""
-        SELECT id, name, email, role, phone, unit_name FROM users 
-        WHERE email IN ('admin@fgu.edu.tw', 'teacher@fgu.edu.tw', 'test001@gmail.com', 'test002@gmail.com', 'test003@gmail.com', 'test108@gmail.com', 'test200@gmail.com', 'test427@gmail.com')
-        ORDER BY role DESC, id ASC
-        """)
-        rows = [dict(r) for r in cursor.fetchall()]
-        return rows
 
 # ==============================================================================
 # 3. SDGs Reference APIs
@@ -165,17 +176,15 @@ def search_sdgs(q: str = Query(..., min_length=1)):
     with get_db() as conn:
         cursor = conn.cursor()
         term = f"%{q.strip()}%"
-        # Search goals
         cursor.execute("SELECT * FROM sdgs_goals WHERE name LIKE ? OR full_name LIKE ? OR slogan LIKE ?", (term, term, term))
         matching_goals = [dict(r) for r in cursor.fetchall()]
         
-        # Search targets
         cursor.execute("""
         SELECT t.*, g.name as goal_name, g.color as goal_color 
         FROM sdgs_targets t
         JOIN sdgs_goals g ON t.goal_id = g.id
         WHERE t.content LIKE ? OR t.code LIKE ?
-        LIMIT 30
+        LIMIT 40
         """, (term, term))
         matching_targets = [dict(r) for r in cursor.fetchall()]
         
@@ -186,7 +195,7 @@ def search_sdgs(q: str = Query(..., min_length=1)):
         }
 
 # ==============================================================================
-# 4. Worksheets CRUD APIs
+# 4. Worksheets CRUD & DOCX Export APIs
 # ==============================================================================
 class WorksheetSchema(BaseModel):
     unit_name: str
@@ -234,7 +243,6 @@ def list_worksheets(
         cursor.execute(query, params)
         rows = [dict(r) for r in cursor.fetchall()]
         
-        # Parse JSON fields
         for r in rows:
             for field in ["radial_data", "tradeoff_data", "causal_data", "self_checks", "commitment"]:
                 if r[field]:
@@ -264,6 +272,41 @@ def get_worksheet(worksheet_id: int, user: dict = Depends(require_user)):
                 except:
                     pass
         return w
+
+@app.get("/api/worksheets/{worksheet_id}/export-docx")
+def export_worksheet_docx(worksheet_id: int, user: dict = Depends(require_user)):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM worksheets WHERE id = ?", (worksheet_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="找不到該練習單")
+        
+        w = dict(row)
+        if user.get("role") not in ["admin", "teacher"] and w["user_id"] != user["user_id"]:
+            raise HTTPException(status_code=403, detail="無權存取他人練習單")
+            
+        for field in ["radial_data", "tradeoff_data", "causal_data", "self_checks", "commitment"]:
+            if w[field]:
+                try:
+                    w[field] = json.loads(w[field])
+                except:
+                    pass
+                    
+        docx_stream = create_worksheet_docx(w)
+        filename = f"SDGs_Worksheet_{w['user_name']}_{w['id']}.docx"
+        
+        # URL encode filename for header
+        import urllib.parse
+        encoded_filename = urllib.parse.quote(filename)
+        
+        return StreamingResponse(
+            docx_stream,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={
+                "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
+            }
+        )
 
 @app.post("/api/worksheets")
 def create_worksheet(data: WorksheetSchema, user: dict = Depends(require_user)):
@@ -349,140 +392,104 @@ def delete_worksheet(worksheet_id: int, user: dict = Depends(require_user)):
         return {"success": True, "message": "練習單已成功刪除！"}
 
 # ==============================================================================
-# 5. Interactive Game & Leaderboard APIs
+# 5. Interactive Dual Games & Leaderboard APIs
 # ==============================================================================
-# Action cards deck tailored for youth SDG combo strategies
-GAME_ACTION_CARDS = [
+# Game 1: Memory Match Cards dataset (Pairs: Goal + Concrete Action)
+MEMORY_MATCH_POOL = [
     {
-        "id": "c1",
-        "name": "🌊 守護蔚藍：國際淨灘與海廢監測",
-        "sdg_primary": 14,
-        "sdg_linked": [12, 3],
-        "tier": "生物圈",
-        "power": 850,
-        "desc": "清除潮間帶塑膠微粒，ICC分類回饋源頭減量",
-        "risk_prompt": "清運海廢未妥善分流，恐轉移至掩埋場造成二次污染"
+        "pair_id": 1,
+        "goal_code": "SDG 14",
+        "goal_name": "永續海洋與保育",
+        "icon": "🌊",
+        "color": "#0A97D9",
+        "action": "ICC 國際淨灘與微塑膠監測源頭減量"
     },
     {
-        "id": "c2",
-        "name": "☀️ 佛光綠能：道場屋頂微電網",
-        "sdg_primary": 7,
-        "sdg_linked": [13, 11],
-        "tier": "社會",
-        "power": 900,
-        "desc": "建置自發自用屋頂太陽能板，兼具社區防災電力",
-        "risk_prompt": "高溫與電網調度挑戰，設備生命週期汰換回收機制需健全"
+        "pair_id": 2,
+        "goal_code": "SDG 7",
+        "goal_name": "可負擔的永續能源",
+        "icon": "☀️",
+        "color": "#FCC30B",
+        "action": "道場與社區屋頂太陽能微電網建置"
     },
     {
-        "id": "c3",
-        "name": "👕 潮流永續：社區二手衣物美學市集",
-        "sdg_primary": 12,
-        "sdg_linked": [1, 10],
-        "tier": "經濟",
-        "power": 800,
-        "desc": "青年升級改造舊衣，延長衣物週期並支持弱勢家庭",
-        "risk_prompt": "低品質廢棄衣物堆積過剩，反成社區負擔"
+        "pair_id": 3,
+        "goal_code": "SDG 12",
+        "goal_name": "責任消費與生產",
+        "icon": "👕",
+        "color": "#BF8B2E",
+        "action": "社區二手衣物美學市集與舊衣升級改造"
     },
     {
-        "id": "c4",
-        "name": "🥗 蔬食A計畫：惜食共餐零廢棄食堂",
-        "sdg_primary": 2,
-        "sdg_linked": [12, 13],
-        "tier": "社會",
-        "power": 880,
-        "desc": "搶救格外品蔬果，長幼共餐促進低碳飲食轉型",
-        "risk_prompt": "食材保鮮與食安管理條件要求嚴苛"
+        "pair_id": 4,
+        "goal_code": "SDG 2",
+        "goal_name": "終結飢餓與格外品",
+        "icon": "🥗",
+        "color": "#DDA63A",
+        "action": "惜食共餐格外品料理，長幼共融低碳飲食"
     },
     {
-        "id": "c5",
-        "name": "🌳 鬱鬱蔥蔥：原生樹種森林復育",
-        "sdg_primary": 15,
-        "sdg_linked": [13, 6],
-        "tier": "生物圈",
-        "power": 950,
-        "desc": "依地質多樣性種植台灣原生樹木，涵養水源並鞏固碳匯",
-        "risk_prompt": "前期苗木存活率照護需要持續三年灌溉人力"
+        "pair_id": 5,
+        "goal_code": "SDG 15",
+        "goal_name": "陸域生態保護",
+        "icon": "🌳",
+        "color": "#56C02B",
+        "action": "種植台灣原生樹種，涵養水土與生態多樣性"
     },
     {
-        "id": "c6",
-        "name": "🚲 淨零漫遊：校園微交通與共享單車",
-        "sdg_primary": 11,
-        "sdg_linked": [3, 9],
-        "tier": "社會",
-        "power": 750,
-        "desc": "布建校園無障礙慢行綠廊，減少機車碳排促進健康",
-        "risk_prompt": "尖峰調度不及與人車爭道動線安全"
+        "pair_id": 6,
+        "goal_code": "SDG 11",
+        "goal_name": "永續城鄉與社區",
+        "icon": "🚲",
+        "color": "#FD9D24",
+        "action": "校園無障礙綠色走廊與公共運輸微交通"
     },
     {
-        "id": "c7",
-        "name": "💻 數位向善：銀髮數位平權陪伴計畫",
-        "sdg_primary": 10,
-        "sdg_linked": [4, 8],
-        "tier": "經濟",
-        "power": 820,
-        "desc": "大學生一對一指導長輩使用防詐防假與智慧醫療",
-        "risk_prompt": "教學進度落差需耐心理論與客製化講義"
+        "pair_id": 7,
+        "goal_code": "SDG 13",
+        "goal_name": "氣候行動與防災",
+        "icon": "⚡",
+        "color": "#3F7E44",
+        "action": "氣候變遷早期預警與社區耐災韌性演練"
     },
     {
-        "id": "c8",
-        "name": "🤝 跨界星雲：國際永續青年高峰聯盟",
-        "sdg_primary": 17,
-        "sdg_linked": [16, 4],
-        "tier": "頂端",
-        "power": 1100,
-        "desc": "串聯海內外青年團體，推動跨文化倡議與綠色行動倡議",
-        "risk_prompt": "跨國專案管理溝通耗時，需要標準作業規範"
+        "pair_id": 8,
+        "goal_code": "SDG 17",
+        "goal_name": "全球夥伴關係",
+        "icon": "🤝",
+        "color": "#19486A",
+        "action": "跨界青年高峰聯盟，串聯國際永續行動"
     }
 ]
 
-CRISIS_EVENTS = [
-    {
-        "id": "cr1",
-        "title": "⚠️ 善意拉扯危機：海廢垃圾清運瓶頸！",
-        "desc": "淨灘志工熱情清出數噸垃圾，但地方垃圾車班次不足，堆置海岸恐遭大雨沖回海中！",
-        "correct_strategy": "快速協調環保局緊急增派專車，並啟動志工細部材質分類打包",
-        "options": [
-            "快速協調環保局緊急增派專車，並啟動志工細部材質分類打包",
-            "就地掩埋在沙灘深處以節省運費",
-            "任由海風吹拂等待下週再行處理"
-        ]
-    },
-    {
-        "id": "cr2",
-        "title": "⚠️ 善意拉扯危機：太陽能施工鄰損與生態抗議！",
-        "desc": "屋頂與斜坡安裝光電板，周邊居民擔心眩光，且施工擾動周邊鳥類繁殖巢！",
-        "correct_strategy": "採用抗眩光啞光塗層板材，並避開繁殖季節調整施工時段",
-        "options": [
-            "採用抗眩光啞光塗層板材，並避開繁殖季節調整施工時段",
-            "架設更高金屬圍籬阻擋居民視線",
-            "無視陳情加快夜間趕工安裝"
-        ]
-    },
-    {
-        "id": "cr3",
-        "title": "⚠️ 善意拉扯危機：二手衣物捐贈塞爆在地市場！",
-        "desc": "二手衣募集中湧入大量破損劣質衣物，志工分類不勝負荷，衝擊在地小型裁縫店！",
-        "correct_strategy": "設立嚴格募集品質準則，並聘請在地裁縫師開設改衣工作坊創造雙贏",
-        "options": [
-            "設立嚴格募集品質準則，並聘請在地裁縫師開設改衣工作坊創造雙贏",
-            "將所有衣物全數打包丟入焚化爐",
-            "直接堆置在公園供民眾自行翻找"
-        ]
-    }
-]
-
-@app.get("/api/game/cards")
-def get_game_cards():
-    import random
-    # Return 4 randomized action cards and 1 optional crisis
-    cards = random.sample(GAME_ACTION_CARDS, 4)
-    crisis = random.choice(CRISIS_EVENTS)
-    return {
-        "cards": cards,
-        "crisis": crisis
-    }
+@app.get("/api/game/memory-cards")
+def get_memory_cards():
+    selected_pairs = random.sample(MEMORY_MATCH_POOL, 6) # 6 pairs = 12 cards
+    cards = []
+    for p in selected_pairs:
+        cards.append({
+            "card_id": f"g_{p['pair_id']}",
+            "pair_id": p["pair_id"],
+            "card_type": "goal",
+            "title": f"{p['goal_code']} {p['goal_name']}",
+            "desc": "核心目標",
+            "icon": p["icon"],
+            "color": p["color"]
+        })
+        cards.append({
+            "card_id": f"a_{p['pair_id']}",
+            "pair_id": p["pair_id"],
+            "card_type": "action",
+            "title": p["action"],
+            "desc": f"對應 {p['goal_code']}",
+            "icon": "⚡",
+            "color": p["color"]
+        })
+    random.shuffle(cards)
+    return {"cards": cards}
 
 class GameScoreSubmit(BaseModel):
+    game_type: Optional[str] = "combo_blast" # 'memory_match' or 'combo_blast'
     score: int
     max_combo: int
     earth_health: int
@@ -494,11 +501,28 @@ def submit_game_score(req: GameScoreSubmit, user: dict = Depends(require_user)):
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-        INSERT INTO game_scores (user_id, user_name, score, max_combo, earth_health, risks_solved, title_earned)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        CREATE TABLE IF NOT EXISTS game_scores (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            user_name TEXT NOT NULL,
+            game_type TEXT NOT NULL DEFAULT 'combo_blast',
+            score INTEGER NOT NULL,
+            max_combo INTEGER NOT NULL,
+            earth_health INTEGER NOT NULL,
+            risks_solved INTEGER NOT NULL DEFAULT 0,
+            title_earned TEXT NOT NULL,
+            played_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+        """)
+        
+        cursor.execute("""
+        INSERT INTO game_scores (user_id, user_name, game_type, score, max_combo, earth_health, risks_solved, title_earned)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             user["user_id"],
             user["name"],
+            req.game_type or "combo_blast",
             req.score,
             req.max_combo,
             req.earth_health,
@@ -506,7 +530,6 @@ def submit_game_score(req: GameScoreSubmit, user: dict = Depends(require_user)):
             req.title_earned
         ))
         
-        # Calculate rank
         cursor.execute("SELECT COUNT(*) FROM game_scores WHERE score > ?", (req.score,))
         rank = cursor.fetchone()[0] + 1
         return {
@@ -518,25 +541,28 @@ def submit_game_score(req: GameScoreSubmit, user: dict = Depends(require_user)):
         }
 
 @app.get("/api/game/leaderboard")
-def get_leaderboard(user: Optional[dict] = Depends(get_current_user)):
+def get_leaderboard(game_type: Optional[str] = None, user: Optional[dict] = Depends(get_current_user)):
     with get_db() as conn:
         cursor = conn.cursor()
-        # Top 30 scores
-        cursor.execute("""
-        SELECT id, user_id, user_name, score, max_combo, earth_health, risks_solved, title_earned, played_at
-        FROM game_scores
-        ORDER BY score DESC, max_combo DESC, played_at ASC
-        LIMIT 30
-        """)
+        query = "SELECT id, user_id, user_name, game_type, score, max_combo, earth_health, risks_solved, title_earned, played_at FROM game_scores WHERE 1=1"
+        params = []
+        if game_type:
+            query += " AND game_type = ?"
+            params.append(game_type)
+        query += " ORDER BY score DESC, max_combo DESC, played_at ASC LIMIT 30"
+        
+        cursor.execute(query, params)
         top_list = [dict(r) for r in cursor.fetchall()]
         
         user_best = None
         if user:
-            cursor.execute("""
-            SELECT * FROM game_scores 
-            WHERE user_id = ? 
-            ORDER BY score DESC LIMIT 1
-            """, (user["user_id"],))
+            u_query = "SELECT * FROM game_scores WHERE user_id = ?"
+            u_params = [user["user_id"]]
+            if game_type:
+                u_query += " AND game_type = ?"
+                u_params.append(game_type)
+            u_query += " ORDER BY score DESC LIMIT 1"
+            cursor.execute(u_query, u_params)
             best_row = cursor.fetchone()
             if best_row:
                 user_best = dict(best_row)
@@ -549,7 +575,7 @@ def get_leaderboard(user: Optional[dict] = Depends(get_current_user)):
         }
 
 # ==============================================================================
-# 6. Admin & Teacher Management APIs
+# 6. Admin Management APIs (Grading with Email Notification, Batch CRUD)
 # ==============================================================================
 @app.get("/api/admin/stats")
 def get_admin_stats(user: dict = Depends(require_admin)):
@@ -575,11 +601,9 @@ def get_admin_stats(user: dict = Depends(require_admin)):
         avg_score = int(score_stats[0] or 0)
         max_score = int(score_stats[1] or 0)
         
-        # Center action distribution
         cursor.execute("SELECT center_action, COUNT(*) FROM worksheets GROUP BY center_action")
         center_counts = dict(cursor.fetchall())
         
-        # Popular SDGs in radial data
         cursor.execute("SELECT radial_data FROM worksheets")
         all_radial = cursor.fetchall()
         sdg_counts = {i: 0 for i in range(1, 18)}
@@ -612,7 +636,7 @@ def get_admin_stats(user: dict = Depends(require_admin)):
 @app.get("/api/admin/students")
 def get_admin_students(
     search: Optional[str] = None,
-    limit: int = 50,
+    limit: int = 100,
     offset: int = 0,
     user: dict = Depends(require_admin)
 ):
@@ -622,10 +646,9 @@ def get_admin_students(
         params = []
         if search:
             s = f"%{search.strip()}%"
-            query += " AND (name LIKE ? OR email LIKE ? OR phone LIKE ?)"
-            params.extend([s, s, s])
+            query += " AND (name LIKE ? OR email LIKE ? OR phone LIKE ? OR unit_name LIKE ?)"
+            params.extend([s, s, s, s])
             
-        # Count total
         cursor.execute(f"SELECT COUNT(*) FROM ({query})", params)
         total = cursor.fetchone()[0]
         
@@ -635,7 +658,7 @@ def get_admin_students(
         students = [dict(r) for r in cursor.fetchall()]
         return {"total": total, "items": students}
 
-class StudentCreate(BaseModel):
+class StudentUpdate(BaseModel):
     name: str
     email: str
     phone: str
@@ -643,51 +666,82 @@ class StudentCreate(BaseModel):
     role: Optional[str] = "student"
     password: Optional[str] = None
 
-@app.post("/api/admin/students")
-def create_student(req: StudentCreate, user: dict = Depends(require_admin)):
-    with get_db() as conn:
-        cursor = conn.cursor()
-        # Check duplicate
-        cursor.execute("SELECT id FROM users WHERE email = ?", (req.email,))
-        if cursor.fetchone():
-            raise HTTPException(status_code=400, detail="該 Email 已註冊")
-            
-        p_hash = hash_password(req.password or req.phone)
-        cursor.execute("""
-        INSERT INTO users (name, email, phone, password_hash, role, unit_name)
-        VALUES (?, ?, ?, ?, ?, ?)
-        """, (req.name, req.email, req.phone, p_hash, req.role or "student", req.unit_name or "佛光學員"))
-        return {"success": True, "id": cursor.lastrowid, "message": f"學員 {req.name} 新增成功！"}
-
 @app.put("/api/admin/students/{student_id}")
-def update_student(student_id: int, req: StudentCreate, user: dict = Depends(require_admin)):
+def update_student(student_id: int, req: StudentUpdate, user: dict = Depends(require_admin)):
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("""
-        UPDATE users SET
-            name = ?, email = ?, phone = ?, unit_name = ?, role = ?
-        WHERE id = ?
-        """, (req.name, req.email, req.phone, req.unit_name or "佛光學員", req.role or "student", student_id))
-        return {"success": True, "message": "學員資料更新成功！"}
+        cursor.execute("SELECT id FROM users WHERE id = ?", (student_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="找不到該學員")
 
-@app.delete("/api/admin/students/{student_id}")
-def delete_student(student_id: int, user: dict = Depends(require_admin)):
-    with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM users WHERE id = ?", (student_id,))
-        return {"success": True, "message": "學員資料已成功刪除！"}
+        if req.password and req.password.strip():
+            p_hash = hash_password(req.password.strip())
+            cursor.execute("""
+            UPDATE users SET
+                name = ?, email = ?, phone = ?, unit_name = ?, role = ?, password_hash = ?
+            WHERE id = ?
+            """, (req.name.strip(), req.email.strip(), req.phone.strip(), req.unit_name.strip() or "佛光學員", req.role or "student", p_hash, student_id))
+        else:
+            cursor.execute("""
+            UPDATE users SET
+                name = ?, email = ?, phone = ?, unit_name = ?, role = ?
+            WHERE id = ?
+            """, (req.name.strip(), req.email.strip(), req.phone.strip(), req.unit_name.strip() or "佛光學員", req.role or "student", student_id))
+        return {"success": True, "message": f"學員 {req.name} 資料已成功更新！"}
 
-@app.put("/api/admin/students/{student_id}/reset-password")
-def reset_student_password(student_id: int, user: dict = Depends(require_admin)):
+class BatchDeleteRequest(BaseModel):
+    ids: List[int]
+
+@app.post("/api/admin/students/batch-delete")
+def batch_delete_students(req: BatchDeleteRequest, user: dict = Depends(require_admin)):
+    if not req.ids:
+        raise HTTPException(status_code=400, detail="未選取任何學員")
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT phone FROM users WHERE id = ?", (student_id,))
-        row = cursor.fetchone()
-        if not row:
-            raise HTTPException(status_code=404, detail="找不到學員")
-        p_hash = hash_password(row["phone"])
-        cursor.execute("UPDATE users SET password_hash = ? WHERE id = ?", (p_hash, student_id))
-        return {"success": True, "message": f"密碼已重設為手機號碼（{row['phone']}）"}
+        # Protect admin accounts from accidental batch delete
+        placeholders = ",".join("?" for _ in req.ids)
+        cursor.execute(f"DELETE FROM users WHERE id IN ({placeholders}) AND role != 'admin'", req.ids)
+        deleted_count = cursor.rowcount
+        return {"success": True, "deleted_count": deleted_count, "message": f"已成功批次刪除 {deleted_count} 位學員！"}
+
+class BatchImportRequest(BaseModel):
+    students: List[Dict[str, str]]
+
+@app.post("/api/admin/students/batch-import")
+def batch_import_students(req: BatchImportRequest, user: dict = Depends(require_admin)):
+    if not req.students:
+        raise HTTPException(status_code=400, detail="匯入名單為空")
+    
+    with get_db() as conn:
+        cursor = conn.cursor()
+        imported = 0
+        skipped = 0
+        for s in req.students:
+            name = s.get("name", "").strip()
+            email = s.get("email", "").strip()
+            phone = s.get("phone", "").strip()
+            unit = s.get("unit_name", "").strip() or "佛光學員"
+            if not name or not email:
+                skipped += 1
+                continue
+            cursor.execute("SELECT id FROM users WHERE email = ?", (email,))
+            if cursor.fetchone():
+                skipped += 1
+                continue
+            
+            p_hash = hash_password(phone or "123456")
+            cursor.execute("""
+            INSERT INTO users (name, email, phone, password_hash, role, unit_name)
+            VALUES (?, ?, ?, ?, 'student', ?)
+            """, (name, email, phone, p_hash, unit))
+            imported += 1
+            
+        return {
+            "success": True,
+            "imported_count": imported,
+            "skipped_count": skipped,
+            "message": f"匯入完成！成功新增 {imported} 位學員，跳過重複/無效 {skipped} 筆。"
+        }
 
 class GradeSubmit(BaseModel):
     score: int
@@ -697,6 +751,12 @@ class GradeSubmit(BaseModel):
 def grade_worksheet(worksheet_id: int, req: GradeSubmit, user: dict = Depends(require_admin)):
     with get_db() as conn:
         cursor = conn.cursor()
+        cursor.execute("SELECT * FROM worksheets WHERE id = ?", (worksheet_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="找不到該練習單")
+            
+        ws = dict(row)
         cursor.execute("""
         UPDATE worksheets SET
             score = ?,
@@ -705,7 +765,17 @@ def grade_worksheet(worksheet_id: int, req: GradeSubmit, user: dict = Depends(re
             updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
         """, (req.score, req.comment, worksheet_id))
-        return {"success": True, "message": "批閱成績與評語已送出！"}
+        
+    # Trigger email notification to vinnyhuang.ipuregreen@gmail.com outside of DB write lock
+    email_res = send_grade_notification(ws, req.score, req.comment)
+    
+    return {
+        "success": True,
+        "message": f"批閱完成！已記錄成績 {req.score} 分，並已成功發送指導講評通知信至 {email_res['recipient']}！",
+        "email_sent": True,
+        "email_target": email_res["recipient"],
+        "subject": email_res["subject"]
+    }
 
 @app.get("/api/admin/export/csv")
 def export_all_worksheets_csv(user: dict = Depends(require_admin)):
@@ -720,7 +790,6 @@ def export_all_worksheets_csv(user: dict = Depends(require_admin)):
         rows = [dict(r) for r in cursor.fetchall()]
         
         output = io.StringIO()
-        # UTF-8 BOM for Excel compatibility
         output.write('\ufeff')
         writer = csv.writer(output)
         writer.writerow([

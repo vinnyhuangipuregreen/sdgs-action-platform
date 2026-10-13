@@ -6,7 +6,6 @@ def get_db_path():
     db_env = os.environ.get("DATABASE_PATH")
     if db_env:
         return db_env
-    # Check if local repo directory supports sqlite locking
     local_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     local_path = os.path.join(local_dir, "sdgs.db")
     try:
@@ -108,6 +107,7 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
             user_name TEXT NOT NULL,
+            game_type TEXT NOT NULL DEFAULT 'combo_blast',
             score INTEGER NOT NULL,
             max_combo INTEGER NOT NULL,
             earth_health INTEGER NOT NULL,
@@ -115,6 +115,20 @@ def init_db():
             title_earned TEXT NOT NULL,
             played_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+        """)
+
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS system_email_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            worksheet_id INTEGER,
+            recipient TEXT NOT NULL,
+            student_name TEXT NOT NULL,
+            subject TEXT NOT NULL,
+            score INTEGER,
+            comment TEXT,
+            status TEXT NOT NULL,
+            sent_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
         """)
         

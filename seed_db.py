@@ -3,7 +3,6 @@ import json
 import sqlite3
 import sys
 
-# Ensure app is importable
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, CURRENT_DIR)
 
@@ -23,7 +22,6 @@ def seed():
             with open(sdgs_path, "r", encoding="utf-8") as f:
                 sdgs_data = json.load(f)
             
-            # Check if already seeded
             cursor.execute("SELECT COUNT(*) FROM sdgs_goals")
             if cursor.fetchone()[0] == 0:
                 print("Seeding 17 SDGs Goals...")
@@ -40,18 +38,22 @@ def seed():
                     VALUES (?, ?, ?, ?)
                     """, (t["goal_id"], t["code"], t["type"], t["text"]))
                 print("SDGs goals and targets seeded successfully!")
-            else:
-                print("SDGs goals and targets already present.")
-                
-        # 2. Seed Admin & Teachers
-        admin_pass = hash_password("admin888")
-        cursor.execute("SELECT id FROM users WHERE email = 'admin@fgu.edu.tw'")
-        if not cursor.fetchone():
+
+        # 2. Seed Admin with default account 'admin' and password 'sdgs2030admin'
+        admin_pass = hash_password("sdgs2030admin")
+        
+        # Create or update admin account
+        cursor.execute("SELECT id FROM users WHERE email = 'admin' OR email = 'admin@fgu.edu.tw'")
+        row = cursor.fetchone()
+        if not row:
             cursor.execute("""
             INSERT INTO users (name, email, email_backup, phone, password_hash, role, unit_name)
             VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, ("戴慶華 博士 (系統管理員)", "admin@fgu.edu.tw", "anderson@fgu.edu.tw", "0912345678", admin_pass, "admin", "佛光永續學院"))
-            print("Admin user created: admin@fgu.edu.tw / admin888")
+            """, ("系統管理員 (戴慶華 博士)", "admin", "admin@fgu.edu.tw", "0912345678", admin_pass, "admin", "佛光永續學院"))
+            print("Admin user created: admin / sdgs2030admin")
+        else:
+            cursor.execute("UPDATE users SET password_hash = ?, role = 'admin' WHERE id = ?", (admin_pass, row[0]))
+            print("Admin user updated with password 'sdgs2030admin'")
 
         teacher_pass = hash_password("teacher888")
         cursor.execute("SELECT id FROM users WHERE email = 'teacher@fgu.edu.tw'")
@@ -60,7 +62,6 @@ def seed():
             INSERT INTO users (name, email, email_backup, phone, password_hash, role, unit_name)
             VALUES (?, ?, ?, ?, ?, ?, ?)
             """, ("佛光教學助教", "teacher@fgu.edu.tw", "ta@fgu.edu.tw", "0987654321", teacher_pass, "teacher", "佛光大學應用科技與設計學院"))
-            print("Teacher user created: teacher@fgu.edu.tw / teacher888")
 
         # 3. Seed Students (427 students)
         students_path = os.path.join(CURRENT_DIR, "data", "students_seed.json")
@@ -79,8 +80,6 @@ def seed():
                     VALUES (?, ?, ?, ?, ?, ?, ?)
                     """, (s["name"], s["email"], s["email_backup"], s["phone"], p_hash, s["role"], s["unit"]))
                 print("All students seeded successfully!")
-            else:
-                print(f"Students already present ({student_count} found).")
 
         # 4. Seed Demonstrative Worksheets
         cursor.execute("SELECT COUNT(*) FROM worksheets")
@@ -144,12 +143,10 @@ def seed():
                     causal1, checks1, commit1, "reviewed", 98,
                     "分析非常透徹！作用機制具備具體生物化學與環境邏輯，拉扯檢查提出配套防護，堪稱模範練習單！"
                 ))
-                print("Sample worksheet for test001 added.")
 
         # 5. Seed Leaderboard high scores
         cursor.execute("SELECT COUNT(*) FROM game_scores")
         if cursor.fetchone()[0] == 0:
-            print("Seeding initial leaderboard scores...")
             sample_scores = [
                 ("戴慶華 博士", 1, 14200, 12, 100, 5, "🌌 宇宙級永續守護神"),
                 ("李O立", 2, 12850, 9, 95, 4, "🌟 傳奇星際修復大師"),
@@ -162,7 +159,6 @@ def seed():
                 INSERT INTO game_scores (user_id, user_name, score, max_combo, earth_health, risks_solved, title_earned)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """, (uid, name, score, combo, health, solved, title))
-            print("Sample leaderboard seeded.")
 
     print("Database seeding completed successfully!")
 

@@ -1,7 +1,6 @@
-// SDGs and Climate Action Platform - Comprehensive Frontend Core
+// SDGs and Climate Action Platform - Comprehensive Frontend Core v2.0
 const API_BASE = "/api";
 
-// App State
 const state = {
   user: null,
   token: localStorage.getItem("sdgs_token") || null,
@@ -11,30 +10,43 @@ const state = {
   worksheetsList: [],
   activeTab: "worksheet",
   
-  // Game State
-  game: {
+  // Game 1: Memory Match State
+  memoryGame: {
     active: false,
-    round: 1,
-    maxRounds: 5,
+    cards: [],
+    flipped: [],
+    matchedPairs: 0,
+    totalPairs: 6,
     score: 0,
     combo: 0,
     maxCombo: 0,
-    earthHealth: 30,
+    timer: null,
+    timeLeft: 60
+  },
+
+  // Game 2: Combo Blast State
+  comboGame: {
+    active: false,
+    grid: [],
+    rows: 5,
+    cols: 5,
+    movesLeft: 15,
+    score: 0,
+    combo: 0,
+    maxCombo: 0,
     risksSolved: 0,
-    hand: [],
-    selectedCards: [],
-    currentCrisis: null,
-    crisisTimer: null,
-    crisisTimeLeft: 10
-  }
+    colors: ["#0284c7", "#10b981", "#f59e0b", "#8b5cf6", "#ef4444", "#14b8a6"]
+  },
+
+  // Selected students for batch actions
+  selectedStudentIds: new Set()
 };
 
 // ==============================================================================
-// 1. Core Initialization & Routing
+// 1. Core Initialization
 // ==============================================================================
 document.addEventListener("DOMContentLoaded", async () => {
   initUIEvents();
-  await loadQuickAccounts();
   await checkAuth();
   await loadSDGsData();
 });
@@ -44,35 +56,44 @@ function initUIEvents() {
   document.querySelectorAll("[data-nav-tab]").forEach(btn => {
     btn.addEventListener("click", () => {
       const tab = btn.getAttribute("data-nav-tab");
+      if (tab === "admin") {
+        handleAdminAccess();
+        return;
+      }
       switchTab(tab);
     });
   });
 
   // Login form submit
   const loginForm = document.getElementById("loginForm");
-  if (loginForm) {
-    loginForm.addEventListener("submit", handleLogin);
-  }
+  if (loginForm) loginForm.addEventListener("submit", handleLogin);
+
+  const adminLoginForm = document.getElementById("adminLoginForm");
+  if (adminLoginForm) adminLoginForm.addEventListener("submit", handleAdminLogin);
 
   // Logout button
   const logoutBtn = document.getElementById("logoutBtn");
-  if (logoutBtn) {
-    logoutBtn.addEventListener("click", handleLogout);
-  }
-
-  // Quick Account selector
-  const quickSelect = document.getElementById("quickAccountSelect");
-  if (quickSelect) {
-    quickSelect.addEventListener("change", handleQuickAccountSelect);
-  }
+  if (logoutBtn) logoutBtn.addEventListener("click", handleLogout);
 
   // Worksheet events
   initWorksheetEvents();
 
   // Search input in SDGs lookup
   const sdgSearchInput = document.getElementById("sdgSearchInput");
-  if (sdgSearchInput) {
-    sdgSearchInput.addEventListener("input", filterSDGsDisplay);
+  if (sdgSearchInput) sdgSearchInput.addEventListener("input", filterSDGsDisplay);
+}
+
+function handleAdminAccess() {
+  if (state.user && ['admin', 'teacher'].includes(state.user.role)) {
+    switchTab("admin");
+  } else {
+    // Show admin login modal with default credentials prefilled/hinted
+    const modal = document.getElementById("adminLoginModal");
+    if (modal) {
+      modal.classList.remove("hidden");
+      document.getElementById("adminAccount").value = "admin";
+      document.getElementById("adminPassword").value = "sdgs2030admin";
+    }
   }
 }
 
@@ -93,10 +114,10 @@ function switchTab(tabId) {
     targetTabBtn.classList.remove("text-slate-600");
   }
 
-  // Tab specific refreshes
   if (tabId === "leaderboard") loadLeaderboard();
   if (tabId === "admin") loadAdminDashboard();
-  if (tabId === "game" && !state.game.active) initNewGame();
+  if (tabId === "memory_game" && !state.memoryGame.active) initNewMemoryGame();
+  if (tabId === "combo_game" && !state.comboGame.active) initNewComboBlastGame();
 }
 
 // ==============================================================================
@@ -115,13 +136,11 @@ async function checkAuth() {
       state.user = await res.json();
       updateUserUI();
       showLoginModal(false);
-      // Auto load user's last worksheet
       loadMyWorksheets();
     } else {
       handleLogout();
     }
   } catch (err) {
-    console.error("Auth check failed:", err);
     handleLogout();
   }
 }
@@ -158,50 +177,45 @@ async function handleLogin(e) {
   }
 }
 
+async function handleAdminLogin(e) {
+  e.preventDefault();
+  const account = document.getElementById("adminAccount").value.trim();
+  const password = document.getElementById("adminPassword").value.trim();
+  const errEl = document.getElementById("adminLoginError");
+  errEl.classList.add("hidden");
+
+  try {
+    const res = await fetch(`${API_BASE}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ account, password })
+    });
+    const data = await res.json();
+    if (!res.ok || !['admin', 'teacher'].includes(data.user.role)) {
+      errEl.textContent = data.detail || "管理員驗證失敗，需要管理權限";
+      errEl.classList.remove("hidden");
+      return;
+    }
+    state.token = data.token;
+    state.user = data.user;
+    localStorage.setItem("sdgs_token", data.token);
+    document.getElementById("adminLoginModal").classList.add("hidden");
+    updateUserUI();
+    showToast(`管理員登入成功，歡迎 ${data.user.name}！`, "success");
+    switchTab("admin");
+  } catch (err) {
+    errEl.textContent = "連線異常，請重試";
+    errEl.classList.remove("hidden");
+  }
+}
+
 function handleLogout() {
   state.token = null;
   state.user = null;
   localStorage.removeItem("sdgs_token");
   showLoginModal(true);
   updateUserUI();
-}
-
-async function loadQuickAccounts() {
-  try {
-    const res = await fetch(`${API_BASE}/auth/quick-list`);
-    if (res.ok) {
-      const list = await res.json();
-      const select = document.getElementById("quickAccountSelect");
-      if (!select) return;
-      select.innerHTML = '<option value="">-- 快速示範身分切換 (1-Click Switch) --</option>';
-      list.forEach(u => {
-        const opt = document.createElement("option");
-        opt.value = JSON.stringify(u);
-        const roleBadge = u.role === 'admin' ? '[講師/系統管理員]' : (u.role === 'teacher' ? '[助教]' : '[學員]');
-        opt.textContent = `${roleBadge} ${u.name} (${u.email})`;
-        select.appendChild(opt);
-      });
-    }
-  } catch (err) {
-    console.warn("Failed to load quick accounts", err);
-  }
-}
-
-async function handleQuickAccountSelect(e) {
-  const val = e.target.value;
-  if (!val) return;
-  const user = JSON.parse(val);
-  document.getElementById("loginAccount").value = user.email;
-  // If admin/teacher, auto populate their passwords
-  if (user.role === 'admin') {
-    document.getElementById("loginPassword").value = "admin888";
-  } else if (user.role === 'teacher') {
-    document.getElementById("loginPassword").value = "teacher888";
-  } else {
-    document.getElementById("loginPassword").value = user.phone;
-  }
-  // Auto submit
-  document.getElementById("loginForm").dispatchEvent(new Event("submit"));
+  switchTab("worksheet");
 }
 
 function showLoginModal(show) {
@@ -215,7 +229,6 @@ function showLoginModal(show) {
 function updateUserUI() {
   const userNameEl = document.getElementById("currentUserName");
   const userRoleEl = document.getElementById("currentUserRole");
-  const adminNavTab = document.getElementById("navTabAdmin");
 
   if (state.user) {
     if (userNameEl) userNameEl.textContent = state.user.name;
@@ -225,15 +238,6 @@ function updateUserUI() {
         ? "text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 font-semibold"
         : "text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-semibold";
     }
-    // Show admin tab only for staff
-    if (adminNavTab) {
-      if (['admin', 'teacher'].includes(state.user.role)) {
-        adminNavTab.classList.remove("hidden");
-      } else {
-        adminNavTab.classList.add("hidden");
-      }
-    }
-    // Auto fill worksheet name & unit
     const formName = document.getElementById("ws_userName");
     const formUnit = document.getElementById("ws_unitName");
     if (formName) formName.value = state.user.name;
@@ -242,7 +246,7 @@ function updateUserUI() {
 }
 
 // ==============================================================================
-// 3. SDGs Reference & Search Module
+// 3. SDGs Reference & Smart Quote Module (Requirement 1 Implementation)
 // ==============================================================================
 async function loadSDGsData() {
   try {
@@ -269,14 +273,10 @@ function renderSDGsDirectory(filterTier = "all", filter5P = "all", keyword = "")
   const kw = keyword.toLowerCase().trim();
 
   state.goals.forEach(goal => {
-    // Check tier / 5P filter
     if (filterTier !== "all" && goal.tier !== filterTier) return;
     if (filter5P !== "all" && !goal.category_5p.includes(filter5P)) return;
 
-    // Filter targets under this goal
     const goalTargets = state.targets.filter(t => t.goal_id === goal.id);
-    
-    // Check keyword search match
     const goalMatch = goal.name.toLowerCase().includes(kw) || goal.slogan.toLowerCase().includes(kw) || goal.full_name.toLowerCase().includes(kw);
     const matchingTargets = kw ? goalTargets.filter(t => t.content.toLowerCase().includes(kw) || t.code.toLowerCase().includes(kw)) : goalTargets;
 
@@ -309,7 +309,10 @@ function renderSDGsDirectory(filterTier = "all", filter5P = "all", keyword = "")
         </div>
 
         <div id="targetsBox_${goal.id}" class="hidden space-y-2 mt-3 pt-3 border-t border-slate-100 max-h-60 overflow-y-auto pr-1">
-          ${matchingTargets.map(t => `
+          ${matchingTargets.map(t => {
+            const escapedContent = t.content.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+            const quoteText = `${t.code}：${escapedContent}`;
+            return `
             <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200/60 text-xs">
               <div class="flex justify-between items-center mb-1">
                 <span class="font-bold text-slate-800">${t.code}</span>
@@ -317,11 +320,11 @@ function renderSDGsDirectory(filterTier = "all", filter5P = "all", keyword = "")
               </div>
               <p class="text-slate-600 text-[11px] leading-relaxed mb-2">${t.content}</p>
               <button type="button" class="w-full py-1 text-center bg-white hover:bg-emerald-50 text-emerald-700 border border-emerald-300 rounded font-medium text-[11px] transition-colors"
-                onclick="quoteTargetToWorksheet('${goal.code} ${goal.name}', '${t.code}: ${t.content.replace(/'/g, "\\'")}')">
+                onclick="quoteTargetToWorksheet('${goal.code} ${goal.name}', '${quoteText}')">
                 📌 引用至連動分析練習單
               </button>
             </div>
-          `).join("")}
+          `;}).join("")}
         </div>
       </div>
     `;
@@ -338,47 +341,76 @@ window.toggleGoalTargets = function(goalId) {
   }
 };
 
+/**
+ * Requirement 1: Smart Quote Target Algorithm
+ */
 window.quoteTargetToWorksheet = function(goalText, targetText) {
-  switchTab("worksheet");
-  // Find first empty radial line or add a new one
   const radialRows = document.querySelectorAll(".radial-line-row");
+  const normGoal = goalText.split(" ")[0].trim(); // e.g. "SDG 14"
+  const normMech = targetText.trim();
+
+  // 1. Check for duplicates (both Goal and Mechanism matching)
+  for (let idx = 0; idx < radialRows.length; idx++) {
+    const r = radialRows[idx];
+    const rGoal = r.querySelector(".radial-goal-select")?.value || "";
+    const rMech = r.querySelector(".radial-mech-input")?.value.trim() || "";
+    const lineNumber = idx + 1;
+
+    if (rGoal.includes(normGoal) && (rMech === normMech || rMech.includes(normMech.substring(0, 30)))) {
+      switchTab("worksheet");
+      r.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      r.classList.add("ring-2", "ring-amber-500");
+      setTimeout(() => r.classList.remove("ring-2", "ring-amber-500"), 3000);
+      alert(`您已經設定相同的資料在[連動線#${lineNumber}]中`);
+      return;
+    }
+  }
+
+  // 2. Check for empty/unselected slot
   let targetRow = null;
-  for (let r of radialRows) {
-    const goalSelect = r.querySelector(".radial-goal-select");
-    if (!goalSelect.value) {
+  let targetIndex = -1;
+  for (let idx = 0; idx < radialRows.length; idx++) {
+    const r = radialRows[idx];
+    const rGoal = r.querySelector(".radial-goal-select")?.value || "";
+    if (!rGoal) {
       targetRow = r;
+      targetIndex = idx + 1;
       break;
     }
   }
+
+  // 3. If no empty slot and no duplicates, automatically add new line
   if (!targetRow) {
     addRadialLineRow();
-    const rows = document.querySelectorAll(".radial-line-row");
-    targetRow = rows[rows.length - 1];
+    const updatedRows = document.querySelectorAll(".radial-line-row");
+    targetRow = updatedRows[updatedRows.length - 1];
+    targetIndex = updatedRows.length;
   }
-  
+
+  // Populate goal and mechanism
   const goalSelect = targetRow.querySelector(".radial-goal-select");
   const mechInput = targetRow.querySelector(".radial-mech-input");
-  
-  // Set goal select option
+
   for (let opt of goalSelect.options) {
-    if (opt.textContent.includes(goalText.split(" ")[0])) {
+    if (opt.value.includes(normGoal) || opt.textContent.includes(normGoal)) {
       goalSelect.value = opt.value;
       break;
     }
   }
-  if (mechInput && !mechInput.value) {
-    mechInput.value = `呼應細項 ${targetText.substring(0, 80)}...`;
-  }
+  if (mechInput) mechInput.value = normMech;
+
   updateChatTextSnippet();
-  showToast(`已引用「${goalText}」至練習單！`, "success");
+  switchTab("worksheet");
   targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  targetRow.classList.add("ring-2", "ring-emerald-500");
+  setTimeout(() => targetRow.classList.remove("ring-2", "ring-emerald-500"), 2500);
+  showToast(`已成功將「${normGoal}」設定至[連動線#${targetIndex}]！`, "success");
 };
 
 function filterSDGsDisplay() {
   const tierFilter = document.querySelector(".tier-filter-btn.active")?.getAttribute("data-tier") || "all";
-  const pFilter = document.querySelector(".p-filter-btn.active")?.getAttribute("data-5p") || "all";
   const kw = document.getElementById("sdgSearchInput")?.value || "";
-  renderSDGsDirectory(tierFilter, pFilter, kw);
+  renderSDGsDirectory(tierFilter, "all", kw);
 }
 
 window.setTierFilter = function(tier, btn) {
@@ -387,25 +419,15 @@ window.setTierFilter = function(tier, btn) {
   filterSDGsDisplay();
 };
 
-window.setPFilter = function(pVal, btn) {
-  document.querySelectorAll(".p-filter-btn").forEach(b => b.classList.remove("active", "bg-sky-600", "text-white"));
-  btn.classList.add("active", "bg-sky-600", "text-white");
-  filterSDGsDisplay();
-};
-
 // ==============================================================================
 // 4. Worksheet Module (CRUD & Linkage Analysis)
 // ==============================================================================
 function initWorksheetEvents() {
-  // Center action radio changes
   document.querySelectorAll("input[name='center_action']").forEach(radio => {
     radio.addEventListener("change", (e) => {
       const customBox = document.getElementById("centerCustomBox");
-      if (e.target.value === "D") {
-        customBox.classList.remove("hidden");
-      } else {
-        customBox.classList.add("hidden");
-      }
+      if (e.target.value === "D") customBox.classList.remove("hidden");
+      else customBox.classList.add("hidden");
       updateChatTextSnippet();
     });
   });
@@ -413,14 +435,12 @@ function initWorksheetEvents() {
   const customInput = document.getElementById("ws_centerCustom");
   if (customInput) customInput.addEventListener("input", updateChatTextSnippet);
 
-  // Add line buttons
   const addLineBtn = document.getElementById("addRadialLineBtn");
   if (addLineBtn) addLineBtn.addEventListener("click", () => addRadialLineRow());
 
   const addTradeoffBtn = document.getElementById("addTradeoffBtn");
   if (addTradeoffBtn) addTradeoffBtn.addEventListener("click", () => addTradeoffRow());
 
-  // Form submit (Draft & Publish)
   const saveDraftBtn = document.getElementById("saveDraftBtn");
   if (saveDraftBtn) saveDraftBtn.addEventListener("click", () => saveWorksheet("draft"));
 
@@ -430,7 +450,6 @@ function initWorksheetEvents() {
   const viewMyWorksheetsBtn = document.getElementById("viewMyWorksheetsBtn");
   if (viewMyWorksheetsBtn) viewMyWorksheetsBtn.addEventListener("click", openMyWorksheetsModal);
 
-  // Chat snippet copy button
   const copyChatBtn = document.getElementById("copyChatSnippetBtn");
   if (copyChatBtn) {
     copyChatBtn.addEventListener("click", () => {
@@ -443,7 +462,6 @@ function initWorksheetEvents() {
     });
   }
 
-  // Pre-seed default 3 radial lines and 1 tradeoff row
   renderDefaultWorksheetRows();
 }
 
@@ -465,13 +483,9 @@ function renderDefaultWorksheetRows() {
   const container = document.getElementById("radialLinesContainer");
   if (!container || container.children.length > 0) return;
   container.innerHTML = "";
-  for (let i = 0; i < 3; i++) {
-    addRadialLineRow();
-  }
+  for (let i = 0; i < 3; i++) addRadialLineRow();
   const toContainer = document.getElementById("tradeoffContainer");
-  if (toContainer && toContainer.children.length === 0) {
-    addTradeoffRow();
-  }
+  if (toContainer && toContainer.children.length === 0) addTradeoffRow();
 }
 
 function addRadialLineRow(data = null) {
@@ -568,7 +582,6 @@ function updateChatTextSnippet() {
     actionName = document.getElementById("ws_centerCustom")?.value.trim() || "自選佛光活動";
   }
 
-  // Linked SDGs numbers
   const goals = [];
   document.querySelectorAll(".radial-goal-select").forEach(sel => {
     if (sel.value) {
@@ -577,8 +590,6 @@ function updateChatTextSnippet() {
     }
   });
   const goalsStr = goals.length > 0 ? goals.join("、") : "14、12、3";
-
-  // First risk
   const firstRisk = document.querySelector(".tradeoff-who")?.value.trim() || "清出的垃圾未妥善處置造成二次污染";
 
   const chatSnippet = `${actionCode}｜${actionName}｜${goalsStr}｜風險：${firstRisk}`;
@@ -602,7 +613,6 @@ async function saveWorksheet(status = "submitted") {
   const centerAction = actionRadio.value;
   const centerCustom = centerAction === "D" ? document.getElementById("ws_centerCustom")?.value.trim() : "";
 
-  // Collect radial data
   const radialData = [];
   document.querySelectorAll(".radial-line-row").forEach(row => {
     const goal = row.querySelector(".radial-goal-select")?.value;
@@ -618,7 +628,6 @@ async function saveWorksheet(status = "submitted") {
     return;
   }
 
-  // Collect tradeoff data
   const tradeoffData = [];
   document.querySelectorAll(".tradeoff-row").forEach(row => {
     const who = row.querySelector(".tradeoff-who")?.value.trim();
@@ -629,7 +638,6 @@ async function saveWorksheet(status = "submitted") {
     }
   });
 
-  // Collect causal data
   const causalData = {
     start: document.getElementById("ws_causalA")?.value.trim() || "",
     start_cond: document.getElementById("ws_causalACond")?.value.trim() || "",
@@ -639,7 +647,6 @@ async function saveWorksheet(status = "submitted") {
     result_cond: document.getElementById("ws_causalCCond")?.value.trim() || ""
   };
 
-  // Collect self-checks
   const selfChecks = [
     document.getElementById("ws_check1")?.checked || false,
     document.getElementById("ws_check2")?.checked || false,
@@ -647,7 +654,6 @@ async function saveWorksheet(status = "submitted") {
     document.getElementById("ws_check4")?.checked || false
   ];
 
-  // Collect commitment
   const commitment = {
     start_action: document.getElementById("ws_commitStart")?.value.trim() || "",
     target_1: document.getElementById("ws_commitT1")?.value.trim() || "",
@@ -694,9 +700,7 @@ async function saveWorksheet(status = "submitted") {
       return;
     }
 
-    if (method === "POST" && data.id) {
-      state.currentWorksheetId = data.id;
-    }
+    if (method === "POST" && data.id) state.currentWorksheetId = data.id;
 
     showToast(status === "submitted" ? "🎉 練習單已正式提交成功！" : "💾 草稿已成功儲存！", "success");
     loadMyWorksheets();
@@ -722,9 +726,7 @@ async function loadMyWorksheets() {
 
 function renderMyWorksheetsBadge() {
   const badge = document.getElementById("myWorksheetsCountBadge");
-  if (badge) {
-    badge.textContent = state.worksheetsList.length;
-  }
+  if (badge) badge.textContent = state.worksheetsList.length;
 }
 
 function openMyWorksheetsModal() {
@@ -758,6 +760,9 @@ function openMyWorksheetsModal() {
         ${ws.score ? `<div class="mt-2 text-xs font-bold text-purple-700">評分：${ws.score} 分 ｜ 講師講評：${ws.teacher_comment || '無'}</div>` : ''}
       </div>
       <div class="flex items-center gap-2">
+        <a href="${API_BASE}/worksheets/${ws.id}/export-docx" target="_blank" class="px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-xs font-semibold">
+          📄 下載Word
+        </a>
         <button class="px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg text-xs font-semibold" onclick="loadWorksheetToForm(${ws.id})">
           編輯載入
         </button>
@@ -775,11 +780,9 @@ window.loadWorksheetToForm = function(wsId) {
   if (!ws) return;
   state.currentWorksheetId = ws.id;
 
-  // Populate fields
   const unitEl = document.getElementById("ws_unitName");
   if (unitEl) unitEl.value = ws.unit_name || "";
 
-  // Radio
   const radio = document.querySelector(`input[name='center_action'][value='${ws.center_action}']`);
   if (radio) {
     radio.checked = true;
@@ -790,7 +793,6 @@ window.loadWorksheetToForm = function(wsId) {
     if (custEl) custEl.value = ws.center_custom || "";
   }
 
-  // Radial lines
   const radialContainer = document.getElementById("radialLinesContainer");
   if (radialContainer) {
     radialContainer.innerHTML = "";
@@ -799,7 +801,6 @@ window.loadWorksheetToForm = function(wsId) {
     }
   }
 
-  // Tradeoff lines
   const tradeoffContainer = document.getElementById("tradeoffContainer");
   if (tradeoffContainer) {
     tradeoffContainer.innerHTML = "";
@@ -808,7 +809,6 @@ window.loadWorksheetToForm = function(wsId) {
     }
   }
 
-  // Causal
   if (ws.causal_data) {
     document.getElementById("ws_causalA").value = ws.causal_data.start || "";
     document.getElementById("ws_causalACond").value = ws.causal_data.start_cond || "";
@@ -818,7 +818,6 @@ window.loadWorksheetToForm = function(wsId) {
     document.getElementById("ws_causalCCond").value = ws.causal_data.result_cond || "";
   }
 
-  // Self checks
   if (Array.isArray(ws.self_checks)) {
     document.getElementById("ws_check1").checked = !!ws.self_checks[0];
     document.getElementById("ws_check2").checked = !!ws.self_checks[1];
@@ -826,7 +825,6 @@ window.loadWorksheetToForm = function(wsId) {
     document.getElementById("ws_check4").checked = !!ws.self_checks[3];
   }
 
-  // Commitment
   if (ws.commitment) {
     document.getElementById("ws_commitStart").value = ws.commitment.start_action || "";
     document.getElementById("ws_commitT1").value = ws.commitment.target_1 || "";
@@ -849,9 +847,7 @@ window.deleteWorksheetConfirm = async function(wsId) {
     });
     if (res.ok) {
       showToast("練習單已成功刪除！", "success");
-      if (state.currentWorksheetId === wsId) {
-        state.currentWorksheetId = null;
-      }
+      if (state.currentWorksheetId === wsId) state.currentWorksheetId = null;
       await loadMyWorksheets();
       openMyWorksheetsModal();
     }
@@ -885,249 +881,320 @@ window.createNewWorksheet = function() {
 };
 
 // ==============================================================================
-// 5. Interactive Game: SDG Roguelike Combo
+// 5. Game 1: 【SDG 永續翻牌大考驗 (Eco-Memory Match)】(Left Game)
 // ==============================================================================
-function initNewGame() {
-  state.game.active = true;
-  state.game.round = 1;
-  state.game.score = 0;
-  state.game.combo = 0;
-  state.game.maxCombo = 0;
-  state.game.earthHealth = 35;
-  state.game.risksSolved = 0;
-  state.game.selectedCards = [];
+async function initNewMemoryGame() {
+  const mg = state.memoryGame;
+  mg.active = true;
+  mg.matchedPairs = 0;
+  mg.score = 0;
+  mg.combo = 0;
+  mg.maxCombo = 0;
+  mg.flipped = [];
+  mg.timeLeft = 60;
+  clearInterval(mg.timer);
 
-  document.getElementById("gameIntroCard").classList.add("hidden");
-  document.getElementById("gameMainScreen").classList.remove("hidden");
-  document.getElementById("gameOverScreen").classList.add("hidden");
+  document.getElementById("memoryIntroCard").classList.add("hidden");
+  document.getElementById("memoryMainScreen").classList.remove("hidden");
+  document.getElementById("memoryGameOverScreen").classList.add("hidden");
 
-  dealGameRound();
-}
-
-async function dealGameRound() {
-  updateGameStatsUI();
-  state.game.selectedCards = [];
-
+  // Fetch 6 pairs (12 cards)
   try {
-    const res = await fetch(`${API_BASE}/game/cards`);
+    const res = await fetch(`${API_BASE}/game/memory-cards`);
     if (res.ok) {
       const data = await res.json();
-      state.game.hand = data.cards;
-      state.game.currentCrisis = data.crisis;
-      renderGameHand();
+      mg.cards = data.cards;
+      renderMemoryBoard();
+      startMemoryTimer();
     }
   } catch (err) {
-    console.error("Deal cards failed", err);
+    showToast("無法載入翻牌卡片，請重試", "error");
   }
 }
 
-function renderGameHand() {
-  const container = document.getElementById("gameHandContainer");
+function renderMemoryBoard() {
+  const container = document.getElementById("memoryGridContainer");
   if (!container) return;
   container.innerHTML = "";
 
-  state.game.hand.forEach((card, idx) => {
+  updateMemoryStatsUI();
+
+  state.memoryGame.cards.forEach((card, idx) => {
     const el = document.createElement("div");
-    el.className = "game-card bg-slate-800 text-white rounded-2xl p-4 border border-slate-700 cursor-pointer flex flex-col justify-between shadow-lg hover:border-emerald-500 transition-all select-none";
+    el.className = "memory-card w-full h-28 sm:h-32 bg-slate-800 rounded-2xl cursor-pointer p-3 flex flex-col justify-center items-center text-center border-2 border-slate-700 shadow-md hover:border-emerald-400 select-none transition-all transform hover:scale-105";
+    el.setAttribute("data-index", idx);
     el.innerHTML = `
-      <div>
-        <div class="flex justify-between items-center mb-2">
-          <span class="text-xs px-2 py-0.5 rounded-full font-bold ${getTierBadgeColor(card.tier)}">${card.tier}</span>
-          <span class="text-xs font-mono font-bold text-emerald-400">⚡ ${card.power} 點</span>
-        </div>
-        <h4 class="font-bold text-sm text-slate-100 mb-1">${card.name}</h4>
-        <p class="text-xs text-slate-300 leading-relaxed mb-3">${card.desc}</p>
-      </div>
-      <div>
-        <div class="flex flex-wrap gap-1 mb-2">
-          <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800">主目標: SDG ${card.sdg_primary}</span>
-          ${card.sdg_linked.map(s => `<span class="text-[10px] px-1 py-0.5 rounded bg-slate-900 text-slate-400">連動 SDG ${s}</span>`).join("")}
-        </div>
-        <div class="text-[10px] text-amber-300 bg-amber-950/40 p-1.5 rounded border border-amber-900/60 flex items-center gap-1">
-          <span>⚠️ 潛在拉扯代價：</span>${card.risk_prompt.substring(0, 22)}...
-        </div>
+      <div class="card-back text-2xl font-black text-slate-500">🌏<span class="block text-[11px] text-slate-400 mt-1">SDG配對</span></div>
+      <div class="card-front hidden flex flex-col justify-center items-center w-full h-full">
+        <span class="text-xl mb-1">${card.icon}</span>
+        <div class="text-xs font-bold text-white line-clamp-2 px-1">${card.title}</div>
+        <span class="text-[10px] mt-1 px-1.5 py-0.2 rounded bg-black/40 text-emerald-300">${card.desc}</span>
       </div>
     `;
 
-    el.addEventListener("click", () => toggleCardSelection(card, el));
+    el.addEventListener("click", () => handleMemoryCardClick(idx, el));
     container.appendChild(el);
   });
-
-  const playBtn = document.getElementById("playCardsBtn");
-  if (playBtn) playBtn.disabled = true;
 }
 
-function getTierBadgeColor(tier) {
-  if (tier === "生物圈") return "bg-sky-500/20 text-sky-300 border border-sky-500/40";
-  if (tier === "社會") return "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40";
-  if (tier === "經濟") return "bg-amber-500/20 text-amber-300 border border-amber-500/40";
-  return "bg-purple-500/20 text-purple-300 border border-purple-500/40";
-}
+function handleMemoryCardClick(idx, cardEl) {
+  const mg = state.memoryGame;
+  if (!mg.active || mg.flipped.length >= 2) return;
+  if (cardEl.classList.contains("matched") || cardEl.classList.contains("is-flipped")) return;
 
-function toggleCardSelection(card, cardEl) {
-  const index = state.game.selectedCards.findIndex(c => c.id === card.id);
-  if (index > -1) {
-    state.game.selectedCards.splice(index, 1);
-    cardEl.classList.remove("selected", "ring-2", "ring-emerald-400");
-  } else {
-    if (state.game.selectedCards.length >= 3) {
-      showToast("每回合最多選擇 3 張卡牌打出！", "info");
-      return;
+  // Flip card
+  cardEl.classList.add("is-flipped", "border-emerald-400", "bg-slate-900");
+  cardEl.querySelector(".card-back").classList.add("hidden");
+  cardEl.querySelector(".card-front").classList.remove("hidden");
+  cardEl.style.backgroundColor = mg.cards[idx].color + "22";
+
+  mg.flipped.push({ idx, el: cardEl, card: mg.cards[idx] });
+
+  if (mg.flipped.length === 2) {
+    const [c1, c2] = mg.flipped;
+    if (c1.card.pair_id === c2.card.pair_id) {
+      // Match success!
+      mg.combo += 1;
+      if (mg.combo > mg.maxCombo) mg.maxCombo = mg.combo;
+      mg.matchedPairs += 1;
+      mg.score += 500 + (mg.combo * 200);
+
+      c1.el.classList.add("matched", "ring-2", "ring-emerald-400");
+      c2.el.classList.add("matched", "ring-2", "ring-emerald-400");
+      showToast(`🎯 配對成功！連擊 +${mg.combo}`, "success");
+      mg.flipped = [];
+      updateMemoryStatsUI();
+
+      if (mg.matchedPairs === mg.totalPairs) {
+        endMemoryGame(true);
+      }
+    } else {
+      // Mismatch
+      mg.combo = 0;
+      updateMemoryStatsUI();
+      setTimeout(() => {
+        c1.el.classList.remove("is-flipped", "border-emerald-400", "bg-slate-900");
+        c1.el.style.backgroundColor = "";
+        c1.el.querySelector(".card-back").classList.remove("hidden");
+        c1.el.querySelector(".card-front").classList.add("hidden");
+
+        c2.el.classList.remove("is-flipped", "border-emerald-400", "bg-slate-900");
+        c2.el.style.backgroundColor = "";
+        c2.el.querySelector(".card-back").classList.remove("hidden");
+        c2.el.querySelector(".card-front").classList.add("hidden");
+        mg.flipped = [];
+      }, 900);
     }
-    state.game.selectedCards.push(card);
-    cardEl.classList.add("selected", "ring-2", "ring-emerald-400");
-  }
-
-  const playBtn = document.getElementById("playCardsBtn");
-  if (playBtn) {
-    playBtn.disabled = state.game.selectedCards.length < 2;
-    playBtn.textContent = state.game.selectedCards.length < 2 
-      ? `請至少挑選 2 張卡牌 (${state.game.selectedCards.length}/3)` 
-      : `🚀 啟動連擊 (${state.game.selectedCards.length} 張出牌)`;
   }
 }
 
-window.executeTurnPlay = function() {
-  if (state.game.selectedCards.length < 2) return;
-
-  // Calculate synergies
-  const selected = state.game.selectedCards;
-  const tiers = new Set(selected.map(c => c.tier));
-  
-  // Wedding cake multipliers
-  let tierMultiplier = 1.0;
-  if (tiers.size === 2) tierMultiplier = 1.5;
-  if (tiers.size >= 3) tierMultiplier = 2.5;
-
-  let basePower = selected.reduce((sum, c) => sum + c.power, 0);
-
-  // Target resonance bonus
-  const allSdgIds = new Set();
-  selected.forEach(c => {
-    allSdgIds.add(c.sdg_primary);
-    c.sdg_linked.forEach(s => allSdgIds.add(s));
-  });
-
-  let synergyBonus = 0;
-  if (allSdgIds.has(14) && allSdgIds.has(12)) synergyBonus += 1500;
-  if (allSdgIds.has(7) && allSdgIds.has(13)) synergyBonus += 1500;
-  if (allSdgIds.has(2) && allSdgIds.has(12)) synergyBonus += 1200;
-
-  state.game.combo += 1;
-  if (state.game.combo > state.game.maxCombo) {
-    state.game.maxCombo = state.game.combo;
-  }
-
-  const turnScore = Math.round((basePower * (1 + state.game.combo * 0.2)) * tierMultiplier) + synergyBonus;
-  state.game.score += turnScore;
-  state.game.earthHealth = Math.min(100, state.game.earthHealth + 15);
-
-  // 40% Chance of triggering Trade-off Crisis
-  const triggerCrisis = Math.random() < 0.45;
-  if (triggerCrisis && state.game.currentCrisis) {
-    showCrisisModal(state.game.currentCrisis);
-  } else {
-    finishTurn();
-  }
-};
-
-function showCrisisModal(crisis) {
-  const modal = document.getElementById("crisisModal");
-  if (!modal) return;
-  modal.classList.remove("hidden");
-
-  document.getElementById("crisisTitle").textContent = crisis.title;
-  document.getElementById("crisisDesc").textContent = crisis.desc;
-
-  const optContainer = document.getElementById("crisisOptionsContainer");
-  optContainer.innerHTML = "";
-
-  crisis.options.forEach((optText, i) => {
-    const btn = document.createElement("button");
-    btn.className = "w-full text-left p-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-100 text-xs font-medium border border-slate-700 hover:border-amber-500 transition-colors";
-    btn.textContent = `${i + 1}. ${optText}`;
-    btn.onclick = () => resolveCrisisChoice(optText === crisis.correct_strategy);
-    optContainer.appendChild(btn);
-  });
-
-  // 10s Timer
-  state.game.crisisTimeLeft = 10;
-  const timerBar = document.getElementById("crisisTimerBar");
-  clearInterval(state.game.crisisTimer);
-  state.game.crisisTimer = setInterval(() => {
-    state.game.crisisTimeLeft -= 1;
-    if (timerBar) {
-      timerBar.style.width = `${(state.game.crisisTimeLeft / 10) * 100}%`;
-    }
-    if (state.game.crisisTimeLeft <= 0) {
-      clearInterval(state.game.crisisTimer);
-      resolveCrisisChoice(false);
+function startMemoryTimer() {
+  const mg = state.memoryGame;
+  clearInterval(mg.timer);
+  mg.timer = setInterval(() => {
+    mg.timeLeft -= 1;
+    updateMemoryStatsUI();
+    if (mg.timeLeft <= 0) {
+      clearInterval(mg.timer);
+      endMemoryGame(false);
     }
   }, 1000);
 }
 
-function resolveCrisisChoice(isCorrect) {
-  clearInterval(state.game.crisisTimer);
-  document.getElementById("crisisModal").classList.add("hidden");
+function updateMemoryStatsUI() {
+  const mg = state.memoryGame;
+  document.getElementById("memoryScoreVal").textContent = mg.score.toLocaleString();
+  document.getElementById("memoryComboVal").textContent = `${mg.combo}x`;
+  document.getElementById("memoryMatchedVal").textContent = `${mg.matchedPairs}/${mg.totalPairs}`;
+  document.getElementById("memoryTimerVal").textContent = `${mg.timeLeft}s`;
+}
 
-  if (isCorrect) {
-    state.game.risksSolved += 1;
-    state.game.score += 2000;
-    showToast("🛡️ 危機化解成功！獲得配套防護加成 +2,000 分！", "success");
-  } else {
-    state.game.earthHealth = Math.max(10, state.game.earthHealth - 15);
-    showToast("💥 善意拉扯失控造成副作用！地球健康度 -15%", "error");
+function endMemoryGame(isWin) {
+  const mg = state.memoryGame;
+  mg.active = false;
+  clearInterval(mg.timer);
+
+  if (isWin) {
+    mg.score += (mg.timeLeft * 50); // Time bonus
   }
-  finishTurn();
+
+  document.getElementById("memoryMainScreen").classList.add("hidden");
+  document.getElementById("memoryGameOverScreen").classList.remove("hidden");
+
+  document.getElementById("finalMemoryScore").textContent = mg.score.toLocaleString();
+  document.getElementById("finalMemoryCombo").textContent = `${mg.maxCombo}x`;
+  document.getElementById("finalMemoryTime").textContent = `${60 - mg.timeLeft} 秒`;
+
+  let title = "🌱 永續記憶見習生";
+  if (mg.score >= 5000) title = "⚡ 永續超能連動大師";
+  else if (mg.score >= 3500) title = "🌿 永續敏銳觀察者";
+  else if (mg.score >= 2000) title = "🎯 永續行動先鋒";
+
+  document.getElementById("finalMemoryTitle").textContent = title;
+
+  document.getElementById("submitMemoryLeaderboardBtn").onclick = () => {
+    submitGameScoreToBackend(mg.score, mg.maxCombo, 100, mg.matchedPairs, title, "memory_match");
+  };
 }
 
-function finishTurn() {
-  updateGameStatsUI();
-  if (state.game.round >= state.game.maxRounds) {
-    endGame();
-  } else {
-    state.game.round += 1;
-    dealGameRound();
+// ==============================================================================
+// 6. Game 2: 【SDG 永續連鎖消消樂 (Eco-Combo Blast)】(Right Game - Rebuilt)
+// ==============================================================================
+const COMBO_BLAST_ICONS = ["🌊", "🌳", "☀️", "🥗", "👕", "🤝"];
+
+function initNewComboBlastGame() {
+  const cg = state.comboGame;
+  cg.active = true;
+  cg.movesLeft = 15;
+  cg.score = 0;
+  cg.combo = 0;
+  cg.maxCombo = 0;
+  cg.risksSolved = 0;
+
+  document.getElementById("comboIntroCard").classList.add("hidden");
+  document.getElementById("comboMainScreen").classList.remove("hidden");
+  document.getElementById("comboGameOverScreen").classList.add("hidden");
+
+  buildComboBlastGrid();
+  updateComboBlastStatsUI();
+}
+
+function buildComboBlastGrid() {
+  const cg = state.comboGame;
+  cg.grid = [];
+  for (let r = 0; r < cg.rows; r++) {
+    const row = [];
+    for (let c = 0; c < cg.cols; c++) {
+      row.push(Math.floor(Math.random() * cg.colors.length));
+    }
+    cg.grid.push(row);
+  }
+  renderComboBlastGrid();
+}
+
+function renderComboBlastGrid() {
+  const container = document.getElementById("comboGridContainer");
+  if (!container) return;
+  container.innerHTML = "";
+
+  const cg = state.comboGame;
+  for (let r = 0; r < cg.rows; r++) {
+    for (let c = 0; c < cg.cols; c++) {
+      const val = cg.grid[r][c];
+      const btn = document.createElement("button");
+      btn.className = "w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex flex-col items-center justify-center text-xl sm:text-2xl shadow-md transform hover:scale-105 transition-all active:scale-95 border-2 border-white/20";
+      btn.style.backgroundColor = cg.colors[val];
+      btn.textContent = COMBO_BLAST_ICONS[val];
+      btn.onclick = () => handleGemClick(r, c);
+      container.appendChild(btn);
+    }
   }
 }
 
-function updateGameStatsUI() {
-  document.getElementById("gameScoreVal").textContent = state.game.score.toLocaleString();
-  document.getElementById("gameComboVal").textContent = `${state.game.combo}x`;
-  document.getElementById("gameRoundVal").textContent = `${state.game.round}/${state.game.maxRounds}`;
-  
-  const hpBar = document.getElementById("gameHealthBar");
-  const hpText = document.getElementById("gameHealthVal");
-  if (hpBar) hpBar.style.width = `${state.game.earthHealth}%`;
-  if (hpText) hpText.textContent = `${state.game.earthHealth}%`;
-}
+function handleGemClick(r, c) {
+  const cg = state.comboGame;
+  if (!cg.active || cg.movesLeft <= 0) return;
 
-function endGame() {
-  state.game.active = false;
-  document.getElementById("gameMainScreen").classList.add("hidden");
-  document.getElementById("gameOverScreen").classList.remove("hidden");
+  const targetColor = cg.grid[r][c];
+  if (targetColor === null) return;
 
-  document.getElementById("finalScoreVal").textContent = state.game.score.toLocaleString();
-  document.getElementById("finalMaxComboVal").textContent = `${state.game.maxCombo} 連擊`;
-  document.getElementById("finalHealthVal").textContent = `${state.game.earthHealth}%`;
-  document.getElementById("finalRisksSolvedVal").textContent = `${state.game.risksSolved} 次`;
+  // Find connected gems using flood-fill
+  const visited = Array.from({ length: cg.rows }, () => Array(cg.cols).fill(false));
+  const connected = [];
 
-  // Determine Title
-  let title = "🌱 永續見習修復師";
-  if (state.game.score >= 12000) title = "🌌 宇宙級永續守護神";
-  else if (state.game.score >= 10000) title = "🌟 傳奇星際修復大師";
-  else if (state.game.score >= 8000) title = "🌿 卓越生態協調者";
-  else if (state.game.score >= 6000) title = "⚡ 永續連鎖先鋒";
+  function dfs(row, col) {
+    if (row < 0 || row >= cg.rows || col < 0 || col >= cg.cols) return;
+    if (visited[row][col] || cg.grid[row][col] !== targetColor) return;
+    visited[row][col] = true;
+    connected.push([row, col]);
+    dfs(row + 1, col);
+    dfs(row - 1, col);
+    dfs(row, col + 1);
+    dfs(row, col - 1);
+  }
 
-  document.getElementById("finalTitleVal").textContent = title;
-  
-  const submitBtn = document.getElementById("submitScoreLeaderboardBtn");
-  if (submitBtn) {
-    submitBtn.onclick = () => submitGameScoreToBackend(title);
+  dfs(r, c);
+
+  if (connected.length < 2) {
+    showToast("至少需 2 個相鄰連動方塊才能消除！", "info");
+    return;
+  }
+
+  // Deduct 1 move
+  cg.movesLeft -= 1;
+  cg.combo += 1;
+  if (cg.combo > cg.maxCombo) cg.maxCombo = cg.combo;
+
+  // Calculate blast points
+  const points = (connected.length * 150) * cg.combo;
+  cg.score += points;
+
+  // Remove gems
+  connected.forEach(([row, col]) => {
+    cg.grid[row][col] = null;
+  });
+
+  // Gravity fall
+  applyGravityAndRefill();
+  renderComboBlastGrid();
+  updateComboBlastStatsUI();
+
+  showToast(`💥 連鎖引爆 ${connected.length} 顆方塊！獲得 +${points} 分！`, "success");
+
+  if (cg.movesLeft <= 0) {
+    endComboBlastGame();
   }
 }
 
-async function submitGameScoreToBackend(title) {
+function applyGravityAndRefill() {
+  const cg = state.comboGame;
+  for (let c = 0; c < cg.cols; c++) {
+    // Drop downwards
+    let emptyRow = cg.rows - 1;
+    for (let r = cg.rows - 1; r >= 0; r--) {
+      if (cg.grid[r][c] !== null) {
+        cg.grid[emptyRow][c] = cg.grid[r][c];
+        if (emptyRow !== r) cg.grid[r][c] = null;
+        emptyRow--;
+      }
+    }
+    // Refill from top
+    for (let r = emptyRow; r >= 0; r--) {
+      cg.grid[r][c] = Math.floor(Math.random() * cg.colors.length);
+    }
+  }
+}
+
+function updateComboBlastStatsUI() {
+  const cg = state.comboGame;
+  document.getElementById("comboScoreVal").textContent = cg.score.toLocaleString();
+  document.getElementById("comboStreakVal").textContent = `${cg.combo}x`;
+  document.getElementById("comboMovesVal").textContent = cg.movesLeft;
+}
+
+function endComboBlastGame() {
+  const cg = state.comboGame;
+  cg.active = false;
+
+  document.getElementById("comboMainScreen").classList.add("hidden");
+  document.getElementById("comboGameOverScreen").classList.remove("hidden");
+
+  document.getElementById("finalComboScore").textContent = cg.score.toLocaleString();
+  document.getElementById("finalComboStreak").textContent = `${cg.maxCombo}x`;
+
+  let title = "🌱 永續消消樂新手";
+  if (cg.score >= 12000) title = "🌌 宇宙級永續守護神";
+  else if (cg.score >= 8000) title = "🌟 傳奇星際消消大師";
+  else if (cg.score >= 5000) title = "⚡ 永續連鎖爆破手";
+
+  document.getElementById("finalComboTitle").textContent = title;
+
+  document.getElementById("submitComboLeaderboardBtn").onclick = () => {
+    submitGameScoreToBackend(cg.score, cg.maxCombo, 100, 5, title, "combo_blast");
+  };
+}
+
+async function submitGameScoreToBackend(score, combo, health, solved, title, gameType) {
   if (!state.token) {
     showToast("請先登入後方可登錄天梯排行榜！", "warning");
     showLoginModal(true);
@@ -1141,16 +1208,17 @@ async function submitGameScoreToBackend(title) {
         "Authorization": `Bearer ${state.token}`
       },
       body: JSON.stringify({
-        score: state.game.score,
-        max_combo: state.game.maxCombo,
-        earth_health: state.game.earthHealth,
-        risks_solved: state.game.risksSolved,
-        title_earned: title
+        score: score,
+        max_combo: combo,
+        earth_health: health,
+        risks_solved: solved,
+        title_earned: title,
+        game_type: gameType
       })
     });
     const data = await res.json();
     if (res.ok) {
-      showToast(data.message || "成績登錄成功！", "success");
+      showToast(data.message || "成績已登錄！", "success");
       switchTab("leaderboard");
     }
   } catch (err) {
@@ -1159,15 +1227,16 @@ async function submitGameScoreToBackend(title) {
 }
 
 // ==============================================================================
-// 6. Leaderboard Module
+// 7. Leaderboard Module
 // ==============================================================================
-async function loadLeaderboard() {
+async function loadLeaderboard(typeFilter = "") {
   const container = document.getElementById("leaderboardTableBody");
   if (!container) return;
   container.innerHTML = '<tr><td colspan="6" class="p-6 text-center text-slate-400">排行榜載入中...</td></tr>';
 
   try {
-    const res = await fetch(`${API_BASE}/game/leaderboard`, {
+    const url = typeFilter ? `${API_BASE}/game/leaderboard?game_type=${typeFilter}` : `${API_BASE}/game/leaderboard`;
+    const res = await fetch(url, {
       headers: state.token ? { "Authorization": `Bearer ${state.token}` } : {}
     });
     if (res.ok) {
@@ -1207,11 +1276,14 @@ function renderLeaderboardTable(list, myBest) {
     if (rank === 2) badge = '<span class="text-xl">🥈</span>';
     if (rank === 3) badge = '<span class="text-xl">🥉</span>';
 
+    const gameName = item.game_type === "memory_match" ? "翻牌對對碰" : "連鎖消消樂";
+
     const tr = document.createElement("tr");
     tr.className = `border-b border-slate-100 hover:bg-slate-50 transition-colors ${state.user && item.user_id === state.user.id ? 'bg-emerald-50/60 font-semibold' : ''}`;
     tr.innerHTML = `
       <td class="p-3 text-center">${badge}</td>
       <td class="p-3 font-bold text-slate-800">${item.user_name}</td>
+      <td class="p-3 text-center"><span class="text-xs px-2 py-0.5 rounded-full ${item.game_type === 'memory_match' ? 'bg-sky-100 text-sky-800' : 'bg-emerald-100 text-emerald-800'} font-bold">${gameName}</span></td>
       <td class="p-3 text-right font-mono font-bold text-emerald-600">${item.score.toLocaleString()}</td>
       <td class="p-3 text-center font-mono text-slate-600">${item.max_combo}x</td>
       <td class="p-3 text-center"><span class="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">${item.title_earned}</span></td>
@@ -1222,7 +1294,7 @@ function renderLeaderboardTable(list, myBest) {
 }
 
 // ==============================================================================
-// 7. Admin Dashboard & Management Module
+// 8. Admin Dashboard & Review Module (Requirements 6 & 7 Implementation)
 // ==============================================================================
 let chartRadar = null;
 let chartPie = null;
@@ -1255,7 +1327,6 @@ function renderAdminStats(s) {
 }
 
 function renderAdminCharts(stats) {
-  // Chart 1: Radar for 17 SDGs
   const ctxRadar = document.getElementById("adminRadarChart")?.getContext("2d");
   if (ctxRadar) {
     if (chartRadar) chartRadar.destroy();
@@ -1278,17 +1349,11 @@ function renderAdminCharts(stats) {
       options: {
         responsive: true,
         plugins: { legend: { display: false } },
-        scales: {
-          r: {
-            beginAtZero: true,
-            ticks: { precision: 0 }
-          }
-        }
+        scales: { r: { beginAtZero: true, ticks: { precision: 0 } } }
       }
     });
   }
 
-  // Chart 2: Doughnut for Center Actions
   const ctxPie = document.getElementById("adminPieChart")?.getContext("2d");
   if (ctxPie) {
     if (chartPie) chartPie.destroy();
@@ -1302,10 +1367,7 @@ function renderAdminCharts(stats) {
           backgroundColor: ["#0284c7", "#f59e0b", "#10b981", "#8b5cf6"]
         }]
       },
-      options: {
-        responsive: true,
-        plugins: { legend: { position: "bottom" } }
-      }
+      options: { responsive: true, plugins: { legend: { position: "bottom" } } }
     });
   }
 }
@@ -1316,7 +1378,7 @@ async function loadAdminWorksheets() {
   container.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-slate-400">載入練習單清單...</td></tr>';
 
   try {
-    const res = await fetch(`${API_BASE}/worksheets?limit=50`, {
+    const res = await fetch(`${API_BASE}/worksheets?limit=100`, {
       headers: { "Authorization": `Bearer ${state.token}` }
     });
     if (res.ok) {
@@ -1336,9 +1398,10 @@ async function loadAdminWorksheets() {
           <td class="p-3 font-medium text-slate-700">${w.center_action} (${w.center_custom || '標準'})</td>
           <td class="p-3"><span class="px-2 py-0.5 rounded font-bold ${w.status === 'reviewed' ? 'bg-purple-100 text-purple-800' : 'bg-emerald-100 text-emerald-800'}">${w.status}</span></td>
           <td class="p-3 font-bold text-purple-700">${w.score ? w.score + '分' : '未評分'}</td>
-          <td class="p-3 text-right">
-            <button class="px-2 py-1 bg-purple-50 text-purple-700 hover:bg-purple-100 rounded font-semibold mr-1" onclick="openGradeModal(${w.id}, '${w.user_name}', ${w.score || 0}, '${(w.teacher_comment || '').replace(/'/g, "\\'")}')">批閱評分</button>
-            <button class="px-2 py-1 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded font-semibold" onclick="viewWorksheetDetail(${w.id})">詳情</button>
+          <td class="p-3 text-right space-x-1">
+            <button class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded font-semibold text-xs" onclick="viewWorksheetDetailModal(${w.id})">詳情</button>
+            <a href="${API_BASE}/worksheets/${w.id}/export-docx" target="_blank" class="inline-block px-2.5 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded font-semibold text-xs">Word匯出</a>
+            <button class="px-2.5 py-1 bg-purple-50 text-purple-700 hover:bg-purple-100 rounded font-semibold text-xs" onclick="openGradeModal(${w.id}, '${w.user_name}', ${w.score || 0}, '${(w.teacher_comment || '').replace(/'/g, "\\'")}')">批閱評分</button>
           </td>
         `;
         container.appendChild(tr);
@@ -1348,6 +1411,95 @@ async function loadAdminWorksheets() {
     container.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-red-400">載入失敗</td></tr>';
   }
 }
+
+/**
+ * Requirement 6: Full Worksheet Details View Modal
+ */
+window.viewWorksheetDetailModal = async function(id) {
+  try {
+    const res = await fetch(`${API_BASE}/worksheets/${id}`, {
+      headers: { "Authorization": `Bearer ${state.token}` }
+    });
+    if (!res.ok) return;
+    const ws = await res.json();
+
+    const modal = document.getElementById("worksheetDetailModal");
+    if (!modal) return;
+    modal.classList.remove("hidden");
+
+    document.getElementById("detailModalHeader").textContent = `學員：${ws.user_name} ｜ 分會單位：${ws.unit_name} (練習單 #${ws.id})`;
+    document.getElementById("detailDownloadDocxBtn").href = `${API_BASE}/worksheets/${ws.id}/export-docx`;
+
+    // Radial lines HTML
+    const radialHtml = (ws.radial_data || []).map((r, i) => `
+      <tr class="border-b border-slate-100">
+        <td class="p-2 font-bold text-emerald-800">#${i+1} ${r.goal || ''}</td>
+        <td class="p-2 text-slate-700">${r.mechanism || ''}</td>
+        <td class="p-2 text-slate-600">${r.observable || ''}</td>
+      </tr>
+    `).join("");
+
+    // Tradeoff lines HTML
+    const tradeoffHtml = (ws.tradeoff_data || []).map((t, i) => `
+      <tr class="border-b border-slate-100">
+        <td class="p-2 font-bold text-amber-900">${t.who || ''}</td>
+        <td class="p-2 text-slate-700">${t.situation || ''}</td>
+        <td class="p-2 text-slate-600">${t.how || ''}</td>
+      </tr>
+    `).join("");
+
+    const causal = ws.causal_data || {};
+    const commit = ws.commitment || {};
+
+    document.getElementById("detailModalBody").innerHTML = `
+      <div class="space-y-4 text-xs">
+        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
+          <span class="font-bold text-slate-500">中心行動：</span>
+          <span class="font-black text-slate-900 text-sm ml-2">${ws.center_action} (${ws.center_custom || '標準行動'})</span>
+          <span class="ml-4 font-mono text-teal-800 font-bold bg-teal-50 px-2 py-0.5 rounded border border-teal-200">${ws.chat_text}</span>
+        </div>
+
+        <div>
+          <h4 class="font-extrabold text-slate-800 mb-2">放射型連動分析（機制與變化）：</h4>
+          <table class="w-full text-left bg-white border border-slate-200 rounded-lg overflow-hidden">
+            <thead class="bg-emerald-50 text-emerald-900 font-bold">
+              <tr><th class="p-2">連動目標</th><th class="p-2">作用機制</th><th class="p-2">可觀察變化</th></tr>
+            </thead>
+            <tbody>${radialHtml || '<tr><td colspan="3" class="p-3 text-center text-slate-400">無連動資料</td></tr>'}</tbody>
+          </table>
+        </div>
+
+        <div>
+          <h4 class="font-extrabold text-amber-900 mb-2">善意拉扯檢核（負面影響與對策）：</h4>
+          <table class="w-full text-left bg-white border border-slate-200 rounded-lg overflow-hidden">
+            <thead class="bg-amber-50 text-amber-900 font-bold">
+              <tr><th class="p-2">可能傷到誰/什麼</th><th class="p-2">發生情況</th><th class="p-2">降低影響對策</th></tr>
+            </thead>
+            <tbody>${tradeoffHtml || '<tr><td colspan="3" class="p-3 text-center text-slate-400">無拉扯檢核</td></tr>'}</tbody>
+          </table>
+        </div>
+
+        <div class="bg-indigo-50/50 p-3 rounded-xl border border-indigo-100">
+          <h4 class="font-bold text-indigo-900 mb-1">課後進階因果鏈：</h4>
+          <p><strong>起點：</strong>${causal.start || '無'}（條件：${causal.start_cond || '無'}） ➔ <strong>中介：</strong>${causal.mid || '無'}（條件：${causal.mid_cond || '無'}） ➔ <strong>結果：</strong>${causal.result || '無'}（條件：${causal.result_cond || '無'}）</p>
+        </div>
+
+        <div class="bg-emerald-50/50 p-3 rounded-xl border border-emerald-200">
+          <h4 class="font-bold text-emerald-900 mb-1">連動承諾宣言：</h4>
+          <p>「我願意從 <u>${commit.start_action || ''}</u> 開始，希望促進 <u>${commit.target_1 || ''}</u> 與 <u>${commit.target_2 || ''}</u>，也會留意 <u>${commit.risk_aware || ''}</u> 的風險。一個月後，我會用 <u>${commit.metric || ''}</u> 來確認自己有沒有做到。」</p>
+        </div>
+
+        ${ws.score ? `
+        <div class="bg-purple-50 p-3 rounded-xl border border-purple-200">
+          <div class="font-bold text-purple-900">審定成績：${ws.score} 分</div>
+          <div class="text-slate-700 mt-1">講師講評：${ws.teacher_comment || '無'}</div>
+        </div>` : '<div class="text-slate-400 italic">目前尚未評分</div>'}
+      </div>
+    `;
+  } catch (err) {
+    showToast("無法載入練習單詳情", "error");
+  }
+};
 
 window.openGradeModal = function(id, name, curScore, curComment) {
   const modal = document.getElementById("gradeModal");
@@ -1359,6 +1511,9 @@ window.openGradeModal = function(id, name, curScore, curComment) {
   document.getElementById("gradeSubmitBtn").onclick = () => submitGrade(id);
 };
 
+/**
+ * Requirement 6: Submit Grade & Send Email Notification
+ */
 async function submitGrade(id) {
   const score = parseInt(document.getElementById("gradeScoreInput").value, 10);
   const comment = document.getElementById("gradeCommentInput").value.trim();
@@ -1375,9 +1530,10 @@ async function submitGrade(id) {
       },
       body: JSON.stringify({ score, comment })
     });
+    const d = await res.json();
     if (res.ok) {
-      showToast("批閱完成！已成功記錄成績與講評", "success");
       document.getElementById("gradeModal").classList.add("hidden");
+      showToast(`✓ 批閱完成！已記錄 ${score} 分，並發送指導通知信至 ${d.email_target}！`, "success");
       loadAdminWorksheets();
     }
   } catch (err) {
@@ -1385,13 +1541,18 @@ async function submitGrade(id) {
   }
 }
 
+// ==============================================================================
+// 9. Student Management (Requirement 7: Edit, Batch Delete & Batch Import)
+// ==============================================================================
 async function loadAdminStudents(search = "") {
   const container = document.getElementById("adminStudentsTableBody");
   if (!container) return;
-  container.innerHTML = '<tr><td colspan="6" class="p-6 text-center text-slate-400">載入學員名單...</td></tr>';
+  container.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-slate-400">載入學員名單...</td></tr>';
+  state.selectedStudentIds.clear();
+  updateSelectedCountUI();
 
   try {
-    const url = search ? `${API_BASE}/admin/students?search=${encodeURIComponent(search)}&limit=100` : `${API_BASE}/admin/students?limit=50`;
+    const url = search ? `${API_BASE}/admin/students?search=${encodeURIComponent(search)}&limit=200` : `${API_BASE}/admin/students?limit=100`;
     const res = await fetch(url, {
       headers: { "Authorization": `Bearer ${state.token}` }
     });
@@ -1402,51 +1563,189 @@ async function loadAdminStudents(search = "") {
         const tr = document.createElement("tr");
         tr.className = "border-b border-slate-100 hover:bg-slate-50 text-xs";
         tr.innerHTML = `
+          <td class="p-3 text-center">
+            ${s.role !== 'admin' ? `<input type="checkbox" class="student-cb rounded text-emerald-600" value="${s.id}" onchange="handleStudentSelectChange(${s.id}, this.checked)">` : ''}
+          </td>
           <td class="p-3 font-mono text-slate-500">#${s.id}</td>
           <td class="p-3 font-bold text-slate-800">${s.name}</td>
           <td class="p-3 text-slate-600">${s.email}</td>
           <td class="p-3 text-slate-600 font-mono">${s.phone}</td>
           <td class="p-3 text-slate-500">${s.unit_name || '佛光學員'}</td>
           <td class="p-3 text-right">
-            <button class="px-2 py-1 bg-amber-50 text-amber-700 hover:bg-amber-100 rounded font-semibold text-[11px] mr-1" onclick="resetStudentPassword(${s.id}, '${s.name}')">重設密碼</button>
-            <button class="px-2 py-1 bg-red-50 text-red-700 hover:bg-red-100 rounded font-semibold text-[11px]" onclick="deleteStudent(${s.id}, '${s.name}')">刪除</button>
+            <button class="px-2.5 py-1 bg-amber-50 text-amber-800 hover:bg-amber-100 rounded font-semibold text-[11px]" 
+              onclick="openEditStudentModal(${s.id}, '${s.name}', '${s.email}', '${s.phone}', '${s.unit_name || '佛光學員'}', '${s.role}')">
+              修改
+            </button>
           </td>
         `;
         container.appendChild(tr);
       });
     }
   } catch (err) {
-    container.innerHTML = '<tr><td colspan="6" class="p-6 text-center text-red-400">無法讀取名單</td></tr>';
+    container.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-red-400">無法讀取名單</td></tr>';
   }
 }
 
-window.resetStudentPassword = async function(id, name) {
-  if (!confirm(`確定要重設 ${name} 的登入密碼為手機號碼嗎？`)) return;
-  try {
-    const res = await fetch(`${API_BASE}/admin/students/${id}/reset-password`, {
-      method: "PUT",
-      headers: { "Authorization": `Bearer ${state.token}` }
-    });
-    const d = await res.json();
-    if (res.ok) showToast(d.message || "密碼已重設", "success");
-  } catch (err) {
-    showToast("重設失敗", "error");
-  }
+window.handleStudentSelectChange = function(id, isChecked) {
+  if (isChecked) state.selectedStudentIds.add(id);
+  else state.selectedStudentIds.delete(id);
+  updateSelectedCountUI();
 };
 
-window.deleteStudent = async function(id, name) {
-  if (!confirm(`確定要刪除學員 ${name} 嗎？此操作將同時刪除該學員的練習單。`)) return;
+window.toggleSelectAllStudents = function(masterCb) {
+  document.querySelectorAll(".student-cb").forEach(cb => {
+    cb.checked = masterCb.checked;
+    const sid = parseInt(cb.value, 10);
+    if (masterCb.checked) state.selectedStudentIds.add(sid);
+    else state.selectedStudentIds.delete(sid);
+  });
+  updateSelectedCountUI();
+};
+
+function updateSelectedCountUI() {
+  const countEl = document.getElementById("selectedStudentCount");
+  if (countEl) countEl.textContent = state.selectedStudentIds.size;
+  const btn = document.getElementById("batchDeleteBtn");
+  if (btn) btn.disabled = state.selectedStudentIds.size === 0;
+}
+
+window.openEditStudentModal = function(id, name, email, phone, unit, role) {
+  const modal = document.getElementById("editStudentModal");
+  if (!modal) return;
+  modal.classList.remove("hidden");
+  document.getElementById("editStudentId").value = id;
+  document.getElementById("editStudentName").value = name;
+  document.getElementById("editStudentEmail").value = email;
+  document.getElementById("editStudentPhone").value = phone;
+  document.getElementById("editStudentUnit").value = unit;
+  document.getElementById("editStudentPassword").value = "";
+};
+
+window.saveStudentEdit = async function() {
+  const id = document.getElementById("editStudentId").value;
+  const name = document.getElementById("editStudentName").value.trim();
+  const email = document.getElementById("editStudentEmail").value.trim();
+  const phone = document.getElementById("editStudentPhone").value.trim();
+  const unit_name = document.getElementById("editStudentUnit").value.trim();
+  const password = document.getElementById("editStudentPassword").value.trim();
+
+  if (!name || !email) {
+    showToast("姓名與 Email 為必填欄位", "error");
+    return;
+  }
+
   try {
     const res = await fetch(`${API_BASE}/admin/students/${id}`, {
-      method: "DELETE",
-      headers: { "Authorization": `Bearer ${state.token}` }
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${state.token}`
+      },
+      body: JSON.stringify({ name, email, phone, unit_name, password })
     });
+    const d = await res.json();
     if (res.ok) {
-      showToast(`學員 ${name} 已刪除`, "success");
+      showToast(d.message || "學員資料更新成功！", "success");
+      document.getElementById("editStudentModal").classList.add("hidden");
       loadAdminStudents();
     }
   } catch (err) {
-    showToast("刪除失敗", "error");
+    showToast("更新失敗", "error");
+  }
+};
+
+window.executeBatchDeleteStudents = async function() {
+  const ids = Array.from(state.selectedStudentIds);
+  if (ids.length === 0) return;
+  if (!confirm(`確定要批次刪除選取的 ${ids.length} 位學員嗎？此操作將同時刪除這些學員的練習單與紀錄。`)) return;
+
+  try {
+    const res = await fetch(`${API_BASE}/admin/students/batch-delete`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${state.token}`
+      },
+      body: JSON.stringify({ ids })
+    });
+    const d = await res.json();
+    if (res.ok) {
+      showToast(d.message || "批次刪除成功！", "success");
+      loadAdminStudents();
+    }
+  } catch (err) {
+    showToast("批次刪除失敗", "error");
+  }
+};
+
+window.openBatchImportModal = function() {
+  document.getElementById("batchImportModal")?.classList.remove("hidden");
+};
+
+window.executeBatchImport = async function() {
+  const textVal = document.getElementById("importTextarea").value.trim();
+  const fileInput = document.getElementById("importFileInput");
+
+  let parsedStudents = [];
+
+  // Parse text area lines (Format: 姓名, Email, 電話, 分會單位)
+  if (textVal) {
+    const lines = textVal.split("\n");
+    for (let line of lines) {
+      const parts = line.split(",").map(p => p.trim());
+      if (parts.length >= 2 && parts[0] && parts[1]) {
+        parsedStudents.push({
+          name: parts[0],
+          email: parts[1],
+          phone: parts[2] || "0920111111",
+          unit_name: parts[3] || "佛光學員"
+        });
+      }
+    }
+  }
+
+  // Parse file if selected
+  if (fileInput.files.length > 0) {
+    const file = fileInput.files[0];
+    const text = await file.text();
+    const rows = text.split("\n");
+    for (let r of rows) {
+      const parts = r.split(",").map(p => p.trim());
+      if (parts.length >= 2 && parts[0] && parts[1] && parts[0] !== "學員姓名" && parts[0] !== "姓名") {
+        parsedStudents.push({
+          name: parts[0],
+          email: parts[1],
+          phone: parts[2] || "0920111111",
+          unit_name: parts[3] || "佛光學員"
+        });
+      }
+    }
+  }
+
+  if (parsedStudents.length === 0) {
+    showToast("未偵測到有效的名冊資料，請確認格式（姓名, Email, 電話, 單位）", "error");
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/admin/students/batch-import`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${state.token}`
+      },
+      body: JSON.stringify({ students: parsedStudents })
+    });
+    const d = await res.json();
+    if (res.ok) {
+      showToast(d.message || "批次匯入完成！", "success");
+      document.getElementById("batchImportModal").classList.add("hidden");
+      document.getElementById("importTextarea").value = "";
+      fileInput.value = "";
+      loadAdminStudents();
+    }
+  } catch (err) {
+    showToast("匯入失敗", "error");
   }
 };
 
@@ -1456,7 +1755,7 @@ window.exportWorksheetsCSV = function() {
 };
 
 // ==============================================================================
-// 8. Utilities & Toast Notifications
+// 10. Utilities & Toast Notifications
 // ==============================================================================
 function showToast(message, type = "info") {
   const container = document.getElementById("toastContainer");
@@ -1465,17 +1764,14 @@ function showToast(message, type = "info") {
   const toast = document.createElement("div");
   const bgClass = type === "success" ? "bg-emerald-600 text-white" : (type === "error" ? "bg-red-600 text-white" : (type === "warning" ? "bg-amber-600 text-white" : "bg-slate-800 text-white"));
 
-  toast.className = `${bgClass} px-4 py-3 rounded-xl shadow-xl flex items-center gap-3 text-sm font-semibold transition-all transform duration-300 opacity-0 translate-y-2`;
+  toast.className = `${bgClass} px-4 py-3 rounded-xl shadow-xl flex items-center gap-3 text-sm font-semibold transition-all transform duration-300 opacity-0 translate-y-2 pointer-events-auto`;
   toast.innerHTML = `
     <span>${type === 'success' ? '✓' : (type === 'error' ? '✕' : 'ℹ')}</span>
     <span>${message}</span>
   `;
 
   container.appendChild(toast);
-  setTimeout(() => {
-    toast.classList.remove("opacity-0", "translate-y-2");
-  }, 10);
-
+  setTimeout(() => toast.classList.remove("opacity-0", "translate-y-2"), 10);
   setTimeout(() => {
     toast.classList.add("opacity-0", "translate-y-2");
     setTimeout(() => toast.remove(), 300);
