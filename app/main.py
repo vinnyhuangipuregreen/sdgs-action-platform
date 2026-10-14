@@ -1,3 +1,4 @@
+import sys
 import os
 import json
 import csv
@@ -20,6 +21,31 @@ app = FastAPI(
     description="佛光永續學院 × 佛光大學應用科技與設計學院 專案平台 v3.0",
     version="3.0.0"
 )
+
+
+@app.on_event("startup")
+def on_startup():
+    init_db()
+    try:
+        with get_db() as conn:
+            c = conn.cursor()
+            c.execute("SELECT COUNT(*) FROM users")
+            count = c.fetchone()[0]
+            if count == 0:
+                print("[STARTUP] Users table empty, auto-seeding database...")
+                root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                if root_dir not in sys.path:
+                    sys.path.insert(0, root_dir)
+                import importlib.util
+                seed_path = os.path.join(root_dir, "seed_db.py")
+                if os.path.exists(seed_path):
+                    spec = importlib.util.spec_from_file_location("seed_db", seed_path)
+                    s_mod = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(s_mod)
+                    s_mod.seed()
+                    print("[STARTUP] Auto-seeding completed successfully!")
+    except Exception as e:
+        print("[STARTUP] Auto-seed check error:", e)
 
 app.add_middleware(
     CORSMiddleware,

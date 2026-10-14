@@ -10,5 +10,3 @@ venv/
 sdgs.db
 *.sqlite3
 .DS_Store
-service-account*.json
-*.json.json

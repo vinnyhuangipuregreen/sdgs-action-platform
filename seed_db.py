@@ -47,35 +47,35 @@ def seed():
             cursor.execute("""
             INSERT INTO users (name, email, email_backup, phone, unit_code, unit_name, password_hash, role)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, ("系統管理員 (戴慶華 博士)", "admin", "vinnyhuang.ipuregreen@gmail.com", "0912345678", "FGU", "佛光永續學院", admin_pass, "admin"))
+            """, ("系統管理員 (戴慶華 博士)", "admin", "admin@fgu.edu.tw", "0912345678", "FGU", "佛光永續學院", admin_pass, "admin"))
             print("Admin user created: admin / sdgs2030admin")
         else:
             cursor.execute("UPDATE users SET password_hash = ?, role = 'admin' WHERE id = ?", (admin_pass, admin_row[0]))
 
-        # 3. Seed Students (427 students with complete 6 columns)
-        students_path = os.path.join(CURRENT_DIR, "data", "students_seed_v3.json")
+        # 3. Seed Students (427 students with test001@gmail.com ~ test427@gmail.com and full 6 columns)
+        students_path = os.path.join(CURRENT_DIR, "data", "students_seed_v4.json")
+        if not os.path.exists(students_path):
+            students_path = os.path.join(CURRENT_DIR, "data", "students_seed_v3.json")
+            
         if os.path.exists(students_path):
             with open(students_path, "r", encoding="utf-8") as f:
                 students = json.load(f)
             
-            # Reset student records if old schema
-            cursor.execute("SELECT COUNT(*) FROM users WHERE role = 'student'")
-            student_count = cursor.fetchone()[0]
-            if student_count < 400 or True: # Force refresh to new 6-column schema
-                cursor.execute("DELETE FROM users WHERE role = 'student'")
-                print(f"Seeding {len(students)} students with new schema (unit_code & unit_name)...")
-                for s in students:
-                    p_hash = hash_password(s["phone"])
-                    cursor.execute("""
-                    INSERT INTO users (name, email, email_backup, phone, unit_code, unit_name, password_hash, role)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, 'student')
-                    """, (s["name"], s["email"], s["email_backup"], s["phone"], s["unit_code"], s["unit_name"], p_hash))
-                print(f"All {len(students)} students seeded successfully!")
+            # Reset student records to ensure latest official list is loaded
+            cursor.execute("DELETE FROM users WHERE role = 'student'")
+            print(f"Seeding {len(students)} students with latest schema (test001@gmail.com ~ test427@gmail.com)...")
+            for s in students:
+                p_hash = hash_password(s["phone"])
+                cursor.execute("""
+                INSERT INTO users (name, email, email_backup, phone, unit_code, unit_name, password_hash, role)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'student')
+                """, (s["name"], s["email"], s.get("email_backup", s["email"]), s["phone"], s.get("unit_code", ""), s.get("unit_name", "佛光學員"), p_hash))
+            print(f"All {len(students)} students seeded successfully!")
 
         # 4. Seed sample worksheet
         cursor.execute("SELECT COUNT(*) FROM worksheets")
         if cursor.fetchone()[0] == 0:
-            cursor.execute("SELECT id, name, unit_name, unit_code FROM users WHERE role = 'student' LIMIT 1")
+            cursor.execute("SELECT id, name, unit_name, unit_code, email FROM users WHERE role = 'student' LIMIT 1")
             s1 = cursor.fetchone()
             if s1:
                 radial1 = json.dumps([
@@ -132,7 +132,7 @@ def seed():
                     "分析非常透徹！作用機制具備具體生物化學與環境邏輯，拉扯檢查提出配套防護，堪稱模範練習單！"
                 ))
 
-    print("Database seeding v3 completed successfully!")
+    print("Database seeding completed successfully!")
 
 if __name__ == "__main__":
     seed()
