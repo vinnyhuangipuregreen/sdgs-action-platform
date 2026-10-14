@@ -1,4 +1,4 @@
-// SDGs and Climate Action Platform - Comprehensive Frontend Core v3.0
+// SDGs and Climate Action Platform - Frontend Core v4.0 (Earth Defense Battle)
 const API_BASE = "/api";
 
 const state = {
@@ -10,35 +10,41 @@ const state = {
   worksheetsList: [],
   activeTab: "worksheet",
   
-  // Game 1: Memory Match State
-  memoryGame: {
+  // Game: 《SDGs 地球保衛戰》(Whac-A-Mole Style)
+  earthDefense: {
     active: false,
-    cards: [],
-    flipped: [],
-    matchedPairs: 0,
-    totalPairs: 6,
     score: 0,
     combo: 0,
     maxCombo: 0,
+    monstersHit: 0,
+    lives: 3,
+    timeLeft: 45,
     timer: null,
-    timeLeft: 60
-  },
-
-  // Game 2: Combo Blast State
-  comboGame: {
-    active: false,
-    grid: [],
-    rows: 5,
-    cols: 5,
-    movesLeft: 15,
-    score: 0,
-    combo: 0,
-    maxCombo: 0,
-    risksSolved: 0,
-    colors: ["#0284c7", "#10b981", "#f59e0b", "#8b5cf6", "#ef4444", "#14b8a6"]
+    spawnInterval: null,
+    holesState: Array(9).fill(null), // null or target object
+    feverTime: false,
+    feverTimer: null
   },
 
   selectedStudentIds: new Set()
+};
+
+// Character datasets for 《SDGs 地球保衛戰》
+const DEFENSE_CHARACTERS = {
+  monsters: [
+    { type: "monster", icon: "🛢️", name: "碳排煙囪怪", tag: "SDG 13 氣候危機", pts: 100, color: "#374151" },
+    { type: "monster", icon: "🥤", name: "萬年塑膠怪", tag: "SDG 14 海洋垃圾", pts: 100, color: "#0284c7" },
+    { type: "monster", icon: "🪓", name: "濫伐推土怪", tag: "SDG 15 森林浩劫", pts: 100, color: "#b45309" },
+    { type: "monster", icon: "🏭", name: "毒毒廢水怪", tag: "SDG 6 水源污染", pts: 100, color: "#7c3aed" },
+    { type: "monster", icon: "🗑️", name: "浪費剩食怪", tag: "SDG 12 資源浪費", pts: 100, color: "#ea580c" }
+  ],
+  guardians: [
+    { type: "guardian", icon: "🐢", name: "海龜保育寶寶", tag: "保護海洋！不要打", pts: -150, color: "#10b981" },
+    { type: "guardian", icon: "🌱", name: "原生小樹苗", tag: "保護陸域！不要打", pts: -150, color: "#22c55e" },
+    { type: "guardian", icon: "☀️", name: "太陽能小萌陽", tag: "潔淨能源！不要打", pts: -150, color: "#facc15" },
+    { type: "guardian", icon: "💧", name: "純淨水滴精靈", tag: "珍貴水源！不要打", pts: -150, color: "#38bdf8" }
+  ],
+  bonus: { type: "bonus", icon: "⭐", name: "彩虹永續金星", tag: "FEVER 全場淨化！", pts: 500, color: "#ec4899" }
 };
 
 // ==============================================================================
@@ -109,12 +115,11 @@ function switchTab(tabId) {
 
   if (tabId === "leaderboard") loadLeaderboard();
   if (tabId === "admin") loadAdminDashboard();
-  if (tabId === "memory_game" && !state.memoryGame.active) initNewMemoryGame();
-  if (tabId === "combo_game" && !state.comboGame.active) initNewComboBlastGame();
+  if (tabId === "earth_defense" && !state.earthDefense.active) initNewEarthDefenseGame();
 }
 
 // ==============================================================================
-// 2. Auth Module (With Disambiguation for Shared Email Accounts)
+// 2. Auth Module
 // ==============================================================================
 async function checkAuth() {
   if (!state.token) {
@@ -163,7 +168,6 @@ async function handleLogin(e, explicitStudentId = null) {
       return;
     }
 
-    // Handle shared email disambiguation
     if (data.multiple_matches && data.students) {
       pickerBox.classList.remove("hidden");
       const listEl = document.getElementById("studentPickerList");
@@ -260,8 +264,7 @@ function updateUserUI() {
     const formUnit = document.getElementById("ws_unitName");
     if (formName) formName.value = state.user.name;
     if (formUnit) {
-      const displayUnit = state.user.unit_name || "佛光學員";
-      formUnit.value = displayUnit;
+      formUnit.value = state.user.unit_name || "佛光學員";
     }
   }
 }
@@ -437,7 +440,7 @@ window.setTierFilter = function(tier, btn) {
 };
 
 // ==============================================================================
-// 4. Worksheet Module (CRUD & Linkage Analysis)
+// 4. Worksheet Module (CRUD)
 // ==============================================================================
 function initWorksheetEvents() {
   document.querySelectorAll("input[name='center_action']").forEach(radio => {
@@ -898,311 +901,258 @@ window.createNewWorksheet = function() {
 };
 
 // ==============================================================================
-// 5. Game 1: 【SDG 永續翻牌大考驗】(Left Game)
+// 5. 《SDGs 地球保衛戰》遊戲引擎 (Whac-A-Mole 綠色永續打地鼠)
 // ==============================================================================
-async function initNewMemoryGame() {
-  const mg = state.memoryGame;
-  mg.active = true;
-  mg.matchedPairs = 0;
-  mg.score = 0;
-  mg.combo = 0;
-  mg.maxCombo = 0;
-  mg.flipped = [];
-  mg.timeLeft = 60;
-  clearInterval(mg.timer);
+function initNewEarthDefenseGame() {
+  const g = state.earthDefense;
+  g.active = true;
+  g.score = 0;
+  g.combo = 0;
+  g.maxCombo = 0;
+  g.monstersHit = 0;
+  g.lives = 3;
+  g.timeLeft = 45;
+  g.feverTime = false;
+  g.holesState = Array(9).fill(null);
 
-  document.getElementById("memoryIntroCard").classList.add("hidden");
-  document.getElementById("memoryMainScreen").classList.remove("hidden");
-  document.getElementById("memoryGameOverScreen").classList.add("hidden");
+  clearInterval(g.timer);
+  clearInterval(g.spawnInterval);
+  clearTimeout(g.feverTimer);
 
-  try {
-    const res = await fetch(`${API_BASE}/game/memory-cards`);
-    if (res.ok) {
-      const data = await res.json();
-      mg.cards = data.cards;
-      renderMemoryBoard();
-      startMemoryTimer();
-    }
-  } catch (err) {
-    showToast("無法載入翻牌卡片，請重試", "error");
-  }
-}
+  document.getElementById("defenseIntroCard").classList.add("hidden");
+  document.getElementById("defenseMainScreen").classList.remove("hidden");
+  document.getElementById("defenseGameOverScreen").classList.add("hidden");
 
-function renderMemoryBoard() {
-  const container = document.getElementById("memoryGridContainer");
-  if (!container) return;
-  container.innerHTML = "";
+  renderDefenseGrid();
+  updateDefenseHUD();
 
-  updateMemoryStatsUI();
-
-  state.memoryGame.cards.forEach((card, idx) => {
-    const el = document.createElement("div");
-    el.className = "memory-card w-full h-28 sm:h-32 bg-slate-800 rounded-2xl cursor-pointer p-3 flex flex-col justify-center items-center text-center border-2 border-slate-700 shadow-md hover:border-emerald-400 select-none transition-all transform hover:scale-105";
-    el.setAttribute("data-index", idx);
-    el.innerHTML = `
-      <div class="card-back text-2xl font-black text-slate-500">🌏<span class="block text-[11px] text-slate-400 mt-1">SDG配對</span></div>
-      <div class="card-front hidden flex flex-col justify-center items-center w-full h-full">
-        <span class="text-xl mb-1">${card.icon}</span>
-        <div class="text-xs font-bold text-white line-clamp-2 px-1">${card.title}</div>
-        <span class="text-[10px] mt-1 px-1.5 py-0.2 rounded bg-black/40 text-emerald-300">${card.desc}</span>
-      </div>
-    `;
-
-    el.addEventListener("click", () => handleMemoryCardClick(idx, el));
-    container.appendChild(el);
-  });
-}
-
-function handleMemoryCardClick(idx, cardEl) {
-  const mg = state.memoryGame;
-  if (!mg.active || mg.flipped.length >= 2) return;
-  if (cardEl.classList.contains("matched") || cardEl.classList.contains("is-flipped")) return;
-
-  cardEl.classList.add("is-flipped", "border-emerald-400", "bg-slate-900");
-  cardEl.querySelector(".card-back").classList.add("hidden");
-  cardEl.querySelector(".card-front").classList.remove("hidden");
-  cardEl.style.backgroundColor = mg.cards[idx].color + "22";
-
-  mg.flipped.push({ idx, el: cardEl, card: mg.cards[idx] });
-
-  if (mg.flipped.length === 2) {
-    const [c1, c2] = mg.flipped;
-    if (c1.card.pair_id === c2.card.pair_id) {
-      mg.combo += 1;
-      if (mg.combo > mg.maxCombo) mg.maxCombo = mg.combo;
-      mg.matchedPairs += 1;
-      mg.score += 500 + (mg.combo * 200);
-
-      c1.el.classList.add("matched", "ring-2", "ring-emerald-400");
-      c2.el.classList.add("matched", "ring-2", "ring-emerald-400");
-      showToast(`🎯 配對成功！連擊 +${mg.combo}`, "success");
-      mg.flipped = [];
-      updateMemoryStatsUI();
-
-      if (mg.matchedPairs === mg.totalPairs) {
-        endMemoryGame(true);
-      }
-    } else {
-      mg.combo = 0;
-      updateMemoryStatsUI();
-      setTimeout(() => {
-        c1.el.classList.remove("is-flipped", "border-emerald-400", "bg-slate-900");
-        c1.el.style.backgroundColor = "";
-        c1.el.querySelector(".card-back").classList.remove("hidden");
-        c1.el.querySelector(".card-front").classList.add("hidden");
-
-        c2.el.classList.remove("is-flipped", "border-emerald-400", "bg-slate-900");
-        c2.el.style.backgroundColor = "";
-        c2.el.querySelector(".card-back").classList.remove("hidden");
-        c2.el.querySelector(".card-front").classList.add("hidden");
-        mg.flipped = [];
-      }, 900);
-    }
-  }
-}
-
-function startMemoryTimer() {
-  const mg = state.memoryGame;
-  clearInterval(mg.timer);
-  mg.timer = setInterval(() => {
-    mg.timeLeft -= 1;
-    updateMemoryStatsUI();
-    if (mg.timeLeft <= 0) {
-      clearInterval(mg.timer);
-      endMemoryGame(false);
+  // Start 45s countdown timer
+  g.timer = setInterval(() => {
+    g.timeLeft -= 1;
+    updateDefenseHUD();
+    if (g.timeLeft <= 0) {
+      endEarthDefenseGame();
     }
   }, 1000);
+
+  // Start spawning loop
+  startMoleSpawning();
 }
 
-function updateMemoryStatsUI() {
-  const mg = state.memoryGame;
-  document.getElementById("memoryScoreVal").textContent = mg.score.toLocaleString();
-  document.getElementById("memoryComboVal").textContent = `${mg.combo}x`;
-  document.getElementById("memoryMatchedVal").textContent = `${mg.matchedPairs}/${mg.totalPairs}`;
-  document.getElementById("memoryTimerVal").textContent = `${mg.timeLeft}s`;
-}
-
-function endMemoryGame(isWin) {
-  const mg = state.memoryGame;
-  mg.active = false;
-  clearInterval(mg.timer);
-
-  if (isWin) {
-    mg.score += (mg.timeLeft * 50);
-  }
-
-  document.getElementById("memoryMainScreen").classList.add("hidden");
-  document.getElementById("memoryGameOverScreen").classList.remove("hidden");
-
-  document.getElementById("finalMemoryScore").textContent = mg.score.toLocaleString();
-  document.getElementById("finalMemoryCombo").textContent = `${mg.maxCombo}x`;
-  document.getElementById("finalMemoryTime").textContent = `${60 - mg.timeLeft} 秒`;
-
-  let title = "🌱 永續記憶見習生";
-  if (mg.score >= 5000) title = "⚡ 永續超能連動大師";
-  else if (mg.score >= 3500) title = "🌿 永續敏銳觀察者";
-  else if (mg.score >= 2000) title = "🎯 永續行動先鋒";
-
-  document.getElementById("finalMemoryTitle").textContent = title;
-
-  document.getElementById("submitMemoryLeaderboardBtn").onclick = () => {
-    submitGameScoreToBackend(mg.score, mg.maxCombo, 100, mg.matchedPairs, title, "memory_match");
-  };
-}
-
-// ==============================================================================
-// 6. Game 2: 【SDG 永續連鎖消消樂】(Right Game)
-// ==============================================================================
-const COMBO_BLAST_ICONS = ["🌊", "🌳", "☀️", "🥗", "👕", "🤝"];
-
-function initNewComboBlastGame() {
-  const cg = state.comboGame;
-  cg.active = true;
-  cg.movesLeft = 15;
-  cg.score = 0;
-  cg.combo = 0;
-  cg.maxCombo = 0;
-  cg.risksSolved = 0;
-
-  document.getElementById("comboIntroCard").classList.add("hidden");
-  document.getElementById("comboMainScreen").classList.remove("hidden");
-  document.getElementById("comboGameOverScreen").classList.add("hidden");
-
-  buildComboBlastGrid();
-  updateComboBlastStatsUI();
-}
-
-function buildComboBlastGrid() {
-  const cg = state.comboGame;
-  cg.grid = [];
-  for (let r = 0; r < cg.rows; r++) {
-    const row = [];
-    for (let c = 0; c < cg.cols; c++) {
-      row.push(Math.floor(Math.random() * cg.colors.length));
-    }
-    cg.grid.push(row);
-  }
-  renderComboBlastGrid();
-}
-
-function renderComboBlastGrid() {
-  const container = document.getElementById("comboGridContainer");
+function renderDefenseGrid() {
+  const container = document.getElementById("defenseGridContainer");
   if (!container) return;
   container.innerHTML = "";
 
-  const cg = state.comboGame;
-  for (let r = 0; r < cg.rows; r++) {
-    for (let c = 0; c < cg.cols; c++) {
-      const val = cg.grid[r][c];
-      const btn = document.createElement("button");
-      btn.className = "w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex flex-col items-center justify-center text-xl sm:text-2xl shadow-md transform hover:scale-105 transition-all active:scale-95 border-2 border-white/20";
-      btn.style.backgroundColor = cg.colors[val];
-      btn.textContent = COMBO_BLAST_ICONS[val];
-      btn.onclick = () => handleGemClick(r, c);
-      container.appendChild(btn);
+  for (let i = 0; i < 9; i++) {
+    const hole = document.createElement("div");
+    hole.className = "hole-container w-24 h-28 sm:w-28 sm:h-36 flex items-center justify-center relative";
+    hole.id = `hole_${i}`;
+    hole.innerHTML = `
+      <div class="hole-rim"></div>
+      <div id="target_${i}" class="mole-target" onclick="hitMoleTarget(${i}, event)"></div>
+    `;
+    container.appendChild(hole);
+  }
+}
+
+function startMoleSpawning() {
+  const g = state.earthDefense;
+  clearInterval(g.spawnInterval);
+
+  // Spawn every 650ms ~ 850ms
+  g.spawnInterval = setInterval(() => {
+    if (!g.active) return;
+    spawnSingleMole();
+  }, 750);
+}
+
+function spawnSingleMole() {
+  const g = state.earthDefense;
+  // Find available holes
+  const freeHoles = [];
+  for (let i = 0; i < 9; i++) {
+    if (!g.holesState[i]) freeHoles.push(i);
+  }
+  if (freeHoles.length === 0) return;
+
+  const holeIdx = freeHoles[Math.floor(Math.random() * freeHoles.length)];
+
+  // Choose character: 70% monster, 20% guardian, 10% rainbow star
+  let char = null;
+  const rand = Math.random();
+  if (rand < 0.70) {
+    char = DEFENSE_CHARACTERS.monsters[Math.floor(Math.random() * DEFENSE_CHARACTERS.monsters.length)];
+  } else if (rand < 0.90) {
+    char = DEFENSE_CHARACTERS.guardians[Math.floor(Math.random() * DEFENSE_CHARACTERS.guardians.length)];
+  } else {
+    char = DEFENSE_CHARACTERS.bonus;
+  }
+
+  g.holesState[holeIdx] = { ...char, id: Date.now() + Math.random(), hit: false };
+
+  const targetEl = document.getElementById(`target_${holeIdx}`);
+  if (!targetEl) return;
+
+  targetEl.innerHTML = `
+    <div class="text-3xl sm:text-4xl filter drop-shadow-md transform active:scale-90 transition-transform">${char.icon}</div>
+    <span class="text-[10px] font-black px-1.5 py-0.5 rounded-full mt-1 text-white shadow" style="background-color: ${char.color}">
+      ${char.name}
+    </span>
+    <span class="text-[9px] opacity-80 text-white block mt-0.5 font-bold">${char.tag}</span>
+  `;
+  targetEl.classList.remove("hit");
+  targetEl.classList.add("up");
+
+  // Retreat after 1.1s if not hit
+  setTimeout(() => {
+    if (g.holesState[holeIdx] && !g.holesState[holeIdx].hit) {
+      targetEl.classList.remove("up");
+      g.holesState[holeIdx] = null;
+    }
+  }, 1100);
+}
+
+window.hitMoleTarget = function(holeIdx, e) {
+  const g = state.earthDefense;
+  if (!g.active) return;
+  const target = g.holesState[holeIdx];
+  if (!target || target.hit) return;
+
+  target.hit = true;
+  const targetEl = document.getElementById(`target_${holeIdx}`);
+  const holeContainer = document.getElementById(`hole_${holeIdx}`);
+
+  // Create floating score element
+  const floatEl = document.createElement("div");
+  floatEl.className = "score-float text-xs sm:text-sm";
+  floatEl.style.left = "50%";
+  floatEl.style.top = "30%";
+
+  if (target.type === "monster") {
+    // Monster defeated!
+    g.combo += 1;
+    if (g.combo > g.maxCombo) g.maxCombo = g.combo;
+    g.monstersHit += 1;
+
+    let mult = 1.0;
+    if (g.combo >= 10) mult = 2.5;
+    else if (g.combo >= 5) mult = 2.0;
+    else if (g.combo >= 3) mult = 1.5;
+
+    const gained = Math.round(target.pts * mult);
+    g.score += gained;
+
+    floatEl.innerHTML = `<span class="text-emerald-400">+${gained} 🍃</span>`;
+    if (g.combo > 1) floatEl.innerHTML += `<span class="block text-[10px] text-amber-300 font-bold">${g.combo} COMBO!</span>`;
+
+    // Visual hit
+    targetEl.classList.add("hit");
+    targetEl.querySelector("div").textContent = "😵";
+    setTimeout(() => {
+      targetEl.classList.remove("up");
+      g.holesState[holeIdx] = null;
+    }, 250);
+
+  } else if (target.type === "guardian") {
+    // Guardian mistaken! Penalty
+    g.combo = 0;
+    g.lives -= 1;
+    g.score = Math.max(0, g.score + target.pts);
+
+    floatEl.innerHTML = `<span class="text-red-400 font-black">${target.pts} 💔 誤傷！</span>`;
+    
+    // Shake screen
+    const arena = document.getElementById("defenseMainScreen");
+    arena.classList.add("shake");
+    setTimeout(() => arena.classList.remove("shake"), 300);
+
+    targetEl.classList.remove("up");
+    g.holesState[holeIdx] = null;
+
+    if (g.lives <= 0) {
+      endEarthDefenseGame();
+    }
+  } else if (target.type === "bonus") {
+    // Rainbow Star Fever!
+    g.score += target.pts;
+    floatEl.innerHTML = `<span class="text-pink-400 font-black">+${target.pts} ⭐ FEVER!</span>`;
+    triggerFeverTime();
+    targetEl.classList.remove("up");
+    g.holesState[holeIdx] = null;
+  }
+
+  holeContainer.appendChild(floatEl);
+  setTimeout(() => floatEl.remove(), 800);
+  updateDefenseHUD();
+};
+
+function triggerFeverTime() {
+  const g = state.earthDefense;
+  g.feverTime = true;
+  showToast("🌈 觸發 FEVER TIME！全場危機怪獸秒速淨化！", "success");
+  
+  // Clear all current monsters with bonus points
+  for (let i = 0; i < 9; i++) {
+    if (g.holesState[i] && g.holesState[i].type === "monster") {
+      hitMoleTarget(i, null);
     }
   }
+
+  clearTimeout(g.feverTimer);
+  g.feverTimer = setTimeout(() => {
+    g.feverTime = false;
+  }, 4000);
 }
 
-function handleGemClick(r, c) {
-  const cg = state.comboGame;
-  if (!cg.active || cg.movesLeft <= 0) return;
+function updateDefenseHUD() {
+  const g = state.earthDefense;
+  document.getElementById("defenseScoreVal").textContent = g.score.toLocaleString();
+  document.getElementById("defenseComboVal").textContent = `${g.combo}x`;
+  document.getElementById("defenseTimerVal").textContent = `${g.timeLeft}s`;
 
-  const targetColor = cg.grid[r][c];
-  if (targetColor === null) return;
-
-  const visited = Array.from({ length: cg.rows }, () => Array(cg.cols).fill(false));
-  const connected = [];
-
-  function dfs(row, col) {
-    if (row < 0 || row >= cg.rows || col < 0 || col >= cg.cols) return;
-    if (visited[row][col] || cg.grid[row][col] !== targetColor) return;
-    visited[row][col] = true;
-    connected.push([row, col]);
-    dfs(row + 1, col);
-    dfs(row - 1, col);
-    dfs(row, col + 1);
-    dfs(row, col - 1);
-  }
-
-  dfs(r, c);
-
-  if (connected.length < 2) {
-    showToast("至少需 2 個相鄰連動方塊才能消除！", "info");
-    return;
-  }
-
-  cg.movesLeft -= 1;
-  cg.combo += 1;
-  if (cg.combo > cg.maxCombo) cg.maxCombo = cg.combo;
-
-  const points = (connected.length * 150) * cg.combo;
-  cg.score += points;
-
-  connected.forEach(([row, col]) => {
-    cg.grid[row][col] = null;
-  });
-
-  applyGravityAndRefill();
-  renderComboBlastGrid();
-  updateComboBlastStatsUI();
-
-  showToast(`💥 連鎖引爆 ${connected.length} 顆方塊！獲得 +${points} 分！`, "success");
-
-  if (cg.movesLeft <= 0) {
-    endComboBlastGame();
+  // Hearts UI
+  const heartsEl = document.getElementById("defenseHeartsVal");
+  if (heartsEl) {
+    heartsEl.innerHTML = "❤️".repeat(Math.max(0, g.lives)) + "🖤".repeat(Math.max(0, 3 - g.lives));
   }
 }
 
-function applyGravityAndRefill() {
-  const cg = state.comboGame;
-  for (let c = 0; c < cg.cols; c++) {
-    let emptyRow = cg.rows - 1;
-    for (let r = cg.rows - 1; r >= 0; r--) {
-      if (cg.grid[r][c] !== null) {
-        cg.grid[emptyRow][c] = cg.grid[r][c];
-        if (emptyRow !== r) cg.grid[r][c] = null;
-        emptyRow--;
-      }
-    }
-    for (let r = emptyRow; r >= 0; r--) {
-      cg.grid[r][c] = Math.floor(Math.random() * cg.colors.length);
-    }
+function endEarthDefenseGame() {
+  const g = state.earthDefense;
+  g.active = false;
+  clearInterval(g.timer);
+  clearInterval(g.spawnInterval);
+  clearTimeout(g.feverTimer);
+
+  // Hide all moles
+  for (let i = 0; i < 9; i++) {
+    const el = document.getElementById(`target_${i}`);
+    if (el) el.classList.remove("up");
   }
-}
 
-function updateComboBlastStatsUI() {
-  const cg = state.comboGame;
-  document.getElementById("comboScoreVal").textContent = cg.score.toLocaleString();
-  document.getElementById("comboStreakVal").textContent = `${cg.combo}x`;
-  document.getElementById("comboMovesVal").textContent = cg.movesLeft;
-}
+  document.getElementById("defenseMainScreen").classList.add("hidden");
+  document.getElementById("defenseGameOverScreen").classList.remove("hidden");
 
-function endComboBlastGame() {
-  const cg = state.comboGame;
-  cg.active = false;
+  document.getElementById("finalDefenseScore").textContent = g.score.toLocaleString();
+  document.getElementById("finalDefenseCombo").textContent = `${g.maxCombo} 連擊`;
+  document.getElementById("finalDefenseMonsters").textContent = `${g.monstersHit} 隻`;
 
-  document.getElementById("comboMainScreen").classList.add("hidden");
-  document.getElementById("comboGameOverScreen").classList.remove("hidden");
+  let title = "🌱 綠野見習巡邏員";
+  if (g.score >= 8000) title = "🌌 綠野傳奇守護神";
+  else if (g.score >= 5000) title = "🌟 星級永續特警隊";
+  else if (g.score >= 3000) title = "🌿 森林生態保衛者";
 
-  document.getElementById("finalComboScore").textContent = cg.score.toLocaleString();
-  document.getElementById("finalComboStreak").textContent = `${cg.maxCombo}x`;
+  document.getElementById("finalDefenseTitle").textContent = title;
 
-  let title = "🌱 永續消消樂新手";
-  if (cg.score >= 12000) title = "🌌 宇宙級永續守護神";
-  else if (cg.score >= 8000) title = "🌟 傳奇星際消消大師";
-  else if (cg.score >= 5000) title = "⚡ 永續連鎖爆破手";
-
-  document.getElementById("finalComboTitle").textContent = title;
-
-  document.getElementById("submitComboLeaderboardBtn").onclick = () => {
-    submitGameScoreToBackend(cg.score, cg.maxCombo, 100, 5, title, "combo_blast");
+  document.getElementById("submitDefenseLeaderboardBtn").onclick = () => {
+    submitGameScoreToBackend(g.score, g.maxCombo, 100, g.monstersHit, title, "earth_defense");
   };
 }
 
 async function submitGameScoreToBackend(score, combo, health, solved, title, gameType) {
   if (!state.token) {
-    showToast("請先登入後方可登錄天梯排行榜！", "warning");
+    showToast("請先登入後方可登錄保衛英雄榜！", "warning");
     showLoginModal(true);
     return;
   }
@@ -1224,7 +1174,7 @@ async function submitGameScoreToBackend(score, combo, health, solved, title, gam
     });
     const data = await res.json();
     if (res.ok) {
-      showToast(data.message || "成績已登錄！", "success");
+      showToast(data.message || "成績已成功登錄保衛英雄榜！", "success");
       switchTab("leaderboard");
     }
   } catch (err) {
@@ -1233,18 +1183,15 @@ async function submitGameScoreToBackend(score, combo, health, solved, title, gam
 }
 
 // ==============================================================================
-// 7. Leaderboard Module
+// 6. Leaderboard Module (Updated for 《SDGs 地球保衛戰》)
 // ==============================================================================
-async function loadLeaderboard(typeFilter = "") {
+async function loadLeaderboard() {
   const container = document.getElementById("leaderboardTableBody");
   if (!container) return;
-  container.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-slate-400">排行榜載入中...</td></tr>';
+  container.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-slate-400">保衛英雄榜載入中...</td></tr>';
 
   try {
-    const url = typeFilter ? `${API_BASE}/game/leaderboard?game_type=${typeFilter}` : `${API_BASE}/game/leaderboard`;
-    const res = await fetch(url, {
-      headers: state.token ? { "Authorization": `Bearer ${state.token}` } : {}
-    });
+    const res = await fetch(`${API_BASE}/game/leaderboard`);
     if (res.ok) {
       const data = await res.json();
       renderLeaderboardTable(data.leaderboard, data.my_best);
@@ -1282,15 +1229,13 @@ function renderLeaderboardTable(list, myBest) {
     if (rank === 2) badge = '<span class="text-xl">🥈</span>';
     if (rank === 3) badge = '<span class="text-xl">🥉</span>';
 
-    const gameName = item.game_type === "memory_match" ? "翻牌對對碰" : "連鎖消消樂";
-
     const tr = document.createElement("tr");
     tr.className = `border-b border-slate-100 hover:bg-slate-50 transition-colors ${state.user && item.user_id === state.user.id ? 'bg-emerald-50/60 font-semibold' : ''}`;
     tr.innerHTML = `
       <td class="p-3 text-center">${badge}</td>
       <td class="p-3 font-bold text-slate-800">${item.user_name}</td>
-      <td class="p-3 text-center"><span class="text-xs px-2 py-0.5 rounded-full ${item.game_type === 'memory_match' ? 'bg-sky-100 text-sky-800' : 'bg-emerald-100 text-emerald-800'} font-bold">${gameName}</span></td>
-      <td class="p-3 text-right font-mono font-bold text-emerald-600">${item.score.toLocaleString()}</td>
+      <td class="p-3 text-center"><span class="text-xs px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-extrabold">🥊 地球保衛戰</span></td>
+      <td class="p-3 text-right font-mono font-black text-emerald-600">${item.score.toLocaleString()}</td>
       <td class="p-3 text-center font-mono text-slate-600">${item.max_combo}x</td>
       <td class="p-3 text-center"><span class="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">${item.title_earned}</span></td>
       <td class="p-3 text-right text-xs text-slate-400">${new Date(item.played_at).toLocaleDateString('zh-TW')}</td>
@@ -1300,7 +1245,7 @@ function renderLeaderboardTable(list, myBest) {
 }
 
 // ==============================================================================
-// 8. Admin Dashboard & Review Module
+// 7. Admin Dashboard & Review Module
 // ==============================================================================
 let chartRadar = null;
 let chartPie = null;
@@ -1540,7 +1485,7 @@ async function submitGrade(id) {
 }
 
 // ==============================================================================
-// 9. Student Management (Full CRUD, Batch Delete, Batch Import & Export)
+// 8. Student Management (6-column CRUD, Batch Delete, Import & Export)
 // ==============================================================================
 async function loadAdminStudents(search = "") {
   const container = document.getElementById("adminStudentsTableBody");
@@ -1566,8 +1511,8 @@ async function loadAdminStudents(search = "") {
           </td>
           <td class="p-3 font-mono text-slate-500">#${s.id}</td>
           <td class="p-3 font-bold text-slate-800">${s.name}</td>
-          <td class="p-3 text-slate-600">${s.email}</td>
-          <td class="p-3 text-slate-500">${s.email_backup || '-'}</td>
+          <td class="p-3 text-slate-600 font-mono">${s.email}</td>
+          <td class="p-3 text-slate-500 font-mono">${s.email_backup || '-'}</td>
           <td class="p-3 text-slate-600 font-mono">${s.phone}</td>
           <td class="p-3 font-mono text-slate-600 font-bold">${s.unit_code || '-'}</td>
           <td class="p-3 text-slate-700 font-medium">${s.unit_name || '佛光學員'}</td>
@@ -1697,6 +1642,8 @@ window.saveStudentEdit = async function() {
       showToast(d.message || "學員資料更新成功！", "success");
       document.getElementById("editStudentModal").classList.add("hidden");
       loadAdminStudents();
+    } else {
+      showToast("更新失敗", "error");
     }
   } catch (err) {
     showToast("更新失敗", "error");
@@ -1824,7 +1771,7 @@ window.exportWorksheetsCSV = function() {
 };
 
 // ==============================================================================
-// 10. Utilities & Toast Notifications
+// 9. Utilities & Toast Notifications
 // ==============================================================================
 function showToast(message, type = "info") {
   const container = document.getElementById("toastContainer");

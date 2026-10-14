@@ -571,7 +571,7 @@ def get_memory_cards():
     return {"cards": cards}
 
 class GameScoreSubmit(BaseModel):
-    game_type: Optional[str] = "combo_blast"
+    game_type: Optional[str] = "earth_defense"
     score: int
     max_combo: int
     earth_health: int
@@ -588,7 +588,7 @@ def submit_game_score(req: GameScoreSubmit, user: dict = Depends(require_user)):
         """, (
             user["user_id"],
             user["name"],
-            req.game_type or "combo_blast",
+            req.game_type or "earth_defense",
             req.score,
             req.max_combo,
             req.earth_health,
@@ -603,7 +603,7 @@ def submit_game_score(req: GameScoreSubmit, user: dict = Depends(require_user)):
             "rank": rank,
             "score": req.score,
             "title": req.title_earned,
-            "message": f"成績已成功登錄！目前全校天梯排名：第 {rank} 名！"
+            "message": f"成績已成功登錄！目前保衛英雄榜排名：第 {rank} 名！"
         }
 
 @app.get("/api/game/leaderboard")
