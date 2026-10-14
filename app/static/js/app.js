@@ -214,7 +214,7 @@ async function checkAuth() {
       state.user = await res.json();
       updateUserUI();
       showLoginModal(false);
-      loadMyWorksheets();
+      await loadMyWorksheets(true);
     } else {
       handleLogout();
     }
@@ -272,7 +272,8 @@ async function handleLogin(e, explicitStudentId = null) {
     showLoginModal(false);
     updateUserUI();
     showToast(`歡迎回來，${data.user.name}！`, "success");
-    loadMyWorksheets();
+    // 切換或登入新帳號時，自動載入該帳號之表單資料
+    await loadMyWorksheets(true);
   } catch (err) {
     errorEl.textContent = "連線異常，請稍後再試";
     errorEl.classList.remove("hidden");
@@ -317,7 +318,16 @@ async function handleAdminLogin(e) {
 function handleLogout() {
   state.token = null;
   state.user = null;
+  state.currentWorksheetId = null;
+  state.worksheetsList = [];
   localStorage.removeItem("sdgs_token");
+  // 清空前台練習單所有欄位，防止前一位使用者的資料殘留
+  createNewWorksheet(false);
+  const nameEl = document.getElementById("ws_userName");
+  if (nameEl) nameEl.value = "";
+  const unitEl = document.getElementById("ws_unitName");
+  if (unitEl) unitEl.value = "";
+
   showLoginModal(true);
   updateUserUI();
   switchTab("worksheet");
@@ -427,7 +437,7 @@ function renderSDGsDirectory(filterTier = "all", filter5P = "all", keyword = "")
               </div>
               <p class="text-slate-600 text-[11px] leading-relaxed mb-2">${t.content}</p>
               <button type="button" class="w-full py-1 text-center bg-white hover:bg-emerald-50 text-emerald-700 border border-emerald-300 rounded font-medium text-[11px] transition-colors"
-                onclick="quoteTargetToWorksheet('${goal.code} ${goal.name}', '${quoteText}')">
+                onclick="quoteTargetToWorksheet('${goal.code}', '${goal.name}', '${t.code}', '${escapedContent}')">
                 📌 引用至連動分析練習單
               </button>
             </div>
@@ -448,34 +458,64 @@ window.toggleGoalTargets = function(goalId) {
   }
 };
 
-window.quoteTargetToWorksheet = function(goalText, targetText) {
-  const radialRows = document.querySelectorAll(".radial-line-row");
-  const normGoal = goalText.split(" ")[0].trim();
-  const normMech = targetText.trim();
+window.quoteTargetToWorksheet = function(goalCode, goalName, targetCode, targetContent) {
+  // 兼顧舊版呼叫相容性 (如果只傳 2 個參數)
+  let targetGoalCode = goalCode;
+  let targetGoalName = goalName;
+  let formattedTargetText = "";
+  let rawTargetCode = targetCode || "";
 
-  // 1. Check duplicate
+  if (arguments.length === 2) {
+    // 舊版格式: goalText ('SDG 1 消除貧窮'), targetText ('1.1：到2030年以前...')
+    const fullGoalText = (goalCode || "").trim();
+    formattedTargetText = (goalName || "").trim();
+    const parts = fullGoalText.split(" ");
+    targetGoalCode = parts[0] || ""; // 'SDG' 或 'SDG 1'
+    if (parts.length >= 3) {
+      targetGoalCode = `${parts[0]} ${parts[1]}`;
+      targetGoalName = parts.slice(2).join(" ");
+    } else if (parts.length === 2) {
+      targetGoalCode = parts[0];
+      targetGoalName = parts[1];
+    }
+    const matchCode = formattedTargetText.match(/^([0-9]{1,2}\.[0-9a-zA-Z]+)/);
+    if (matchCode) rawTargetCode = matchCode[1];
+  } else {
+    // 新版格式: goalCode ('SDG 1'), goalName ('消除貧窮'), targetCode ('1.1'), targetContent ('到2030年以前...')
+    formattedTargetText = `${targetCode}：${targetContent}`;
+  }
+
+  // 標準目標文字，例如 "SDG 1 消除貧窮"
+  const expectedGoalString = `${targetGoalCode} ${targetGoalName}`.trim();
+
+  const radialRows = document.querySelectorAll(".radial-line-row");
+
+  // 1. 防呆檢查：檢查是否已引用過相同的細項或目標
   for (let idx = 0; idx < radialRows.length; idx++) {
     const r = radialRows[idx];
-    const rGoal = r.querySelector(".radial-goal-select")?.value || "";
-    const rMech = r.querySelector(".radial-mech-input")?.value.trim() || "";
+    const rGoal = (r.querySelector(".radial-goal-select")?.value || "").trim();
+    const rMech = (r.querySelector(".radial-mech-input")?.value || "").trim();
     const lineNumber = idx + 1;
 
-    if (rGoal.includes(normGoal) && (rMech === normMech || rMech.includes(normMech.substring(0, 30)))) {
+    const isSameGoal = rGoal === expectedGoalString || (targetGoalCode && rGoal.startsWith(targetGoalCode + " "));
+    const isSameTarget = rawTargetCode ? rMech.includes(rawTargetCode) : (rMech === formattedTargetText);
+
+    if (isSameGoal && isSameTarget) {
       switchTab("worksheet");
       r.scrollIntoView({ behavior: 'smooth', block: 'center' });
       r.classList.add("ring-2", "ring-amber-500");
       setTimeout(() => r.classList.remove("ring-2", "ring-amber-500"), 3000);
-      alert(`您已經設定相同的資料在[連動線#${lineNumber}]中`);
+      alert(`您已經將「${rawTargetCode || expectedGoalString}」設定在[連動線#${lineNumber}]中！`);
       return;
     }
   }
 
-  // 2. Empty slot check
+  // 2. 尋找尚未選擇「連動目標 (SDG)」的連動線欄位
   let targetRow = null;
   let targetIndex = -1;
   for (let idx = 0; idx < radialRows.length; idx++) {
     const r = radialRows[idx];
-    const rGoal = r.querySelector(".radial-goal-select")?.value || "";
+    const rGoal = (r.querySelector(".radial-goal-select")?.value || "").trim();
     if (!rGoal) {
       targetRow = r;
       targetIndex = idx + 1;
@@ -483,7 +523,7 @@ window.quoteTargetToWorksheet = function(goalText, targetText) {
     }
   }
 
-  // 3. Auto add new line
+  // 3. 若現有連動線都已選擇目標，則自動增加一條新的連動線
   if (!targetRow) {
     addRadialLineRow();
     const updatedRows = document.querySelectorAll(".radial-line-row");
@@ -494,20 +534,55 @@ window.quoteTargetToWorksheet = function(goalText, targetText) {
   const goalSelect = targetRow.querySelector(".radial-goal-select");
   const mechInput = targetRow.querySelector(".radial-mech-input");
 
-  for (let opt of goalSelect.options) {
-    if (opt.value.includes(normGoal) || opt.textContent.includes(normGoal)) {
-      goalSelect.value = opt.value;
-      break;
+  // 4. 精確自動選擇對應的連動目標 (SDG)，例如 "SDG 1 消除貧窮"
+  if (goalSelect) {
+    let matchedOptionValue = "";
+    for (let opt of goalSelect.options) {
+      if (!opt.value) continue;
+      // 優先 1: 完全一致
+      if (opt.value === expectedGoalString) {
+        matchedOptionValue = opt.value;
+        break;
+      }
+      // 優先 2: 以 "SDG 1 " 或 "SDG 14 " 開頭 (精確匹配目標編號，避免 SDG 1 誤匹配 SDG 10~17)
+      if (targetGoalCode && (opt.value.startsWith(targetGoalCode + " ") || opt.value.startsWith(targetGoalCode + "("))) {
+        matchedOptionValue = opt.value;
+        break;
+      }
+      // 優先 3: 目標名稱一致
+      if (targetGoalName && opt.value.includes(targetGoalName)) {
+        matchedOptionValue = opt.value;
+        break;
+      }
     }
-  }
-  if (mechInput) mechInput.value = normMech;
 
+    if (matchedOptionValue) {
+      goalSelect.value = matchedOptionValue;
+    } else {
+      // 容錯防呆：若 option value 找不到，比對 textContent
+      for (let opt of goalSelect.options) {
+        if (targetGoalCode && (opt.textContent.startsWith(targetGoalCode + " ") || opt.textContent.includes(targetGoalCode + " "))) {
+          goalSelect.value = opt.value;
+          break;
+        }
+      }
+    }
+    goalSelect.dispatchEvent(new Event("change"));
+  }
+
+  // 5. 填寫細項目標資料到 [怎麼影響？(作用機制機制說明)] 欄位內
+  if (mechInput) {
+    mechInput.value = formattedTargetText;
+    mechInput.dispatchEvent(new Event("input"));
+  }
+
+  // 6. 更新聊天室預覽代碼並平滑切換捲動至該連動線
   updateChatTextSnippet();
   switchTab("worksheet");
   targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
   targetRow.classList.add("ring-2", "ring-emerald-500");
   setTimeout(() => targetRow.classList.remove("ring-2", "ring-emerald-500"), 2500);
-  showToast(`已成功將「${normGoal}」設定至[連動線#${targetIndex}]！`, "success");
+  showToast(`已成功將「${rawTargetCode} (${expectedGoalString})」引用至[連動線#${targetIndex}]！`, "success");
 };
 
 function filterSDGsDisplay() {
@@ -803,24 +878,41 @@ async function saveWorksheet(status = "submitted") {
       return;
     }
 
-    if (method === "POST" && data.id) state.currentWorksheetId = data.id;
-
-    showToast(status === "submitted" ? "🎉 練習單已正式提交成功！" : "💾 草稿已成功儲存！", "success");
-    loadMyWorksheets();
+    if (status === "submitted") {
+      // 正式提交練習單儲存成功後：清空表單上的資料，方便填寫新練習單
+      createNewWorksheet(false);
+      showToast("🎉 練習單已正式提交成功！已為您清空表單資料。", "success");
+      // 重新整理歷史紀錄列表（不自動載入至表單，保持清空）
+      await loadMyWorksheets(false);
+    } else {
+      if (method === "POST" && data.id) state.currentWorksheetId = data.id;
+      showToast("💾 草稿已成功儲存！", "success");
+      await loadMyWorksheets(false);
+    }
   } catch (err) {
     showToast("網路異常，無法儲存練習單", "error");
   }
 }
 
-async function loadMyWorksheets() {
+async function loadMyWorksheets(autoLoadLatest = false) {
   if (!state.token) return;
   try {
-    const res = await fetch(`${API_BASE}/worksheets`, {
+    // 依據當前登入者身分載入其專屬練習單
+    const res = await fetch(`${API_BASE}/worksheets?mine=true`, {
       headers: { "Authorization": `Bearer ${state.token}` }
     });
     if (res.ok) {
       state.worksheetsList = await res.json();
       renderMyWorksheetsBadge();
+
+      // 切換帳號或登入時：自動載入該登入者的表單；若無歷史紀錄則提供乾淨空白表單
+      if (autoLoadLatest) {
+        if (state.worksheetsList && state.worksheetsList.length > 0) {
+          loadWorksheetToForm(state.worksheetsList[0].id, true);
+        } else {
+          createNewWorksheet(false);
+        }
+      }
     }
   } catch (err) {
     console.error("Failed to load worksheets", err);
@@ -878,13 +970,15 @@ function openMyWorksheetsModal() {
   });
 }
 
-window.loadWorksheetToForm = function(wsId) {
+window.loadWorksheetToForm = function(wsId, silent = false) {
   const ws = state.worksheetsList.find(w => w.id === wsId);
   if (!ws) return;
   state.currentWorksheetId = ws.id;
 
+  const nameEl = document.getElementById("ws_userName");
+  if (nameEl) nameEl.value = ws.student_name || state.user?.name || "";
   const unitEl = document.getElementById("ws_unitName");
-  if (unitEl) unitEl.value = ws.unit_name || "";
+  if (unitEl) unitEl.value = ws.unit_name || state.user?.unit_name || "佛光學員";
 
   const radio = document.querySelector(`input[name='center_action'][value='${ws.center_action}']`);
   if (radio) {
@@ -899,8 +993,13 @@ window.loadWorksheetToForm = function(wsId) {
   const radialContainer = document.getElementById("radialLinesContainer");
   if (radialContainer) {
     radialContainer.innerHTML = "";
-    if (Array.isArray(ws.radial_data)) {
+    if (Array.isArray(ws.radial_data) && ws.radial_data.length > 0) {
       ws.radial_data.forEach(line => addRadialLineRow(line));
+      while (radialContainer.children.length < 3) {
+        addRadialLineRow();
+      }
+    } else {
+      for (let i = 0; i < 3; i++) addRadialLineRow();
     }
   }
 
@@ -937,8 +1036,11 @@ window.loadWorksheetToForm = function(wsId) {
   }
 
   updateChatTextSnippet();
-  document.getElementById("myWorksheetsModal").classList.add("hidden");
-  showToast(`已載入練習單 #${ws.id}，您可以進行修改後重新提交！`, "success");
+  const myWsModal = document.getElementById("myWorksheetsModal");
+  if (myWsModal) myWsModal.classList.add("hidden");
+  if (!silent) {
+    showToast(`已載入練習單 #${ws.id}，您可以進行修改後重新提交！`, "success");
+  }
 };
 
 window.deleteWorksheetConfirm = async function(wsId) {
@@ -959,12 +1061,17 @@ window.deleteWorksheetConfirm = async function(wsId) {
   }
 };
 
-window.createNewWorksheet = function() {
+window.createNewWorksheet = function(showToastMsg = true) {
   state.currentWorksheetId = null;
-  document.getElementById("ws_unitName").value = state.user?.unit_name || "佛光學員";
+  const nameEl = document.getElementById("ws_userName");
+  if (nameEl) nameEl.value = state.user?.name || "";
+  const unitEl = document.getElementById("ws_unitName");
+  if (unitEl) unitEl.value = state.user?.unit_name || "佛光學員";
+
   const radA = document.querySelector("input[name='center_action'][value='A']");
   if (radA) { radA.checked = true; radA.dispatchEvent(new Event("change")); }
-  document.getElementById("ws_centerCustom").value = "";
+  const custEl = document.getElementById("ws_centerCustom");
+  if (custEl) custEl.value = "";
   
   const rc = document.getElementById("radialLinesContainer");
   if (rc) { rc.innerHTML = ""; for(let i=0; i<3; i++) addRadialLineRow(); }
@@ -980,7 +1087,9 @@ window.createNewWorksheet = function() {
     if (el) el.checked = false;
   });
   updateChatTextSnippet();
-  showToast("已重置為新練習單！", "info");
+  if (showToastMsg) {
+    showToast("已重置為新練習單！", "info");
+  }
 };
 
 // ==============================================================================

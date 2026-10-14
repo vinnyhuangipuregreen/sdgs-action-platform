@@ -296,6 +296,7 @@ def list_worksheets(
     user: dict = Depends(require_user),
     status_filter: Optional[str] = None,
     search: Optional[str] = None,
+    mine: Optional[bool] = False,
     limit: int = 50,
     offset: int = 0
 ):
@@ -306,7 +307,7 @@ def list_worksheets(
         query = "SELECT * FROM worksheets WHERE 1=1"
         params = []
         
-        if not is_staff:
+        if mine or not is_staff:
             query += " AND user_id = ?"
             params.append(user["user_id"])
         
