@@ -81,6 +81,22 @@ function initUIEvents() {
 
   const sdgSearchInput = document.getElementById("sdgSearchInput");
   if (sdgSearchInput) sdgSearchInput.addEventListener("input", filterSDGsDisplay);
+
+  // Earth Defense Start & Restart buttons explicit event binding
+  const startDefenseBtn = document.getElementById("startDefenseGameBtn");
+  if (startDefenseBtn) {
+    startDefenseBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      initNewEarthDefenseGame();
+    });
+  }
+  const restartDefenseBtn = document.getElementById("restartDefenseGameBtn");
+  if (restartDefenseBtn) {
+    restartDefenseBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      initNewEarthDefenseGame();
+    });
+  }
 }
 
 function handleAdminAccess() {
@@ -115,7 +131,16 @@ function switchTab(tabId) {
 
   if (tabId === "leaderboard") loadLeaderboard();
   if (tabId === "admin") loadAdminDashboard();
-  if (tabId === "earth_defense" && !state.earthDefense.active) initNewEarthDefenseGame();
+  if (tabId === "earth_defense") {
+    if (!state.earthDefense.active) {
+      const intro = document.getElementById("defenseIntroCard");
+      const main = document.getElementById("defenseMainScreen");
+      const over = document.getElementById("defenseGameOverScreen");
+      if (intro) intro.classList.remove("hidden");
+      if (main) main.classList.add("hidden");
+      if (over) over.classList.add("hidden");
+    }
+  }
 }
 
 // ==============================================================================
@@ -904,40 +929,70 @@ window.createNewWorksheet = function() {
 // 5. 《SDGs 地球保衛戰》遊戲引擎 (Whac-A-Mole 綠色永續打地鼠)
 // ==============================================================================
 function initNewEarthDefenseGame() {
-  const g = state.earthDefense;
-  g.active = true;
-  g.score = 0;
-  g.combo = 0;
-  g.maxCombo = 0;
-  g.monstersHit = 0;
-  g.lives = 3;
-  g.timeLeft = 45;
-  g.feverTime = false;
-  g.holesState = Array(9).fill(null);
+  try {
+    const g = state.earthDefense;
+    g.active = true;
+    g.score = 0;
+    g.combo = 0;
+    g.maxCombo = 0;
+    g.monstersHit = 0;
+    g.lives = 3;
+    g.timeLeft = 45;
+    g.feverTime = false;
+    g.holesState = Array(9).fill(null);
 
+    clearInterval(g.timer);
+    clearInterval(g.spawnInterval);
+    clearTimeout(g.feverTimer);
+
+    const introCard = document.getElementById("defenseIntroCard");
+    const mainScreen = document.getElementById("defenseMainScreen");
+    const gameOverScreen = document.getElementById("defenseGameOverScreen");
+
+    if (introCard) introCard.classList.add("hidden");
+    if (mainScreen) mainScreen.classList.remove("hidden");
+    if (gameOverScreen) gameOverScreen.classList.add("hidden");
+
+    renderDefenseGrid();
+    updateDefenseHUD();
+
+    // Start 45s countdown timer
+    g.timer = setInterval(() => {
+      g.timeLeft -= 1;
+      updateDefenseHUD();
+      if (g.timeLeft <= 0) {
+        endEarthDefenseGame();
+      }
+    }, 1000);
+
+    // Start spawning loop
+    startMoleSpawning();
+    showToast("🥊 《SDGs 地球保衛戰》啟動！45秒全力擊退環境破壞怪！", "success");
+  } catch (err) {
+    console.error("啟動地球保衛戰失敗：", err);
+    alert("啟動遊戲時發生錯誤：" + err.message);
+  }
+}
+
+function showDefenseIntroCard() {
+  const g = state.earthDefense;
+  g.active = false;
   clearInterval(g.timer);
   clearInterval(g.spawnInterval);
   clearTimeout(g.feverTimer);
 
-  document.getElementById("defenseIntroCard").classList.add("hidden");
-  document.getElementById("defenseMainScreen").classList.remove("hidden");
-  document.getElementById("defenseGameOverScreen").classList.add("hidden");
+  const introCard = document.getElementById("defenseIntroCard");
+  const mainScreen = document.getElementById("defenseMainScreen");
+  const gameOverScreen = document.getElementById("defenseGameOverScreen");
 
-  renderDefenseGrid();
-  updateDefenseHUD();
-
-  // Start 45s countdown timer
-  g.timer = setInterval(() => {
-    g.timeLeft -= 1;
-    updateDefenseHUD();
-    if (g.timeLeft <= 0) {
-      endEarthDefenseGame();
-    }
-  }, 1000);
-
-  // Start spawning loop
-  startMoleSpawning();
+  if (introCard) introCard.classList.remove("hidden");
+  if (mainScreen) mainScreen.classList.add("hidden");
+  if (gameOverScreen) gameOverScreen.classList.add("hidden");
 }
+
+window.initNewEarthDefenseGame = initNewEarthDefenseGame;
+window.startEarthDefenseGame = initNewEarthDefenseGame;
+window.showDefenseIntroCard = showDefenseIntroCard;
 
 function renderDefenseGrid() {
   const container = document.getElementById("defenseGridContainer");
@@ -946,12 +1001,15 @@ function renderDefenseGrid() {
 
   for (let i = 0; i < 9; i++) {
     const hole = document.createElement("div");
-    hole.className = "hole-container w-24 h-28 sm:w-28 sm:h-36 flex items-center justify-center relative";
+    hole.className = "hole-container w-24 h-28 sm:w-28 sm:h-36 flex items-center justify-center relative select-none cursor-pointer";
     hole.id = `hole_${i}`;
     hole.innerHTML = `
       <div class="hole-rim"></div>
       <div id="target_${i}" class="mole-target" onclick="hitMoleTarget(${i}, event)"></div>
     `;
+    hole.addEventListener("click", (e) => {
+      hitMoleTarget(i, e);
+    });
     container.appendChild(hole);
   }
 }
@@ -1014,6 +1072,7 @@ function spawnSingleMole() {
 }
 
 window.hitMoleTarget = function(holeIdx, e) {
+  if (e && e.stopPropagation) e.stopPropagation();
   const g = state.earthDefense;
   if (!g.active) return;
   const target = g.holesState[holeIdx];

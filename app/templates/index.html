@@ -6,7 +6,7 @@
   <title>SDGs 與氣候行動—連動分析與學習平台</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="stylesheet" href="/static/css/style.css?v=20261014_defense_fix">
   <script>
     tailwind.config = {
       theme: {
@@ -336,7 +336,7 @@
           <span class="px-2.5 py-1 bg-black/40 rounded-full border border-red-500/40">🛡️ 千萬別打：海龜/小樹苗 (-150分 扣心)</span>
           <span class="px-2.5 py-1 bg-black/40 rounded-full border border-pink-500/40">⭐ 彩虹金星：FEVER 全場淨化 (+500分)</span>
         </div>
-        <button type="button" onclick="initNewEarthDefenseGame()" class="px-8 py-3.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-black text-base rounded-2xl shadow-lg shadow-emerald-500/30 transform hover:scale-105 active:scale-95 transition-all">
+        <button id="startDefenseGameBtn" type="button" onclick="initNewEarthDefenseGame()" class="cursor-pointer px-8 py-3.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-black text-base rounded-2xl shadow-lg shadow-emerald-500/30 transform hover:scale-105 active:scale-95 transition-all">
           🚀 立即進入地球保衛戰！
         </button>
       </div>
@@ -399,12 +399,15 @@
           <span id="finalDefenseTitle" class="text-xl font-extrabold text-white mt-1 block">🌌 綠野傳奇守護神</span>
         </div>
 
-        <div class="flex justify-center gap-3">
-          <button id="submitDefenseLeaderboardBtn" class="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm rounded-xl shadow-lg transition-all">
+        <div class="flex flex-wrap justify-center gap-3">
+          <button id="submitDefenseLeaderboardBtn" class="cursor-pointer px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm rounded-xl shadow-lg transition-all">
             🥇 登錄保衛英雄榜
           </button>
-          <button onclick="initNewEarthDefenseGame()" class="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-sm rounded-xl transition-all">
+          <button id="restartDefenseGameBtn" type="button" onclick="initNewEarthDefenseGame()" class="cursor-pointer px-6 py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-sm rounded-xl transition-all">
             🔄 再保衛一次
+          </button>
+          <button type="button" onclick="showDefenseIntroCard()" class="cursor-pointer px-5 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs rounded-xl transition-all">
+            📖 查看規則說明
           </button>
         </div>
       </div>
@@ -841,6 +844,6 @@
     </div>
   </footer>
 
-  <script src="/static/js/app.js"></script>
+  <script src="/static/js/app.js?v=20261014_defense_fix"></script>
 </body>
 </html>
