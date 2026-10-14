@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: sdgs-climate-action-platform
+    name: sdgs-action-platform
     env: python
     region: singapore
     plan: free
