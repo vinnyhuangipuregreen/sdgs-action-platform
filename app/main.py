@@ -11,7 +11,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from app.database import get_db, init_db
+from app.database import get_db, init_db, get_game_settings, set_game_settings, DEFAULT_GAME_SETTINGS
 from app.auth import hash_password, verify_password, create_access_token, decode_access_token
 from app.docx_exporter import create_worksheet_docx
 from app.mailer import send_grade_notification
@@ -569,6 +569,32 @@ def get_memory_cards():
         })
     random.shuffle(cards)
     return {"cards": cards}
+
+class GameSettingsModel(BaseModel):
+    game_duration: Optional[int] = 45
+    card_speed_ms: Optional[int] = 1000
+    monster_pts: Optional[int] = 100
+    guardian_penalty: Optional[int] = 150
+    bonus_pts: Optional[int] = 500
+    initial_lives: Optional[int] = 3
+
+@app.get("/api/game/settings")
+def get_game_settings_api():
+    """取得《SDGs 地球保衛戰》遊戲參數與難度設定（秒數、卡片閃過速度、分數）"""
+    with get_db() as conn:
+        return get_game_settings(conn)
+
+@app.put("/api/admin/game/settings")
+def update_game_settings_api(req: GameSettingsModel, user: dict = Depends(require_admin)):
+    """管理員修改《SDGs 地球保衛戰》遊戲參數與計分規則"""
+    data = req.dict(exclude_unset=True)
+    with get_db() as conn:
+        updated = set_game_settings(conn, data)
+    return {
+        "success": True,
+        "message": "《SDGs 地球保衛戰》遊戲參數與難度設定已成功更新！",
+        "settings": updated
+    }
 
 class GameScoreSubmit(BaseModel):
     game_type: Optional[str] = "earth_defense"

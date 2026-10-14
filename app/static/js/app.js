@@ -21,9 +21,21 @@ const state = {
     timeLeft: 45,
     timer: null,
     spawnInterval: null,
+    activeMoleTimeout: null,
+    currentActiveHole: null,
     holesState: Array(9).fill(null), // null or target object
     feverTime: false,
     feverTimer: null
+  },
+
+  // Game Settings managed from backend
+  gameSettings: {
+    game_duration: 45,
+    card_speed_ms: 1000,
+    monster_pts: 100,
+    guardian_penalty: 150,
+    bonus_pts: 500,
+    initial_lives: 3
   },
 
   selectedStudentIds: new Set()
@@ -48,12 +60,52 @@ const DEFENSE_CHARACTERS = {
 };
 
 // ==============================================================================
+
+// Game Settings Management (Client & Admin)
+async function loadGameSettings() {
+  try {
+    const res = await fetch(`${API_BASE}/game/settings`);
+    if (res.ok) {
+      const data = await res.json();
+      state.gameSettings = { ...state.gameSettings, ...data };
+      updateDefenseRuleTexts();
+    }
+  } catch (err) {
+    console.warn("無法取得遊戲參數，使用預設值", err);
+  }
+}
+
+function updateDefenseRuleTexts() {
+  const s = state.gameSettings;
+  const durEl = document.getElementById("defenseRuleDurationText");
+  if (durEl) durEl.textContent = s.game_duration;
+
+  const spdEl = document.getElementById("defenseRuleSpeedText");
+  if (spdEl) {
+    const sec = s.card_speed_ms / 1000;
+    spdEl.textContent = (sec % 1 === 0) ? sec.toFixed(0) : sec.toFixed(1);
+  }
+
+  const monEl = document.getElementById("defenseRuleMonsterPts");
+  if (monEl) monEl.textContent = s.monster_pts;
+
+  const guaEl = document.getElementById("defenseRuleGuardianPts");
+  if (guaEl) guaEl.textContent = s.guardian_penalty;
+
+  const bonEl = document.getElementById("defenseRuleBonusPts");
+  if (bonEl) bonEl.textContent = s.bonus_pts;
+
+  const timerEl = document.getElementById("defenseTimerVal");
+  if (timerEl && !state.earthDefense.active) timerEl.textContent = `${s.game_duration}s`;
+}
+
 // 1. Core Initialization
 // ==============================================================================
 document.addEventListener("DOMContentLoaded", async () => {
   initUIEvents();
   await checkAuth();
   await loadSDGsData();
+  await loadGameSettings();
 });
 
 function initUIEvents() {
@@ -106,8 +158,11 @@ function handleAdminAccess() {
     const modal = document.getElementById("adminLoginModal");
     if (modal) {
       modal.classList.remove("hidden");
-      document.getElementById("adminAccount").value = "admin";
-      document.getElementById("adminPassword").value = "sdgs2030admin";
+      const acc = document.getElementById("adminAccount");
+      const pwd = document.getElementById("adminPassword");
+      if (acc) acc.value = "";
+      if (pwd) pwd.value = "";
+      document.getElementById("adminLoginError")?.classList.add("hidden");
     }
   }
 }
@@ -247,10 +302,13 @@ async function handleAdminLogin(e) {
     state.user = data.user;
     localStorage.setItem("sdgs_token", data.token);
     document.getElementById("adminLoginModal").classList.add("hidden");
+    document.getElementById("adminAccount").value = "";
+    document.getElementById("adminPassword").value = "";
     updateUserUI();
     showToast(`管理員登入成功，歡迎 ${data.user.name}！`, "success");
     switchTab("admin");
   } catch (err) {
+    document.getElementById("adminPassword").value = "";
     errEl.textContent = "連線異常，請重試";
     errEl.classList.remove("hidden");
   }
@@ -936,14 +994,16 @@ function initNewEarthDefenseGame() {
     g.combo = 0;
     g.maxCombo = 0;
     g.monstersHit = 0;
-    g.lives = 3;
-    g.timeLeft = 45;
+    g.lives = state.gameSettings.initial_lives || 3;
+    g.timeLeft = state.gameSettings.game_duration || 45;
     g.feverTime = false;
     g.holesState = Array(9).fill(null);
+    g.currentActiveHole = null;
 
     clearInterval(g.timer);
     clearInterval(g.spawnInterval);
     clearTimeout(g.feverTimer);
+    clearTimeout(g.activeMoleTimeout);
 
     const introCard = document.getElementById("defenseIntroCard");
     const mainScreen = document.getElementById("defenseMainScreen");
@@ -956,7 +1016,7 @@ function initNewEarthDefenseGame() {
     renderDefenseGrid();
     updateDefenseHUD();
 
-    // Start 45s countdown timer
+    // Start countdown timer
     g.timer = setInterval(() => {
       g.timeLeft -= 1;
       updateDefenseHUD();
@@ -965,9 +1025,9 @@ function initNewEarthDefenseGame() {
       }
     }, 1000);
 
-    // Start spawning loop
+    // Start spawning loop (1 秒鐘閃過一張卡)
     startMoleSpawning();
-    showToast("🥊 《SDGs 地球保衛戰》啟動！45秒全力擊退環境破壞怪！", "success");
+    showToast(`🥊 《SDGs 地球保衛戰》啟動！${g.timeLeft}秒全力擊退環境破壞怪！`, "success");
   } catch (err) {
     console.error("啟動地球保衛戰失敗：", err);
     alert("啟動遊戲時發生錯誤：" + err.message);
@@ -980,6 +1040,7 @@ function showDefenseIntroCard() {
   clearInterval(g.timer);
   clearInterval(g.spawnInterval);
   clearTimeout(g.feverTimer);
+  clearTimeout(g.activeMoleTimeout);
 
   const introCard = document.getElementById("defenseIntroCard");
   const mainScreen = document.getElementById("defenseMainScreen");
@@ -988,6 +1049,7 @@ function showDefenseIntroCard() {
   if (introCard) introCard.classList.remove("hidden");
   if (mainScreen) mainScreen.classList.add("hidden");
   if (gameOverScreen) gameOverScreen.classList.add("hidden");
+  updateDefenseRuleTexts();
 }
 
 window.initNewEarthDefenseGame = initNewEarthDefenseGame;
@@ -1017,34 +1079,64 @@ function renderDefenseGrid() {
 function startMoleSpawning() {
   const g = state.earthDefense;
   clearInterval(g.spawnInterval);
+  clearTimeout(g.activeMoleTimeout);
 
-  // Spawn every 650ms ~ 850ms
+  // 清除現有洞穴狀態
+  for (let i = 0; i < 9; i++) {
+    const el = document.getElementById(`target_${i}`);
+    if (el) {
+      el.classList.remove("up", "hit");
+      el.innerHTML = "";
+    }
+  }
+  g.holesState = Array(9).fill(null);
+  g.currentActiveHole = null;
+
+  // 每張卡片閃過速度 (毫秒，預設 1000ms = 1秒鐘閃過一張卡)
+  const speedMs = state.gameSettings.card_speed_ms || 1000;
+
+  // 立即閃出第一張卡片
+  spawnSingleMole();
+
+  // 依照設定的速度 (1秒鐘) 定期閃過下一張卡
   g.spawnInterval = setInterval(() => {
     if (!g.active) return;
     spawnSingleMole();
-  }, 750);
+  }, speedMs);
 }
 
 function spawnSingleMole() {
   const g = state.earthDefense;
-  // Find available holes
-  const freeHoles = [];
-  for (let i = 0; i < 9; i++) {
-    if (!g.holesState[i]) freeHoles.push(i);
+  if (!g.active) return;
+
+  const speedMs = state.gameSettings.card_speed_ms || 1000;
+
+  // 若場上有上一張未被擊中的卡片，先平順收回
+  if (g.currentActiveHole !== null && g.currentActiveHole !== undefined) {
+    const prevIdx = g.currentActiveHole;
+    const prevEl = document.getElementById(`target_${prevIdx}`);
+    if (prevEl) {
+      prevEl.classList.remove("up");
+    }
+    g.holesState[prevIdx] = null;
+    g.currentActiveHole = null;
   }
-  if (freeHoles.length === 0) return;
 
-  const holeIdx = freeHoles[Math.floor(Math.random() * freeHoles.length)];
+  // 隨機選取 9 個洞穴中的 1 個 (保證單張卡片閃現，不重疊干擾)
+  const holeIdx = Math.floor(Math.random() * 9);
+  g.currentActiveHole = holeIdx;
 
-  // Choose character: 70% monster, 20% guardian, 10% rainbow star
+  // 決定卡片角色：70% 危機破壞怪、20% 永續守護精靈、10% 彩虹金星
   let char = null;
   const rand = Math.random();
   if (rand < 0.70) {
     char = DEFENSE_CHARACTERS.monsters[Math.floor(Math.random() * DEFENSE_CHARACTERS.monsters.length)];
+    char = { ...char, pts: state.gameSettings.monster_pts || 100 };
   } else if (rand < 0.90) {
     char = DEFENSE_CHARACTERS.guardians[Math.floor(Math.random() * DEFENSE_CHARACTERS.guardians.length)];
+    char = { ...char, pts: -(state.gameSettings.guardian_penalty || 150) };
   } else {
-    char = DEFENSE_CHARACTERS.bonus;
+    char = { ...DEFENSE_CHARACTERS.bonus, pts: state.gameSettings.bonus_pts || 500 };
   }
 
   g.holesState[holeIdx] = { ...char, id: Date.now() + Math.random(), hit: false };
@@ -1053,22 +1145,26 @@ function spawnSingleMole() {
   if (!targetEl) return;
 
   targetEl.innerHTML = `
-    <div class="text-3xl sm:text-4xl filter drop-shadow-md transform active:scale-90 transition-transform">${char.icon}</div>
-    <span class="text-[10px] font-black px-1.5 py-0.5 rounded-full mt-1 text-white shadow" style="background-color: ${char.color}">
+    <div class="text-3xl sm:text-4xl filter drop-shadow-md transform active:scale-90 transition-transform select-none">${char.icon}</div>
+    <span class="text-[10px] font-black px-1.5 py-0.5 rounded-full mt-1 text-white shadow select-none" style="background-color: ${char.color}">
       ${char.name}
     </span>
-    <span class="text-[9px] opacity-80 text-white block mt-0.5 font-bold">${char.tag}</span>
+    <span class="text-[9px] opacity-80 text-white block mt-0.5 font-bold select-none">${char.tag}</span>
   `;
   targetEl.classList.remove("hit");
   targetEl.classList.add("up");
 
-  // Retreat after 1.1s if not hit
-  setTimeout(() => {
+  // 卡片停留時間：剛好在下一張出現前微幅縮回，節奏分明
+  clearTimeout(g.activeMoleTimeout);
+  g.activeMoleTimeout = setTimeout(() => {
     if (g.holesState[holeIdx] && !g.holesState[holeIdx].hit) {
       targetEl.classList.remove("up");
       g.holesState[holeIdx] = null;
+      if (g.currentActiveHole === holeIdx) {
+        g.currentActiveHole = null;
+      }
     }
-  }, 1100);
+  }, Math.max(200, speedMs - 80));
 }
 
 window.hitMoleTarget = function(holeIdx, e) {
@@ -1082,14 +1178,14 @@ window.hitMoleTarget = function(holeIdx, e) {
   const targetEl = document.getElementById(`target_${holeIdx}`);
   const holeContainer = document.getElementById(`hole_${holeIdx}`);
 
-  // Create floating score element
+  // 浮動得分文字動態效果
   const floatEl = document.createElement("div");
-  floatEl.className = "score-float text-xs sm:text-sm";
+  floatEl.className = "score-float text-xs sm:text-sm select-none pointer-events-none";
   floatEl.style.left = "50%";
   floatEl.style.top = "30%";
 
   if (target.type === "monster") {
-    // Monster defeated!
+    // 成功擊退環境危機破壞怪！
     g.combo += 1;
     if (g.combo > g.maxCombo) g.maxCombo = g.combo;
     g.monstersHit += 1;
@@ -1099,50 +1195,61 @@ window.hitMoleTarget = function(holeIdx, e) {
     else if (g.combo >= 5) mult = 2.0;
     else if (g.combo >= 3) mult = 1.5;
 
-    const gained = Math.round(target.pts * mult);
+    const basePts = state.gameSettings.monster_pts || 100;
+    const gained = Math.round(basePts * mult);
     g.score += gained;
 
-    floatEl.innerHTML = `<span class="text-emerald-400">+${gained} 🍃</span>`;
+    floatEl.innerHTML = `<span class="text-emerald-400 font-black">+${gained} 🍃</span>`;
     if (g.combo > 1) floatEl.innerHTML += `<span class="block text-[10px] text-amber-300 font-bold">${g.combo} COMBO!</span>`;
 
-    // Visual hit
+    // 擊中動畫
     targetEl.classList.add("hit");
-    targetEl.querySelector("div").textContent = "😵";
+    const iconEl = targetEl.querySelector("div");
+    if (iconEl) iconEl.textContent = "😵";
     setTimeout(() => {
       targetEl.classList.remove("up");
       g.holesState[holeIdx] = null;
-    }, 250);
+      if (g.currentActiveHole === holeIdx) g.currentActiveHole = null;
+    }, 200);
 
   } else if (target.type === "guardian") {
-    // Guardian mistaken! Penalty
+    // 誤擊永續守護精靈！懲罰扣分並扣心
     g.combo = 0;
     g.lives -= 1;
-    g.score = Math.max(0, g.score + target.pts);
+    const penalty = state.gameSettings.guardian_penalty || 150;
+    g.score = Math.max(0, g.score - penalty);
 
-    floatEl.innerHTML = `<span class="text-red-400 font-black">${target.pts} 💔 誤傷！</span>`;
+    floatEl.innerHTML = `<span class="text-red-400 font-black">-${penalty} 💔 誤傷！</span>`;
     
-    // Shake screen
+    // 震動畫面
     const arena = document.getElementById("defenseMainScreen");
-    arena.classList.add("shake");
-    setTimeout(() => arena.classList.remove("shake"), 300);
+    if (arena) {
+      arena.classList.add("shake");
+      setTimeout(() => arena.classList.remove("shake"), 300);
+    }
 
     targetEl.classList.remove("up");
     g.holesState[holeIdx] = null;
+    if (g.currentActiveHole === holeIdx) g.currentActiveHole = null;
 
     if (g.lives <= 0) {
       endEarthDefenseGame();
     }
   } else if (target.type === "bonus") {
-    // Rainbow Star Fever!
-    g.score += target.pts;
-    floatEl.innerHTML = `<span class="text-pink-400 font-black">+${target.pts} ⭐ FEVER!</span>`;
+    // 敲中彩虹永續金星！FEVER TIME！
+    const bonus = state.gameSettings.bonus_pts || 500;
+    g.score += bonus;
+    floatEl.innerHTML = `<span class="text-pink-400 font-black">+${bonus} ⭐ FEVER!</span>`;
     triggerFeverTime();
     targetEl.classList.remove("up");
     g.holesState[holeIdx] = null;
+    if (g.currentActiveHole === holeIdx) g.currentActiveHole = null;
   }
 
-  holeContainer.appendChild(floatEl);
-  setTimeout(() => floatEl.remove(), 800);
+  if (holeContainer) {
+    holeContainer.appendChild(floatEl);
+    setTimeout(() => floatEl.remove(), 800);
+  }
   updateDefenseHUD();
 };
 
@@ -1151,7 +1258,7 @@ function triggerFeverTime() {
   g.feverTime = true;
   showToast("🌈 觸發 FEVER TIME！全場危機怪獸秒速淨化！", "success");
   
-  // Clear all current monsters with bonus points
+  // 清場現有怪獸獲得加分
   for (let i = 0; i < 9; i++) {
     if (g.holesState[i] && g.holesState[i].type === "monster") {
       hitMoleTarget(i, null);
@@ -1170,10 +1277,11 @@ function updateDefenseHUD() {
   document.getElementById("defenseComboVal").textContent = `${g.combo}x`;
   document.getElementById("defenseTimerVal").textContent = `${g.timeLeft}s`;
 
-  // Hearts UI
+  // Hearts UI 依據後台設定的起始愛心數動態顯示
   const heartsEl = document.getElementById("defenseHeartsVal");
   if (heartsEl) {
-    heartsEl.innerHTML = "❤️".repeat(Math.max(0, g.lives)) + "🖤".repeat(Math.max(0, 3 - g.lives));
+    const totalLives = state.gameSettings.initial_lives || 3;
+    heartsEl.innerHTML = "❤️".repeat(Math.max(0, g.lives)) + "🖤".repeat(Math.max(0, totalLives - g.lives));
   }
 }
 
@@ -1183,11 +1291,12 @@ function endEarthDefenseGame() {
   clearInterval(g.timer);
   clearInterval(g.spawnInterval);
   clearTimeout(g.feverTimer);
+  clearTimeout(g.activeMoleTimeout);
 
-  // Hide all moles
+  // 隱藏全部洞穴目標
   for (let i = 0; i < 9; i++) {
     const el = document.getElementById(`target_${i}`);
-    if (el) el.classList.remove("up");
+    if (el) el.classList.remove("up", "hit");
   }
 
   document.getElementById("defenseMainScreen").classList.add("hidden");
@@ -1240,6 +1349,85 @@ async function submitGameScoreToBackend(score, combo, health, solved, title, gam
     showToast("登錄失敗，請重試", "error");
   }
 }
+
+
+async function loadAdminGameSettings() {
+  await loadGameSettings();
+  const s = state.gameSettings;
+  const dEl = document.getElementById("setting_game_duration");
+  if (dEl) dEl.value = s.game_duration || 45;
+
+  const spdEl = document.getElementById("setting_card_speed_ms");
+  if (spdEl) spdEl.value = s.card_speed_ms || 1000;
+
+  const lEl = document.getElementById("setting_initial_lives");
+  if (lEl) lEl.value = s.initial_lives || 3;
+
+  const mEl = document.getElementById("setting_monster_pts");
+  if (mEl) mEl.value = s.monster_pts || 100;
+
+  const gEl = document.getElementById("setting_guardian_penalty");
+  if (gEl) gEl.value = s.guardian_penalty || 150;
+
+  const bEl = document.getElementById("setting_bonus_pts");
+  if (bEl) bEl.value = s.bonus_pts || 500;
+}
+
+async function saveAdminGameSettings() {
+  if (!state.token) {
+    showToast("需要管理員權限", "error");
+    return;
+  }
+  const payload = {
+    game_duration: parseInt(document.getElementById("setting_game_duration")?.value) || 45,
+    card_speed_ms: parseInt(document.getElementById("setting_card_speed_ms")?.value) || 1000,
+    initial_lives: parseInt(document.getElementById("setting_initial_lives")?.value) || 3,
+    monster_pts: parseInt(document.getElementById("setting_monster_pts")?.value) || 100,
+    guardian_penalty: parseInt(document.getElementById("setting_guardian_penalty")?.value) || 150,
+    bonus_pts: parseInt(document.getElementById("setting_bonus_pts")?.value) || 500
+  };
+
+  try {
+    const res = await fetch(`${API_BASE}/admin/game/settings`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${state.token}`
+      },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (res.ok) {
+      state.gameSettings = { ...state.gameSettings, ...(data.settings || payload) };
+      updateDefenseRuleTexts();
+      showToast("✓ 《SDGs 地球保衛戰》遊戲參數已成功更新並即時生效！", "success");
+    } else {
+      showToast(data.detail || "更新失敗", "error");
+    }
+  } catch (err) {
+    showToast("連線異常，儲存設定失敗", "error");
+  }
+}
+
+function resetAdminGameSettingsToDefault() {
+  const dEl = document.getElementById("setting_game_duration");
+  if (dEl) dEl.value = 45;
+  const spdEl = document.getElementById("setting_card_speed_ms");
+  if (spdEl) spdEl.value = 1000;
+  const lEl = document.getElementById("setting_initial_lives");
+  if (lEl) lEl.value = 3;
+  const mEl = document.getElementById("setting_monster_pts");
+  if (mEl) mEl.value = 100;
+  const gEl = document.getElementById("setting_guardian_penalty");
+  if (gEl) gEl.value = 150;
+  const bEl = document.getElementById("setting_bonus_pts");
+  if (bEl) bEl.value = 500;
+  showToast("已載入推薦預設參數（1秒閃過一張卡），請點擊「儲存遊戲設定」生效！", "info");
+}
+
+window.loadAdminGameSettings = loadAdminGameSettings;
+window.saveAdminGameSettings = saveAdminGameSettings;
+window.resetAdminGameSettingsToDefault = resetAdminGameSettingsToDefault;
 
 // ==============================================================================
 // 6. Leaderboard Module (Updated for 《SDGs 地球保衛戰》)
@@ -1324,6 +1512,7 @@ async function loadAdminDashboard() {
 
     loadAdminWorksheets();
     loadAdminStudents();
+    loadAdminGameSettings();
   } catch (err) {
     console.error("Admin dashboard load failed", err);
   }

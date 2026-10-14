@@ -138,9 +138,61 @@ def init_db():
             sent_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
         """)
+
+        # System Settings table for game configuration
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS system_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
+        """)
+
+        # Seed default game settings if not present
+        for k, v in DEFAULT_GAME_SETTINGS.items():
+            cursor.execute("""
+            INSERT OR IGNORE INTO system_settings (key, value)
+            VALUES (?, ?)
+            """, (f"game_{k}", str(v)))
         
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_worksheets_user ON worksheets(user_id);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_game_scores_score ON game_scores(score DESC);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_targets_goal ON sdgs_targets(goal_id);")
+
+
+# Default Game Settings for 《SDGs 地球保衛戰》
+DEFAULT_GAME_SETTINGS = {
+    "game_duration": 45,        # 遊戲倒數總秒數 (秒)
+    "card_speed_ms": 1000,      # 每張卡片閃過速度 (毫秒，1000ms = 1秒)
+    "monster_pts": 100,         # 擊退危機破壞怪得分
+    "guardian_penalty": 150,    # 誤打永續守護精靈扣分 (同時扣 1 顆心)
+    "bonus_pts": 500,           # 彩虹永續金星 FEVER 得分
+    "initial_lives": 3          # 起始生命愛心數
+}
+
+def get_game_settings(conn) -> dict:
+    cursor = conn.cursor()
+    cursor.execute("SELECT key, value FROM system_settings WHERE key LIKE 'game_%'")
+    rows = cursor.fetchall()
+    settings = dict(DEFAULT_GAME_SETTINGS)
+    for r in rows:
+        key = r["key"].replace("game_", "", 1)
+        val = r["value"]
+        if key in settings:
+            try:
+                settings[key] = int(val)
+            except (ValueError, TypeError):
+                settings[key] = val
+    return settings
+
+def set_game_settings(conn, settings: dict) -> dict:
+    cursor = conn.cursor()
+    for key, val in settings.items():
+        db_key = f"game_{key}"
+        cursor.execute("""
+        INSERT INTO system_settings (key, value)
+        VALUES (?, ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+        """, (db_key, str(val)))
+    return get_game_settings(conn)
