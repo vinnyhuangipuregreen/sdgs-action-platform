@@ -62,13 +62,21 @@ TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
 if os.path.exists(STATIC_DIR):
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
-def get_current_user(authorization: Optional[str] = Header(None)) -> Optional[dict]:
-    if not authorization:
+def get_current_user(
+    authorization: Optional[str] = Header(None),
+    token: Optional[str] = Query(None)
+) -> Optional[dict]:
+    raw_token = None
+    if authorization:
+        raw_token = authorization
+        if raw_token.startswith("Bearer "):
+            raw_token = raw_token[7:]
+    elif token:
+        raw_token = token
+        
+    if not raw_token:
         return None
-    token = authorization
-    if token.startswith("Bearer "):
-        token = token[7:]
-    payload = decode_access_token(token)
+    payload = decode_access_token(raw_token)
     return payload
 
 def require_user(current_user: Optional[dict] = Depends(get_current_user)) -> dict:

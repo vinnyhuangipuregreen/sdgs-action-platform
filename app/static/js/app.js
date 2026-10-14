@@ -863,9 +863,9 @@ function openMyWorksheetsModal() {
         ${ws.score ? `<div class="mt-2 text-xs font-bold text-purple-700">評分：${ws.score} 分 ｜ 講師講評：${ws.teacher_comment || '無'}</div>` : ''}
       </div>
       <div class="flex items-center gap-2">
-        <a href="${API_BASE}/worksheets/${ws.id}/export-docx" target="_blank" class="px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-xs font-semibold">
+        <button type="button" onclick="downloadWorksheetDocx(${ws.id})" class="cursor-pointer px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-xs font-semibold flex items-center gap-1">
           📄 下載Word
-        </a>
+        </button>
         <button class="px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg text-xs font-semibold" onclick="loadWorksheetToForm(${ws.id})">
           編輯載入
         </button>
@@ -1599,7 +1599,7 @@ async function loadAdminWorksheets() {
           <td class="p-3 font-bold text-purple-700">${w.score ? w.score + '分' : '未評分'}</td>
           <td class="p-3 text-right space-x-1">
             <button class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded font-semibold text-xs" onclick="viewWorksheetDetailModal(${w.id})">詳情</button>
-            <a href="${API_BASE}/worksheets/${w.id}/export-docx" target="_blank" class="inline-block px-2.5 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded font-semibold text-xs">Word匯出</a>
+            <button type="button" onclick="downloadWorksheetDocx(${w.id})" class="cursor-pointer inline-block px-2.5 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded font-semibold text-xs">Word匯出</button>
             <button class="px-2.5 py-1 bg-purple-50 text-purple-700 hover:bg-purple-100 rounded font-semibold text-xs" onclick="openGradeModal(${w.id}, '${w.user_name}', ${w.score || 0}, '${(w.teacher_comment || '').replace(/'/g, "\\'")}')">批閱評分</button>
           </td>
         `;
@@ -1624,7 +1624,12 @@ window.viewWorksheetDetailModal = async function(id) {
     modal.classList.remove("hidden");
 
     document.getElementById("detailModalHeader").textContent = `學員：${ws.user_name} ｜ 分會單位：${ws.unit_name} (練習單 #${ws.id})`;
-    document.getElementById("detailDownloadDocxBtn").href = `${API_BASE}/worksheets/${ws.id}/export-docx`;
+    window.currentDetailWorksheetId = ws.id;
+    const docxBtn = document.getElementById("detailDownloadDocxBtn");
+    if (docxBtn) {
+      docxBtn.onclick = () => downloadWorksheetDocx(ws.id);
+      docxBtn.setAttribute("href", `${API_BASE}/worksheets/${ws.id}/export-docx?token=${encodeURIComponent(state.token || '')}`);
+    }
 
     const radialHtml = (ws.radial_data || []).map((r, i) => `
       <tr class="border-b border-slate-100">
@@ -2009,13 +2014,63 @@ window.executeBatchImport = async function() {
 };
 
 window.exportStudentsCSV = function() {
-  if (!state.token) return;
-  window.open(`${API_BASE}/admin/students/export-csv`, "_blank");
+  if (!state.token) {
+    showToast("請先登入管理員帳號", "warning");
+    return;
+  }
+  window.open(`${API_BASE}/admin/students/export-csv?token=${encodeURIComponent(state.token)}`, "_blank");
 };
 
 window.exportWorksheetsCSV = function() {
-  if (!state.token) return;
-  window.open(`${API_BASE}/admin/export/csv`, "_blank");
+  if (!state.token) {
+    showToast("請先登入管理員帳號", "warning");
+    return;
+  }
+  window.open(`${API_BASE}/admin/export/csv?token=${encodeURIComponent(state.token)}`, "_blank");
+};
+
+window.currentDetailWorksheetId = null;
+
+window.downloadCurrentDetailDocx = function() {
+  if (window.currentDetailWorksheetId) {
+    downloadWorksheetDocx(window.currentDetailWorksheetId);
+  } else {
+    showToast("未指定練習單編號", "warning");
+  }
+};
+
+window.downloadWorksheetDocx = async function(worksheetId) {
+  if (!state.token) {
+    showToast("請先登入系統", "warning");
+    showLoginModal(true);
+    return;
+  }
+  showToast("📄 正在產生 Word (.docx) 文件，請稍候...", "info");
+  try {
+    const res = await fetch(`${API_BASE}/worksheets/${worksheetId}/export-docx`, {
+      headers: {
+        "Authorization": `Bearer ${state.token}`
+      }
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      showToast(err.detail || "匯出失敗，請確認登入狀態或權限", "error");
+      return;
+    }
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `SDGs_Worksheet_${worksheetId}.docx`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => window.URL.revokeObjectURL(url), 2000);
+    showToast("✓ Word 文件已成功下載！", "success");
+  } catch (err) {
+    console.warn("fetch 下載失敗，切換為直接下載", err);
+    window.open(`${API_BASE}/worksheets/${worksheetId}/export-docx?token=${encodeURIComponent(state.token)}`, "_blank");
+  }
 };
 
 // ==============================================================================

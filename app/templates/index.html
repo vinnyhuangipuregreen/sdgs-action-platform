@@ -6,7 +6,7 @@
   <title>SDGs 與氣候行動—連動分析與學習平台</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <link rel="stylesheet" href="/static/css/style.css?v=20261014_v3">
+  <link rel="stylesheet" href="/static/css/style.css?v=20261014_v31">
   <script>
     tailwind.config = {
       theme: {
@@ -767,7 +767,7 @@
           <p id="detailModalHeader" class="text-xs text-slate-500"></p>
         </div>
         <div class="flex items-center gap-2">
-          <a id="detailDownloadDocxBtn" href="#" target="_blank" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-sm">
+          <a id="detailDownloadDocxBtn" href="javascript:void(0)" onclick="downloadCurrentDetailDocx()" class="cursor-pointer px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-sm transition-all">
             📄 匯出成 Word 檔案 (.docx)
           </a>
           <button onclick="document.getElementById('worksheetDetailModal').classList.add('hidden')" class="text-slate-400 hover:text-slate-600 text-xl font-bold ml-2">✕</button>
@@ -942,6 +942,6 @@
     </div>
   </footer>
 
-  <script src="/static/js/app.js?v=20261014_v3"></script>
+  <script src="/static/js/app.js?v=20261014_v31"></script>
 </body>
 </html>
