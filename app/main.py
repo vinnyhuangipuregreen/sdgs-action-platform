@@ -15,6 +15,7 @@ from app.database import get_db, init_db, get_game_settings, set_game_settings, 
 from app.auth import hash_password, verify_password, create_access_token, decode_access_token
 from app.docx_exporter import create_worksheet_docx
 from app.mailer import send_grade_notification
+from app.sdgs_check import ensure_sdgs_seeded
 
 app = FastAPI(
     title="SDGs 與氣候行動連動分析與智慧學習平台",
@@ -26,6 +27,11 @@ app = FastAPI(
 @app.on_event("startup")
 def on_startup():
     init_db()
+    try:
+        with get_db() as conn:
+            ensure_sdgs_seeded(conn)
+    except Exception as e:
+        print("[STARTUP] SDGs check error:", e)
     try:
         with get_db() as conn:
             c = conn.cursor()
@@ -225,6 +231,7 @@ def get_me(user: dict = Depends(require_user)):
 @app.get("/api/sdgs/goals")
 def get_sdgs_goals():
     with get_db() as conn:
+        ensure_sdgs_seeded(conn)
         cursor = conn.cursor()
         cursor.execute("""
         SELECT g.*, COUNT(t.id) as target_count 
@@ -239,6 +246,7 @@ def get_sdgs_goals():
 @app.get("/api/sdgs/targets")
 def get_sdgs_targets(goal_id: Optional[int] = None, target_type: Optional[str] = None):
     with get_db() as conn:
+        ensure_sdgs_seeded(conn)
         cursor = conn.cursor()
         query = "SELECT * FROM sdgs_targets WHERE 1=1"
         params = []
