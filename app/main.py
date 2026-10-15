@@ -15,7 +15,7 @@ from app.database import get_db, init_db, get_game_settings, set_game_settings, 
 from app.auth import hash_password, verify_password, create_access_token, decode_access_token
 from app.docx_exporter import create_worksheet_docx
 from app.mailer import send_grade_notification
-from app.sdgs_check import ensure_sdgs_seeded
+from app.sdgs_check import ensure_sdgs_seeded, ensure_users_seeded
 
 app = FastAPI(
     title="SDGs 與氣候行動連動分析與智慧學習平台",
@@ -26,32 +26,10 @@ app = FastAPI(
 
 @app.on_event("startup")
 def on_startup():
-    init_db()
     try:
-        with get_db() as conn:
-            ensure_sdgs_seeded(conn)
+        init_db()
     except Exception as e:
-        print("[STARTUP] SDGs check error:", e)
-    try:
-        with get_db() as conn:
-            c = conn.cursor()
-            c.execute("SELECT COUNT(*) FROM users")
-            count = c.fetchone()[0]
-            if count == 0:
-                print("[STARTUP] Users table empty, auto-seeding database...")
-                root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                if root_dir not in sys.path:
-                    sys.path.insert(0, root_dir)
-                import importlib.util
-                seed_path = os.path.join(root_dir, "seed_db.py")
-                if os.path.exists(seed_path):
-                    spec = importlib.util.spec_from_file_location("seed_db", seed_path)
-                    s_mod = importlib.util.module_from_spec(spec)
-                    spec.loader.exec_module(s_mod)
-                    s_mod.seed()
-                    print("[STARTUP] Auto-seeding completed successfully!")
-    except Exception as e:
-        print("[STARTUP] Auto-seed check error:", e)
+        print("[STARTUP] init_db deferred:", e)
 
 app.add_middleware(
     CORSMiddleware,
@@ -117,6 +95,7 @@ class LoginRequest(BaseModel):
 @app.post("/api/auth/login")
 def login(req: LoginRequest):
     with get_db() as conn:
+        ensure_users_seeded(conn)
         cursor = conn.cursor()
         acc = req.account.strip()
         pwd = req.password.strip()
@@ -689,6 +668,8 @@ def get_leaderboard(game_type: Optional[str] = None, user: Optional[dict] = Depe
 @app.get("/api/admin/stats")
 def get_admin_stats(user: dict = Depends(require_admin)):
     with get_db() as conn:
+        ensure_users_seeded(conn)
+        ensure_sdgs_seeded(conn)
         cursor = conn.cursor()
         cursor.execute("SELECT COUNT(*) FROM users WHERE role = 'student'")
         total_students = cursor.fetchone()[0]
@@ -751,6 +732,7 @@ def get_admin_students(
     user: dict = Depends(require_admin)
 ):
     with get_db() as conn:
+        ensure_users_seeded(conn)
         cursor = conn.cursor()
         query = "SELECT id, name, email, email_backup, phone, unit_code, unit_name, role, created_at FROM users WHERE 1=1"
         params = []
