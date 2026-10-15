@@ -1,6 +1,155 @@
-import sqlite3
 import os
+import json
+import sqlite3
+import requests
 from contextlib import contextmanager
+from typing import Optional, List, Dict, Any
+
+# ==============================================================================
+# Turso / LibSQL HTTP Client for Remote Permanent SQLite Cloud Database
+# ==============================================================================
+class TursoRow(dict):
+    """
+    Emulates sqlite3.Row: supports both dictionary key access ('email')
+    and numerical index access (row[0], row[1]), plus dict(row) conversion.
+    """
+    def __init__(self, cols: list, values: list):
+        super().__init__(zip(cols, values))
+        self._cols = cols
+        self._values = values
+
+    def __getitem__(self, item):
+        if isinstance(item, int):
+            return self._values[item]
+        return super().__getitem__(item)
+
+    def keys(self):
+        return self._cols
+
+    def values(self):
+        return self._values
+
+
+class TursoCursor:
+    def __init__(self, client):
+        self.client = client
+        self._results = []
+        self._idx = 0
+        self.rowcount = 0
+        self.lastrowid = None
+
+    def execute(self, sql: str, params: tuple = ()):
+        args = []
+        for p in params:
+            if p is None:
+                args.append({"type": "null"})
+            elif isinstance(p, int):
+                args.append({"type": "integer", "value": str(p)})
+            elif isinstance(p, float):
+                args.append({"type": "float", "value": p})
+            elif isinstance(p, bytes):
+                import base64
+                args.append({"type": "blob", "base64": base64.b64encode(p).decode()})
+            else:
+                args.append({"type": "text", "value": str(p)})
+
+        stmt = {"sql": sql}
+        if args:
+            stmt["args"] = args
+
+        payload = {
+            "requests": [
+                {"type": "execute", "stmt": stmt},
+                {"type": "close"}
+            ]
+        }
+
+        res = requests.post(
+            f"{self.client.base_url}/v2/pipeline",
+            headers={
+                "Authorization": f"Bearer {self.client.auth_token}",
+                "Content-Type": "application/json"
+            },
+            json=payload,
+            timeout=10
+        )
+        if not res.ok:
+            raise Exception(f"Turso HTTP error {res.status_code}: {res.text}")
+
+        data = res.json()
+        exec_res = data["results"][0]
+        if exec_res.get("type") == "error":
+            raise Exception(f"SQL error: {exec_res.get('error', {}).get('message')}")
+
+        result_data = exec_res.get("response", {}).get("result", {})
+        self.rowcount = result_data.get("affected_row_count", 0)
+        self.lastrowid = result_data.get("last_insert_rowid")
+
+        cols = [c["name"] for c in result_data.get("cols", [])]
+        raw_rows = result_data.get("rows", [])
+        
+        parsed_rows = []
+        for row in raw_rows:
+            row_vals = []
+            for cell in row:
+                val = cell.get("value")
+                c_type = cell.get("type")
+                if c_type == "null":
+                    row_vals.append(None)
+                elif c_type == "integer":
+                    row_vals.append(int(val) if val is not None else None)
+                elif c_type == "float":
+                    row_vals.append(float(val) if val is not None else None)
+                else:
+                    row_vals.append(val)
+            parsed_rows.append(TursoRow(cols, row_vals))
+
+        self._results = parsed_rows
+        self._idx = 0
+        return self
+
+    def fetchone(self):
+        if self._idx < len(self._results):
+            r = self._results[self._idx]
+            self._idx += 1
+            return r
+        return None
+
+    def fetchall(self):
+        res = self._results[self._idx:]
+        self._idx = len(self._results)
+        return res
+
+
+class TursoConnection:
+    def __init__(self, base_url: str, auth_token: str):
+        # Convert libsql:// to https://
+        if base_url.startswith("libsql://"):
+            base_url = "https://" + base_url[len("libsql://"):]
+        elif base_url.startswith("http://"):
+            base_url = "https://" + base_url[len("http://"):]
+        self.base_url = base_url.rstrip("/")
+        self.auth_token = auth_token
+
+    def cursor(self):
+        return TursoCursor(self)
+
+    def commit(self):
+        pass
+
+    def rollback(self):
+        pass
+
+    def close(self):
+        pass
+
+# ==============================================================================
+# Database Configuration & Dual-Mode Routing
+# ==============================================================================
+def is_turso_configured() -> bool:
+    url = os.environ.get("TURSO_DATABASE_URL")
+    token = os.environ.get("TURSO_AUTH_TOKEN")
+    return bool(url and token)
 
 def get_db_path():
     db_env = os.environ.get("DATABASE_PATH")
@@ -20,6 +169,11 @@ def get_db_path():
 DB_PATH = get_db_path()
 
 def get_db_connection():
+    if is_turso_configured():
+        url = os.environ.get("TURSO_DATABASE_URL")
+        token = os.environ.get("TURSO_AUTH_TOKEN")
+        return TursoConnection(url, token)
+    
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
@@ -78,8 +232,7 @@ def init_db():
             goal_id INTEGER NOT NULL,
             code TEXT NOT NULL UNIQUE,
             target_type TEXT NOT NULL,
-            content TEXT NOT NULL,
-            FOREIGN KEY (goal_id) REFERENCES sdgs_goals(id) ON DELETE CASCADE
+            content TEXT NOT NULL
         );
         """)
         
@@ -102,8 +255,7 @@ def init_db():
             score INTEGER,
             teacher_comment TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
         """)
         
@@ -119,8 +271,7 @@ def init_db():
             earth_health INTEGER NOT NULL,
             risks_solved INTEGER NOT NULL DEFAULT 0,
             title_earned TEXT NOT NULL,
-            played_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            played_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
         """)
 
@@ -159,7 +310,6 @@ def init_db():
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_worksheets_user ON worksheets(user_id);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_game_scores_score ON game_scores(score DESC);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_targets_goal ON sdgs_targets(goal_id);")
-
 
 # Default Game Settings for 《SDGs 地球保衛戰》
 DEFAULT_GAME_SETTINGS = {
