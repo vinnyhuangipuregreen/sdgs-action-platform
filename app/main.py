@@ -723,18 +723,18 @@ def get_admin_stats(user: dict = Depends(require_admin)):
             "sdg_frequency": sdg_counts
         }
 
-# --- Student CRUD ---
+# --- Student & Staff/Admin CRUD ---
 @app.get("/api/admin/students")
 def get_admin_students(
     search: Optional[str] = None,
-    limit: int = 100,
+    limit: int = 300,
     offset: int = 0,
     user: dict = Depends(require_admin)
 ):
     with get_db() as conn:
         ensure_users_seeded(conn)
         cursor = conn.cursor()
-        query = "SELECT id, name, email, email_backup, phone, unit_code, unit_name, role, created_at FROM users WHERE 1=1"
+        query = "SELECT id, name, email, email_backup, phone, unit_code, unit_name, role, created_at FROM users WHERE role = 'student'"
         params = []
         if search:
             s = f"%{search.strip()}%"
@@ -750,6 +750,32 @@ def get_admin_students(
         students = [dict(r) for r in cursor.fetchall()]
         return {"total": total, "items": students}
 
+@app.get("/api/admin/staff")
+def get_admin_staff(
+    search: Optional[str] = None,
+    limit: int = 100,
+    offset: int = 0,
+    user: dict = Depends(require_admin)
+):
+    with get_db() as conn:
+        ensure_users_seeded(conn)
+        cursor = conn.cursor()
+        query = "SELECT id, name, email, email_backup, phone, unit_code, unit_name, role, created_at FROM users WHERE role IN ('admin', 'teacher')"
+        params = []
+        if search:
+            s = f"%{search.strip()}%"
+            query += " AND (name LIKE ? OR email LIKE ? OR phone LIKE ? OR unit_code LIKE ? OR unit_name LIKE ?)"
+            params.extend([s, s, s, s, s])
+            
+        cursor.execute(f"SELECT COUNT(*) FROM ({query})", params)
+        total = cursor.fetchone()[0]
+        
+        query += " ORDER BY id ASC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+        cursor.execute(query, params)
+        staff = [dict(r) for r in cursor.fetchall()]
+        return {"total": total, "items": staff}
+
 class StudentSaveSchema(BaseModel):
     name: str
     email: str
@@ -764,21 +790,39 @@ class StudentSaveSchema(BaseModel):
 def create_student(req: StudentSaveSchema, user: dict = Depends(require_admin)):
     with get_db() as conn:
         cursor = conn.cursor()
-        p_hash = hash_password(req.password or req.phone)
+        role_val = req.role if req.role in ["admin", "teacher", "student"] else "student"
+        p_hash = hash_password(req.password or req.phone or "sdgs2030admin")
         cursor.execute("""
         INSERT INTO users (name, email, email_backup, phone, unit_code, unit_name, password_hash, role)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (req.name.strip(), req.email.strip(), req.email_backup or "", req.phone.strip(), req.unit_code or "", req.unit_name or "佛光學員", p_hash, req.role or "student"))
+        """, (req.name.strip(), req.email.strip(), req.email_backup or "", req.phone.strip(), req.unit_code or "", req.unit_name or "佛光學員", p_hash, role_val))
         new_id = cursor.lastrowid
-        return {"success": True, "id": new_id, "message": f"學員 {req.name} 已成功新增！"}
+        label = "管理帳號" if role_val in ["admin", "teacher"] else "學員"
+        return {"success": True, "id": new_id, "message": f"{label} {req.name} 已成功新增！"}
+
+@app.post("/api/admin/staff")
+def create_staff(req: StudentSaveSchema, user: dict = Depends(require_admin)):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        role_val = req.role if req.role in ["admin", "teacher"] else "admin"
+        p_hash = hash_password(req.password or req.phone or "sdgs2030admin")
+        cursor.execute("""
+        INSERT INTO users (name, email, email_backup, phone, unit_code, unit_name, password_hash, role)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (req.name.strip(), req.email.strip(), req.email_backup or "", req.phone.strip(), req.unit_code or "FGU", req.unit_name or "佛光永續學院", p_hash, role_val))
+        new_id = cursor.lastrowid
+        return {"success": True, "id": new_id, "message": f"管理帳號 {req.name} 已成功新增！"}
 
 @app.put("/api/admin/students/{student_id}")
 def update_student(student_id: int, req: StudentSaveSchema, user: dict = Depends(require_admin)):
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM users WHERE id = ?", (student_id,))
-        if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="找不到該學員")
+        cursor.execute("SELECT id, role FROM users WHERE id = ?", (student_id,))
+        existing = cursor.fetchone()
+        if not existing:
+            raise HTTPException(status_code=404, detail="找不到該帳號")
+
+        role_val = req.role if req.role in ["admin", "teacher", "student"] else existing["role"]
 
         if req.password and req.password.strip():
             p_hash = hash_password(req.password.strip())
@@ -786,21 +830,25 @@ def update_student(student_id: int, req: StudentSaveSchema, user: dict = Depends
             UPDATE users SET
                 name = ?, email = ?, email_backup = ?, phone = ?, unit_code = ?, unit_name = ?, role = ?, password_hash = ?
             WHERE id = ?
-            """, (req.name.strip(), req.email.strip(), req.email_backup or "", req.phone.strip(), req.unit_code or "", req.unit_name or "佛光學員", req.role or "student", p_hash, student_id))
+            """, (req.name.strip(), req.email.strip(), req.email_backup or "", req.phone.strip(), req.unit_code or "", req.unit_name or "佛光學員", role_val, p_hash, student_id))
         else:
             cursor.execute("""
             UPDATE users SET
                 name = ?, email = ?, email_backup = ?, phone = ?, unit_code = ?, unit_name = ?, role = ?
             WHERE id = ?
-            """, (req.name.strip(), req.email.strip(), req.email_backup or "", req.phone.strip(), req.unit_code or "", req.unit_name or "佛光學員", req.role or "student", student_id))
-        return {"success": True, "message": f"學員 {req.name} 資料已成功更新！"}
+            """, (req.name.strip(), req.email.strip(), req.email_backup or "", req.phone.strip(), req.unit_code or "", req.unit_name or "佛光學員", role_val, student_id))
+        return {"success": True, "message": f"帳號 {req.name} 資料已成功更新！"}
 
 @app.delete("/api/admin/students/{student_id}")
 def delete_single_student(student_id: int, user: dict = Depends(require_admin)):
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM users WHERE id = ? AND role != 'admin'", (student_id,))
-        return {"success": True, "message": "學員資料已成功刪除！"}
+        cursor.execute("SELECT email, role FROM users WHERE id = ?", (student_id,))
+        row = cursor.fetchone()
+        if row and row["email"] == "admin" and row["role"] == "admin":
+            raise HTTPException(status_code=400, detail="預設最高系統管理員帳號不可刪除，但可修改資料與密碼")
+        cursor.execute("DELETE FROM users WHERE id = ?", (student_id,))
+        return {"success": True, "message": "帳號資料已成功刪除！"}
 
 class BatchDeleteRequest(BaseModel):
     ids: List[int]
@@ -808,16 +856,17 @@ class BatchDeleteRequest(BaseModel):
 @app.post("/api/admin/students/batch-delete")
 def batch_delete_students(req: BatchDeleteRequest, user: dict = Depends(require_admin)):
     if not req.ids:
-        raise HTTPException(status_code=400, detail="未選取任何學員")
+        raise HTTPException(status_code=400, detail="未選取任何名單")
     with get_db() as conn:
         cursor = conn.cursor()
         placeholders = ",".join("?" for _ in req.ids)
-        cursor.execute(f"DELETE FROM users WHERE id IN ({placeholders}) AND role != 'admin'", req.ids)
+        cursor.execute(f"DELETE FROM users WHERE id IN ({placeholders}) AND NOT (email = 'admin' AND role = 'admin')", req.ids)
         deleted_count = cursor.rowcount
-        return {"success": True, "deleted_count": deleted_count, "message": f"已成功批次刪除 {deleted_count} 位學員！"}
+        return {"success": True, "deleted_count": deleted_count, "message": f"已成功批次刪除 {deleted_count} 筆帳號資料！"}
 
 class BatchImportRequest(BaseModel):
     students: List[Dict[str, str]]
+    default_role: Optional[str] = "student"
 
 @app.post("/api/admin/students/batch-import")
 def batch_import_students(req: BatchImportRequest, user: dict = Depends(require_admin)):
@@ -835,6 +884,9 @@ def batch_import_students(req: BatchImportRequest, user: dict = Depends(require_
             phone = s.get("phone", "").strip()
             unit_code = s.get("unit_code", "").strip()
             unit_name = s.get("unit_name", "").strip() or "佛光學員"
+            role_val = s.get("role", req.default_role or "student").strip()
+            if role_val not in ["admin", "teacher", "student"]:
+                role_val = req.default_role or "student"
             
             if not name or not email:
                 skipped += 1
@@ -843,15 +895,15 @@ def batch_import_students(req: BatchImportRequest, user: dict = Depends(require_
             p_hash = hash_password(phone or "0920111111")
             cursor.execute("""
             INSERT INTO users (name, email, email_backup, phone, unit_code, unit_name, password_hash, role)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'student')
-            """, (name, email, email_backup, phone, unit_code, unit_name, p_hash))
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (name, email, email_backup, phone, unit_code, unit_name, p_hash, role_val))
             imported += 1
             
         return {
             "success": True,
             "imported_count": imported,
             "skipped_count": skipped,
-            "message": f"匯入完成！成功新增 {imported} 位學員，跳過無效 {skipped} 筆。"
+            "message": f"匯入完成！成功新增 {imported} 筆帳號，跳過無效 {skipped} 筆。"
         }
 
 @app.get("/api/admin/students/export-csv")
@@ -867,7 +919,7 @@ def export_students_csv(user: dict = Depends(require_admin)):
         rows = cursor.fetchall()
         
         output = io.StringIO()
-        output.write('\ufeff') # UTF-8 BOM
+        output.write('﻿') # UTF-8 BOM
         writer = csv.writer(output)
         writer.writerow(["學員姓名", "Email（帳號）", "Email（補課平台）", "聯絡電話（密碼）", "分會/分團/童軍團（編號）", "所屬分會/分團/童軍團（完整名稱）"])
         
@@ -879,6 +931,34 @@ def export_students_csv(user: dict = Depends(require_admin)):
             io.BytesIO(output.getvalue().encode('utf-8-sig')),
             media_type="text/csv",
             headers={"Content-Disposition": "attachment; filename=student_list_export.csv"}
+        )
+
+@app.get("/api/admin/staff/export-csv")
+def export_staff_csv(user: dict = Depends(require_admin)):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+        SELECT name, email, email_backup, phone, unit_code, unit_name, role 
+        FROM users 
+        WHERE role IN ('admin', 'teacher')
+        ORDER BY id ASC
+        """)
+        rows = cursor.fetchall()
+        
+        output = io.StringIO()
+        output.write('﻿') # UTF-8 BOM
+        writer = csv.writer(output)
+        writer.writerow(["姓名", "登入帳號/Email", "備用Email", "聯絡電話", "單位代碼", "所屬單位名稱", "角色權限"])
+        
+        for r in rows:
+            role_label = "系統管理員" if r[6] == "admin" else "授課講師/助教"
+            writer.writerow([r[0], r[1], r[2] or "", r[3], r[4] or "", r[5] or "", role_label])
+            
+        output.seek(0)
+        return StreamingResponse(
+            io.BytesIO(output.getvalue().encode('utf-8-sig')),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=admin_staff_export.csv"}
         )
 
 # --- Grading with Email Send to Student ---

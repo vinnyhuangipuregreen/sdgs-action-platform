@@ -38,7 +38,10 @@ const state = {
     initial_lives: 3
   },
 
-  selectedStudentIds: new Set()
+  selectedStudentIds: new Set(),
+  selectedStaffIds: new Set(),
+  activeAdminSubTab: "dashboard",
+  lastAdminStats: null
 };
 
 // Character datasets for 《SDGs 地球保衛戰》
@@ -1606,8 +1609,28 @@ function renderLeaderboardTable(list, myBest) {
 let chartRadar = null;
 let chartPie = null;
 
+window.switchAdminSubTab = function(subTab) {
+  state.activeAdminSubTab = subTab;
+  document.querySelectorAll(".admin-subpane").forEach(el => el.classList.add("hidden"));
+  const targetPane = document.getElementById(`adminSubPane_${subTab}`);
+  if (targetPane) targetPane.classList.remove("hidden");
+
+  document.querySelectorAll(".admin-subtab-btn").forEach(btn => {
+    const btnTab = btn.getAttribute("data-admin-subtab");
+    if (btnTab === subTab) {
+      btn.className = "admin-subtab-btn px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center gap-2 bg-purple-700 text-white shadow-sm cursor-pointer";
+    } else {
+      btn.className = "admin-subtab-btn px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer";
+    }
+  });
+
+  if (subTab === "dashboard" && state.lastAdminStats) {
+    setTimeout(() => renderAdminCharts(state.lastAdminStats), 30);
+  }
+};
+
 async function loadAdminDashboard() {
-  if (!state.token || !state.user || !['admin', 'teacher'].includes(state.user.role)) return;
+  if (!state.token || !state.user || !["admin", "teacher"].includes(state.user.role)) return;
 
   try {
     const resStats = await fetch(`${API_BASE}/admin/stats`, {
@@ -1615,11 +1638,13 @@ async function loadAdminDashboard() {
     });
     if (resStats.ok) {
       const stats = await resStats.json();
+      state.lastAdminStats = stats;
       renderAdminStats(stats);
       renderAdminCharts(stats);
     }
 
     loadAdminWorksheets();
+    loadAdminStaff();
     loadAdminStudents();
     loadAdminGameSettings();
   } catch (err) {
@@ -1847,6 +1872,263 @@ async function submitGrade(id) {
 }
 
 // ==============================================================================
+// 7B. Staff / Admin Account Management ([管理帳號與權限名單維護])
+// ==============================================================================
+async function loadAdminStaff(search = "") {
+  const container = document.getElementById("adminStaffTableBody");
+  if (!container) return;
+  container.innerHTML = '<tr><td colspan="10" class="p-6 text-center text-slate-400">載入管理帳號名單...</td></tr>';
+  state.selectedStaffIds.clear();
+  updateSelectedStaffCountUI();
+  const masterCb = document.getElementById("masterStaffCb");
+  if (masterCb) masterCb.checked = false;
+
+  try {
+    const url = search ? `${API_BASE}/admin/staff?search=${encodeURIComponent(search)}&limit=200` : `${API_BASE}/admin/staff?limit=200`;
+    const res = await fetch(url, {
+      headers: { "Authorization": `Bearer ${state.token}` }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      container.innerHTML = "";
+      if (!data.items || data.items.length === 0) {
+        container.innerHTML = '<tr><td colspan="10" class="p-6 text-center text-slate-400">無符合條件之管理員／講師帳號</td></tr>';
+        return;
+      }
+      data.items.forEach(s => {
+        const isPrimaryRootAdmin = (s.email === "admin");
+        const roleBadge = s.role === "admin"
+          ? '<span class="px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 font-extrabold text-[11px]">🛡️ 系統管理員</span>'
+          : '<span class="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 font-bold text-[11px]">👩‍🏫 授課講師</span>';
+
+        const tr = document.createElement("tr");
+        tr.className = "border-b border-slate-100 hover:bg-purple-50/30 text-xs";
+        tr.innerHTML = `
+          <td class="p-3 text-center">
+            ${!isPrimaryRootAdmin ? `<input type="checkbox" class="staff-cb rounded text-purple-600" value="${s.id}" onchange="handleStaffSelectChange(${s.id}, this.checked)">` : '<span title="預設最高管理員受系統保護" class="text-purple-600 font-bold">🔒</span>'}
+          </td>
+          <td class="p-3 font-mono text-slate-500">#${s.id}</td>
+          <td class="p-3 font-bold text-slate-900">${s.name}</td>
+          <td class="p-3 text-purple-700 font-mono font-bold">${s.email}</td>
+          <td class="p-3 text-slate-500 font-mono">${s.email_backup || '-'}</td>
+          <td class="p-3 text-slate-600 font-mono">${s.phone}</td>
+          <td class="p-3 font-mono text-slate-600 font-bold">${s.unit_code || 'FGU'}</td>
+          <td class="p-3 text-slate-700 font-medium">${s.unit_name || '佛光永續學院'}</td>
+          <td class="p-3">${roleBadge}</td>
+          <td class="p-3 text-right space-x-1">
+            <button class="px-2.5 py-1 bg-amber-50 text-amber-800 hover:bg-amber-100 rounded font-semibold text-[11px]"
+              onclick="openEditStudentModal(${s.id}, '${(s.name || '').replace(/'/g, "\\'")}', '${(s.email || '').replace(/'/g, "\\'")}', '${(s.email_backup || '').replace(/'/g, "\\'")}', '${(s.phone || '').replace(/'/g, "\\'")}', '${(s.unit_code || '').replace(/'/g, "\\'")}', '${(s.unit_name || '佛光永續學院').replace(/'/g, "\\'")}', '${s.role}')">
+              修改
+            </button>
+            ${!isPrimaryRootAdmin ? `
+            <button class="px-2.5 py-1 bg-red-50 text-red-700 hover:bg-red-100 rounded font-semibold text-[11px]"
+              onclick="deleteSingleStaff(${s.id}, '${(s.name || '').replace(/'/g, "\\'")}')">
+              刪除
+            </button>` : '<span class="text-[11px] text-slate-400 px-1">預設主帳號</span>'}
+          </td>
+        `;
+        container.appendChild(tr);
+      });
+    }
+  } catch (err) {
+    container.innerHTML = '<tr><td colspan="10" class="p-6 text-center text-red-400">無法讀取管理帳號名單</td></tr>';
+  }
+}
+
+window.loadAdminStaff = loadAdminStaff;
+
+window.handleStaffSelectChange = function(id, isChecked) {
+  if (isChecked) state.selectedStaffIds.add(id);
+  else state.selectedStaffIds.delete(id);
+  updateSelectedStaffCountUI();
+};
+
+window.toggleSelectAllStaff = function(masterCb) {
+  document.querySelectorAll(".staff-cb").forEach(cb => {
+    cb.checked = masterCb.checked;
+    const sid = parseInt(cb.value, 10);
+    if (masterCb.checked) state.selectedStaffIds.add(sid);
+    else state.selectedStaffIds.delete(sid);
+  });
+  updateSelectedStaffCountUI();
+};
+
+function updateSelectedStaffCountUI() {
+  const countEl = document.getElementById("selectedStaffCount");
+  if (countEl) countEl.textContent = state.selectedStaffIds.size;
+  const btn = document.getElementById("batchDeleteStaffBtn");
+  if (btn) btn.disabled = state.selectedStaffIds.size === 0;
+}
+
+window.openAddStaffModal = function() {
+  document.getElementById("addStaffModal")?.classList.remove("hidden");
+};
+
+window.saveNewStaff = async function() {
+  const name = document.getElementById("addStaffName").value.trim();
+  const email = document.getElementById("addStaffEmail").value.trim();
+  const email_backup = document.getElementById("addStaffEmailBackup").value.trim();
+  const phone = document.getElementById("addStaffPhone").value.trim();
+  const unit_code = document.getElementById("addStaffUnitCode").value.trim() || "FGU";
+  const unit_name = document.getElementById("addStaffUnitName").value.trim() || "佛光永續學院";
+  const role = document.getElementById("addStaffRole").value || "admin";
+  const password = document.getElementById("addStaffPassword").value.trim();
+
+  if (!name || !email || !phone) {
+    showToast("姓名、登入帳號/Email 與聯絡電話為必填欄位！", "error");
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/admin/staff`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${state.token}`
+      },
+      body: JSON.stringify({ name, email, email_backup, phone, unit_code, unit_name, role, password })
+    });
+    const d = await res.json();
+    if (res.ok) {
+      showToast(d.message || "管理帳號新增成功！", "success");
+      document.getElementById("addStaffModal").classList.add("hidden");
+      document.getElementById("addStaffName").value = "";
+      document.getElementById("addStaffEmail").value = "";
+      document.getElementById("addStaffEmailBackup").value = "";
+      document.getElementById("addStaffPhone").value = "";
+      document.getElementById("addStaffPassword").value = "";
+      loadAdminStaff();
+    } else {
+      showToast(d.detail || "新增失敗", "error");
+    }
+  } catch (err) {
+    showToast("連線異常", "error");
+  }
+};
+
+window.deleteSingleStaff = async function(id, name) {
+  if (!confirm(`確定要刪除管理員／講師帳號「${name}」嗎？`)) return;
+  try {
+    const res = await fetch(`${API_BASE}/admin/students/${id}`, {
+      method: "DELETE",
+      headers: { "Authorization": `Bearer ${state.token}` }
+    });
+    const d = await res.json().catch(() => ({}));
+    if (res.ok) {
+      showToast(`帳號 ${name} 已成功刪除！`, "success");
+      loadAdminStaff();
+    } else {
+      showToast(d.detail || "刪除失敗", "error");
+    }
+  } catch (err) {
+    showToast("刪除失敗", "error");
+  }
+};
+
+window.executeBatchDeleteStaff = async function() {
+  const ids = Array.from(state.selectedStaffIds);
+  if (ids.length === 0) return;
+  if (!confirm(`確定要批次刪除選取的 ${ids.length} 個管理帳號嗎？此操作無法復原。`)) return;
+
+  try {
+    const res = await fetch(`${API_BASE}/admin/students/batch-delete`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${state.token}`
+      },
+      body: JSON.stringify({ ids })
+    });
+    const d = await res.json();
+    if (res.ok) {
+      showToast(d.message || "批次刪除管理帳號成功！", "success");
+      loadAdminStaff();
+    }
+  } catch (err) {
+    showToast("批次刪除失敗", "error");
+  }
+};
+
+window.openBatchImportStaffModal = function() {
+  document.getElementById("batchImportStaffModal")?.classList.remove("hidden");
+};
+
+window.executeBatchImportStaff = async function() {
+  const textVal = document.getElementById("importStaffTextarea").value.trim();
+  const fileInput = document.getElementById("importStaffFileInput");
+
+  let parsedStaff = [];
+
+  function parseCSVLine(line) {
+    const parts = line.split(",").map(p => p.trim());
+    if (parts.length >= 2 && parts[0] && parts[1] && !["姓名", "管理員／講師姓名", "學員姓名"].includes(parts[0])) {
+      return {
+        name: parts[0],
+        email: parts[1],
+        email_backup: parts[2] || "",
+        phone: parts[3] || "0912345678",
+        unit_code: parts[4] || "FGU",
+        unit_name: parts[5] || parts[4] || "佛光永續學院",
+        role: parts[6] || "admin"
+      };
+    }
+    return null;
+  }
+
+  if (textVal) {
+    const lines = textVal.split("\n");
+    for (let l of lines) {
+      const s = parseCSVLine(l);
+      if (s) parsedStaff.push(s);
+    }
+  }
+
+  if (fileInput && fileInput.files.length > 0) {
+    const file = fileInput.files[0];
+    const text = await file.text();
+    const rows = text.split("\n");
+    for (let r of rows) {
+      const s = parseCSVLine(r);
+      if (s) parsedStaff.push(s);
+    }
+  }
+
+  if (parsedStaff.length === 0) {
+    showToast("未偵測到有效管理名單資料，請確認格式（姓名, 帳號/Email, 備用Email, 電話, 單位編號, 單位名稱）", "error");
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/admin/students/batch-import`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${state.token}`
+      },
+      body: JSON.stringify({ students: parsedStaff, default_role: "admin" })
+    });
+    const d = await res.json();
+    if (res.ok) {
+      showToast(d.message || "管理名單批次匯入完成！", "success");
+      document.getElementById("batchImportStaffModal").classList.add("hidden");
+      document.getElementById("importStaffTextarea").value = "";
+      if (fileInput) fileInput.value = "";
+      loadAdminStaff();
+    }
+  } catch (err) {
+    showToast("匯入失敗", "error");
+  }
+};
+
+window.exportStaffCSV = function() {
+  if (!state.token) {
+    showToast("請先登入管理員帳號", "warning");
+    return;
+  }
+  window.open(`${API_BASE}/admin/staff/export-csv?token=${encodeURIComponent(state.token)}`, "_blank");
+};
+
+// ==============================================================================
 // 8. Student Management (6-column CRUD, Batch Delete, Import & Export)
 // ==============================================================================
 async function loadAdminStudents(search = "") {
@@ -1855,6 +2137,8 @@ async function loadAdminStudents(search = "") {
   container.innerHTML = '<tr><td colspan="9" class="p-6 text-center text-slate-400">載入學員名單...</td></tr>';
   state.selectedStudentIds.clear();
   updateSelectedCountUI();
+  const masterCb = document.getElementById("masterStudentCb");
+  if (masterCb) masterCb.checked = false;
 
   try {
     const url = search ? `${API_BASE}/admin/students?search=${encodeURIComponent(search)}&limit=300` : `${API_BASE}/admin/students?limit=150`;
@@ -1864,12 +2148,16 @@ async function loadAdminStudents(search = "") {
     if (res.ok) {
       const data = await res.json();
       container.innerHTML = "";
+      if (!data.items || data.items.length === 0) {
+        container.innerHTML = '<tr><td colspan="9" class="p-6 text-center text-slate-400">無符合條件之學員資料</td></tr>';
+        return;
+      }
       data.items.forEach(s => {
         const tr = document.createElement("tr");
         tr.className = "border-b border-slate-100 hover:bg-slate-50 text-xs";
         tr.innerHTML = `
           <td class="p-3 text-center">
-            ${s.role !== 'admin' ? `<input type="checkbox" class="student-cb rounded text-emerald-600" value="${s.id}" onchange="handleStudentSelectChange(${s.id}, this.checked)">` : ''}
+            <input type="checkbox" class="student-cb rounded text-emerald-600" value="${s.id}" onchange="handleStudentSelectChange(${s.id}, this.checked)">
           </td>
           <td class="p-3 font-mono text-slate-500">#${s.id}</td>
           <td class="p-3 font-bold text-slate-800">${s.name}</td>
@@ -1880,14 +2168,13 @@ async function loadAdminStudents(search = "") {
           <td class="p-3 text-slate-700 font-medium">${s.unit_name || '佛光學員'}</td>
           <td class="p-3 text-right space-x-1">
             <button class="px-2 py-1 bg-amber-50 text-amber-800 hover:bg-amber-100 rounded font-semibold text-[11px]" 
-              onclick="openEditStudentModal(${s.id}, '${s.name}', '${s.email}', '${s.email_backup || ''}', '${s.phone}', '${s.unit_code || ''}', '${s.unit_name || '佛光學員'}', '${s.role}')">
+              onclick="openEditStudentModal(${s.id}, '${(s.name || '').replace(/'/g, "\\'")}', '${(s.email || '').replace(/'/g, "\\'")}', '${(s.email_backup || '').replace(/'/g, "\\'")}', '${(s.phone || '').replace(/'/g, "\\'")}', '${(s.unit_code || '').replace(/'/g, "\\'")}', '${(s.unit_name || '佛光學員').replace(/'/g, "\\'")}', '${s.role || 'student'}')">
               修改
             </button>
-            ${s.role !== 'admin' ? `
             <button class="px-2 py-1 bg-red-50 text-red-700 hover:bg-red-100 rounded font-semibold text-[11px]" 
-              onclick="deleteSingleStudent(${s.id}, '${s.name}')">
+              onclick="deleteSingleStudent(${s.id}, '${(s.name || '').replace(/'/g, "\\'")}')">
               刪除
-            </button>` : ''}
+            </button>
           </td>
         `;
         container.appendChild(tr);
@@ -1897,6 +2184,8 @@ async function loadAdminStudents(search = "") {
     container.innerHTML = '<tr><td colspan="9" class="p-6 text-center text-red-400">無法讀取名單</td></tr>';
   }
 }
+
+window.loadAdminStudents = loadAdminStudents;
 
 window.handleStudentSelectChange = function(id, isChecked) {
   if (isChecked) state.selectedStudentIds.add(id);
@@ -1973,6 +2262,11 @@ window.openEditStudentModal = function(id, name, email, email_backup, phone, uni
   document.getElementById("editStudentUnitCode").value = unit_code || "";
   document.getElementById("editStudentUnitName").value = unit_name || "";
   document.getElementById("editStudentPassword").value = "";
+  const roleSel = document.getElementById("editStudentRole");
+  if (roleSel) {
+    roleSel.value = role || "student";
+    roleSel.disabled = (email === "admin");
+  }
 };
 
 window.saveStudentEdit = async function() {
@@ -1984,6 +2278,7 @@ window.saveStudentEdit = async function() {
   const unit_code = document.getElementById("editStudentUnitCode").value.trim();
   const unit_name = document.getElementById("editStudentUnitName").value.trim();
   const password = document.getElementById("editStudentPassword").value.trim();
+  const role = document.getElementById("editStudentRole")?.value || "student";
 
   if (!name || !email || !phone) {
     showToast("姓名、Email與電話為必填欄位", "error");
@@ -1997,15 +2292,16 @@ window.saveStudentEdit = async function() {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${state.token}`
       },
-      body: JSON.stringify({ name, email, email_backup, phone, unit_code, unit_name, password })
+      body: JSON.stringify({ name, email, email_backup, phone, unit_code, unit_name, password, role })
     });
     const d = await res.json();
     if (res.ok) {
-      showToast(d.message || "學員資料更新成功！", "success");
+      showToast(d.message || "帳號資料更新成功！", "success");
       document.getElementById("editStudentModal").classList.add("hidden");
+      loadAdminStaff();
       loadAdminStudents();
     } else {
-      showToast("更新失敗", "error");
+      showToast(d.detail || "更新失敗", "error");
     }
   } catch (err) {
     showToast("更新失敗", "error");
@@ -2071,7 +2367,8 @@ window.executeBatchImport = async function() {
         email_backup: parts[2] || "",
         phone: parts[3] || "0920111111",
         unit_code: parts[4] || "",
-        unit_name: parts[5] || parts[4] || "佛光學員"
+        unit_name: parts[5] || parts[4] || "佛光學員",
+        role: "student"
       };
     }
     return null;
@@ -2107,7 +2404,7 @@ window.executeBatchImport = async function() {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${state.token}`
       },
-      body: JSON.stringify({ students: parsedStudents })
+      body: JSON.stringify({ students: parsedStudents, default_role: "student" })
     });
     const d = await res.json();
     if (res.ok) {

@@ -468,221 +468,369 @@
     </section>
 
     <!-- ======================================================================= -->
-    <!-- TAB 5: ⚙️ 管理後台 -->
+    <!-- TAB 5: ⚙️ 管理後台 (專業多頁籤管理中樞) -->
     <!-- ======================================================================= -->
     <section id="tabPane_admin" class="tab-pane hidden space-y-6">
       
-      <!-- Stats Summary -->
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-          <span class="text-xs font-bold text-slate-500 block">全體註冊學員</span>
-          <span id="adminStatStudents" class="text-2xl font-black text-slate-900 font-mono">0</span>
-          <span class="text-[11px] text-slate-400 block mt-1">427 位預載學員名單</span>
+      <!-- 後台頂部專業橫幅與功能頁籤導覽列 -->
+      <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-5 sm:p-6">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-5 border-b border-slate-100">
+          <div class="flex items-center gap-3.5">
+            <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-700 to-indigo-800 text-white flex items-center justify-center text-2xl shadow-md">
+              ⚙️
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <h2 class="text-lg sm:text-xl font-black text-slate-900 tracking-tight">系統管理與教學數據中樞</h2>
+                <span class="text-[11px] px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 font-extrabold">Admin Console</span>
+              </div>
+              <p class="text-xs text-slate-500 mt-0.5">佛光永續學院 × 佛光大學 ｜ 即時掌握學員連動分析成效、練習單批閱、權限名冊與遊戲參數配置</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2 self-end md:self-center">
+            <button type="button" onclick="loadAdminDashboard()" class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer">
+              <span>🔄</span> 重新整理數據
+            </button>
+          </div>
         </div>
-        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-          <span class="text-xs font-bold text-slate-500 block">累計提交練習單</span>
-          <span id="adminStatWorksheets" class="text-2xl font-black text-emerald-600 font-mono">0</span>
-          <span class="text-[11px] text-emerald-600 block mt-1">含草稿與正式送出</span>
-        </div>
-        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-          <span class="text-xs font-bold text-slate-500 block">地球保衛戰挑戰人次</span>
-          <span id="adminStatGames" class="text-2xl font-black text-indigo-600 font-mono">0</span>
-          <span class="text-[11px] text-indigo-500 block mt-1">打地鼠戰績紀錄</span>
-        </div>
-        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-          <span class="text-xs font-bold text-slate-500 block">全校英雄最高分</span>
-          <span id="adminStatMaxScore" class="text-2xl font-black text-amber-500 font-mono">0</span>
-          <span class="text-[11px] text-amber-600 block mt-1">當前王者紀錄</span>
-        </div>
-      </div>
 
-      <!-- Charts -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
-          <h4 class="font-extrabold text-sm text-slate-800 mb-2">📊 17 項 SDGs 被選取次數分佈 (雷達圖)</h4>
-          <p class="text-xs text-slate-400 mb-4">掌握學員最常連動之核心目標熱區</p>
-          <div class="h-64 flex items-center justify-center">
-            <canvas id="adminRadarChart"></canvas>
-          </div>
-        </div>
-        <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
-          <h4 class="font-extrabold text-sm text-slate-800 mb-2">🎯 中心行動選擇比例 (甜甜圈圖)</h4>
-          <p class="text-xs text-slate-400 mb-4">A淨灘 vs B二手衣 vs C太陽能 vs D自選活動</p>
-          <div class="h-64 flex items-center justify-center">
-            <canvas id="adminPieChart"></canvas>
-          </div>
-        </div>
-      </div>
-
-      <!-- Worksheets Review Table -->
-      <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-        <div class="p-5 border-b border-slate-100 flex justify-between items-center">
-          <div>
-            <h3 class="font-black text-base text-slate-900">學員練習單審核與評分管理</h3>
-            <p class="text-xs text-slate-500">點選 [詳情] 檢視完整內容並可匯出 Word 檔；評分完成自動發信通知該學員信箱</p>
-          </div>
-          <button onclick="exportWorksheetsCSV()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition-colors">
-            📥 批次匯出 CSV
+        <!-- 5 大專業功能子頁籤導覽 -->
+        <div class="flex flex-wrap items-center gap-2 pt-4" id="adminSubTabsNav">
+          <button type="button" data-admin-subtab="dashboard" onclick="switchAdminSubTab('dashboard')"
+            class="admin-subtab-btn px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center gap-2 bg-purple-700 text-white shadow-sm cursor-pointer">
+            <span>📊</span> 儀錶板
+          </button>
+          <button type="button" data-admin-subtab="worksheets" onclick="switchAdminSubTab('worksheets')"
+            class="admin-subtab-btn px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer">
+            <span>📝</span> 學員練習單審核與評分管理
+          </button>
+          <button type="button" data-admin-subtab="staff" onclick="switchAdminSubTab('staff')"
+            class="admin-subtab-btn px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer">
+            <span>🛡️</span> 管理帳號與權限名單維護
+          </button>
+          <button type="button" data-admin-subtab="students" onclick="switchAdminSubTab('students')"
+            class="admin-subtab-btn px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer">
+            <span>🎓</span> 學員帳號與權限名冊維護
+          </button>
+          <button type="button" data-admin-subtab="gamesettings" onclick="switchAdminSubTab('gamesettings')"
+            class="admin-subtab-btn px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer">
+            <span>🎮</span> 遊戲參數與計分管理
           </button>
         </div>
-        <div class="overflow-x-auto">
-          <table class="w-full text-left text-xs">
-            <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold">
-              <tr>
-                <th class="p-3">編號</th>
-                <th class="p-3">學員姓名</th>
-                <th class="p-3">分會單位</th>
-                <th class="p-3">中心行動</th>
-                <th class="p-3">狀態</th>
-                <th class="p-3">成績</th>
-                <th class="p-3 text-right">操作</th>
-              </tr>
-            </thead>
-            <tbody id="adminWorksheetsTableBody"></tbody>
-          </table>
+      </div>
+
+      <!-- =================================================================== -->
+      <!-- 子頁籤 1：[儀錶板] -->
+      <!-- =================================================================== -->
+      <div id="adminSubPane_dashboard" class="admin-subpane space-y-6">
+        <!-- Stats Summary Cards -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+            <div class="flex justify-between items-start">
+              <span class="text-xs font-bold text-slate-500 block">全體註冊學員</span>
+              <span class="w-8 h-8 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center text-sm">👥</span>
+            </div>
+            <span id="adminStatStudents" class="text-3xl font-black text-slate-900 font-mono mt-2 block">0</span>
+            <span class="text-[11px] text-slate-400 block mt-1">427 位預載學員名單</span>
+          </div>
+          <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+            <div class="flex justify-between items-start">
+              <span class="text-xs font-bold text-slate-500 block">累計提交練習單</span>
+              <span class="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-sm">📑</span>
+            </div>
+            <span id="adminStatWorksheets" class="text-3xl font-black text-emerald-600 font-mono mt-2 block">0</span>
+            <span class="text-[11px] text-emerald-600 block mt-1">含草稿與正式送出</span>
+          </div>
+          <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+            <div class="flex justify-between items-start">
+              <span class="text-xs font-bold text-slate-500 block">地球保衛戰挑戰人次</span>
+              <span class="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-sm">🥊</span>
+            </div>
+            <span id="adminStatGames" class="text-3xl font-black text-indigo-600 font-mono mt-2 block">0</span>
+            <span class="text-[11px] text-indigo-500 block mt-1">打地鼠戰績紀錄</span>
+          </div>
+          <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+            <div class="flex justify-between items-start">
+              <span class="text-xs font-bold text-slate-500 block">全校英雄最高分</span>
+              <span class="w-8 h-8 rounded-xl bg-amber-50 text-amber-500 flex items-center justify-center text-sm">👑</span>
+            </div>
+            <span id="adminStatMaxScore" class="text-3xl font-black text-amber-500 font-mono mt-2 block">0</span>
+            <span class="text-[11px] text-amber-600 block mt-1">當前王者紀錄</span>
+          </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+            <div class="flex items-center justify-between mb-2">
+              <h4 class="font-extrabold text-sm sm:text-base text-slate-800">📊 17 項 SDGs 被選取次數分佈 (雷達圖)</h4>
+              <span class="text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold">連動熱區分析</span>
+            </div>
+            <p class="text-xs text-slate-400 mb-4">掌握學員最常連動之核心目標熱區</p>
+            <div class="h-72 flex items-center justify-center">
+              <canvas id="adminRadarChart"></canvas>
+            </div>
+          </div>
+          <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+            <div class="flex items-center justify-between mb-2">
+              <h4 class="font-extrabold text-sm sm:text-base text-slate-800">🎯 中心行動選擇比例 (甜甜圈圖)</h4>
+              <span class="text-[11px] px-2.5 py-0.5 rounded-full bg-sky-50 text-sky-700 font-bold">行動主題佔比</span>
+            </div>
+            <p class="text-xs text-slate-400 mb-4">A淨灘 vs B二手衣 vs C太陽能 vs D自選活動</p>
+            <div class="h-72 flex items-center justify-center">
+              <canvas id="adminPieChart"></canvas>
+            </div>
+          </div>
         </div>
       </div>
 
-      <!-- Students Directory Table (6 Columns) -->
-      <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-        <div class="p-5 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-          <div>
-            <h3 class="font-black text-base text-slate-900">學員帳號與權限名冊維護 (完整 6 欄位架構)</h3>
-            <p class="text-xs text-slate-500">支援【新增】、【修改】、【刪除】、【瀏覽】、【匯入】與【匯出】學員名單</p>
-          </div>
-          <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-            <input type="text" id="adminStudentSearch" oninput="loadAdminStudents(this.value)" class="text-xs border border-slate-300 rounded-xl px-3 py-1.5 w-40" placeholder="搜尋姓名/Email/分會">
-            <button type="button" onclick="openAddStudentModal()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm">
-              ＋ 新增學員
-            </button>
-            <button type="button" onclick="openBatchImportModal()" class="px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-bold shadow-sm">
-              📥 匯入名單
-            </button>
-            <button type="button" onclick="exportStudentsCSV()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold shadow-sm">
-              📤 匯出名單 (CSV)
-            </button>
-            <button type="button" id="batchDeleteBtn" onclick="executeBatchDeleteStudents()" disabled class="px-3 py-1.5 bg-red-600 hover:bg-red-700 disabled:bg-slate-200 text-white rounded-xl text-xs font-bold">
-              🗑️ 刪除選取 (<span id="selectedStudentCount">0</span>)
-            </button>
-          </div>
-        </div>
-        <div class="overflow-x-auto">
-          <table class="w-full text-left text-xs">
-            <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold">
-              <tr>
-                <th class="p-3 text-center w-8">
-                  <input type="checkbox" id="masterStudentCb" onclick="toggleSelectAllStudents(this)">
-                </th>
-                <th class="p-3">ID</th>
-                <th class="p-3">學員姓名</th>
-                <th class="p-3">Email（帳號）</th>
-                <th class="p-3">Email（補課平台）</th>
-                <th class="p-3">聯絡電話（密碼）</th>
-                <th class="p-3">分會編號</th>
-                <th class="p-3">所屬分會／童軍團（完整名稱）</th>
-                <th class="p-3 text-right">操作</th>
-              </tr>
-            </thead>
-            <tbody id="adminStudentsTableBody"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Earth Defense Game Settings & Parameters (Admin Management) -->
-      <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-        <div class="p-5 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-          <div>
+      <!-- =================================================================== -->
+      <!-- 子頁籤 2：[學員練習單審核與評分管理] -->
+      <!-- =================================================================== -->
+      <div id="adminSubPane_worksheets" class="admin-subpane hidden space-y-6">
+        <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="p-5 sm:p-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50/50">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="text-lg">📝</span>
+                <h3 class="font-black text-base sm:text-lg text-slate-900">學員練習單審核與評分管理</h3>
+              </div>
+              <p class="text-xs text-slate-500 mt-1">點選 [詳情] 檢視完整內容並可匯出 Word 檔；評分完成自動發信通知該學員信箱</p>
+            </div>
             <div class="flex items-center gap-2">
-              <span class="text-xl">🥊</span>
-              <h3 class="font-black text-base text-slate-900">《SDGs 地球保衛戰》遊戲參數與計分管理</h3>
-              <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-extrabold">即時生效</span>
+              <button onclick="loadAdminWorksheets()" class="px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer">
+                🔄 重新載入列表
+              </button>
+              <button onclick="exportWorksheetsCSV()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition-colors cursor-pointer">
+                📥 批次匯出 CSV
+              </button>
             </div>
-            <p class="text-xs text-slate-500 mt-1">自訂遊戲倒數總秒數、卡片閃過節奏（預設 1 秒閃過一張卡）與各類目標得分/扣分規則</p>
           </div>
-          <div class="flex items-center gap-2">
-            <button type="button" onclick="resetAdminGameSettingsToDefault()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors">
-              🔄 載入預設值
-            </button>
-            <button type="button" onclick="saveAdminGameSettings()" class="px-4 py-1.5 bg-purple-700 hover:bg-purple-800 text-white rounded-xl text-xs font-bold shadow-md transition-colors flex items-center gap-1.5">
-              <span>💾</span> 儲存遊戲設定
-            </button>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-100/80 border-b border-slate-200 text-slate-600 font-extrabold uppercase tracking-wider">
+                <tr>
+                  <th class="p-3.5">編號</th>
+                  <th class="p-3.5">學員姓名</th>
+                  <th class="p-3.5">分會單位</th>
+                  <th class="p-3.5">中心行動</th>
+                  <th class="p-3.5">狀態</th>
+                  <th class="p-3.5">成績</th>
+                  <th class="p-3.5 text-right">操作</th>
+                </tr>
+              </thead>
+              <tbody id="adminWorksheetsTableBody"></tbody>
+            </table>
           </div>
         </div>
+      </div>
 
-        <div class="p-6">
-          <form id="adminGameSettingsForm" onsubmit="event.preventDefault(); saveAdminGameSettings();" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            <!-- 遊戲總秒數 -->
-            <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-1.5">
-              <div class="flex justify-between items-center">
-                <label class="text-xs font-black text-slate-800 flex items-center gap-1">
-                  <span>⏱️</span> 遊戲倒數總秒數
-                </label>
-                <span class="text-[11px] font-mono font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">秒</span>
+      <!-- =================================================================== -->
+      <!-- 子頁籤 3：[管理帳號與權限名單維護] -->
+      <!-- =================================================================== -->
+      <div id="adminSubPane_staff" class="admin-subpane hidden space-y-6">
+        <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="p-5 sm:p-6 border-b border-slate-100 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-purple-50/30">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="text-lg">🛡️</span>
+                <h3 class="font-black text-base sm:text-lg text-slate-900">管理帳號與權限名單維護</h3>
+                <span class="text-[11px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 font-bold">系統管理員 & 講師權限</span>
               </div>
-              <input type="number" id="setting_game_duration" min="15" max="180" step="5" required class="w-full text-base font-black font-mono text-slate-800 border border-slate-300 rounded-xl px-3 py-2 bg-white focus:ring-purple-500">
-              <p class="text-[11px] text-slate-500">推薦值：45 秒（亦可設 60 秒或 90 秒，讓學員更充裕體驗）</p>
+              <p class="text-xs text-slate-500 mt-1">集中維護「系統管理員 (戴慶華 博士)」及授課講師／助教之管理帳號，支援【新增】、【修改】、【刪除】、【瀏覽】、【匯入】與【匯出】</p>
             </div>
+            <div class="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+              <input type="text" id="adminStaffSearch" oninput="loadAdminStaff(this.value)" class="text-xs border border-slate-300 rounded-xl px-3.5 py-2 w-44 bg-white focus:ring-purple-500" placeholder="搜尋管理員姓名/帳號/單位">
+              <button type="button" onclick="openAddStaffModal()" class="px-3.5 py-2 bg-purple-700 hover:bg-purple-800 text-white rounded-xl text-xs font-bold shadow-sm cursor-pointer">
+                ＋ 新增管理帳號
+              </button>
+              <button type="button" onclick="openBatchImportStaffModal()" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-sm cursor-pointer">
+                📥 匯入管理名單
+              </button>
+              <button type="button" onclick="exportStaffCSV()" class="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold shadow-sm cursor-pointer">
+                📤 匯出管理名單 (CSV)
+              </button>
+              <button type="button" id="batchDeleteStaffBtn" onclick="executeBatchDeleteStaff()" disabled class="px-3.5 py-2 bg-red-600 hover:bg-red-700 disabled:bg-slate-200 text-white rounded-xl text-xs font-bold cursor-pointer">
+                🗑️ 刪除選取 (<span id="selectedStaffCount">0</span>)
+              </button>
+            </div>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-100/80 border-b border-slate-200 text-slate-600 font-extrabold">
+                <tr>
+                  <th class="p-3.5 text-center w-8">
+                    <input type="checkbox" id="masterStaffCb" onclick="toggleSelectAllStaff(this)">
+                  </th>
+                  <th class="p-3.5">ID</th>
+                  <th class="p-3.5">管理員／講師姓名</th>
+                  <th class="p-3.5">登入帳號 / Email</th>
+                  <th class="p-3.5">備用 Email</th>
+                  <th class="p-3.5">聯絡電話（預設密碼）</th>
+                  <th class="p-3.5">單位編號</th>
+                  <th class="p-3.5">所屬學院／單位名稱</th>
+                  <th class="p-3.5">權限角色</th>
+                  <th class="p-3.5 text-right">操作</th>
+                </tr>
+              </thead>
+              <tbody id="adminStaffTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
 
-            <!-- 卡片閃過速度 (毫秒) -->
-            <div class="bg-emerald-50/50 p-4 rounded-2xl border border-emerald-200/80 space-y-1.5">
-              <div class="flex justify-between items-center">
-                <label class="text-xs font-black text-emerald-900 flex items-center gap-1">
-                  <span>⚡</span> 卡片閃過時間 / 節奏
-                </label>
-                <span class="text-[11px] font-mono font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">毫秒 (ms)</span>
+      <!-- =================================================================== -->
+      <!-- 子頁籤 4：[學員帳號與權限名冊維護] -->
+      <!-- =================================================================== -->
+      <div id="adminSubPane_students" class="admin-subpane hidden space-y-6">
+        <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="p-5 sm:p-6 border-b border-slate-100 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-emerald-50/30">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="text-lg">🎓</span>
+                <h3 class="font-black text-base sm:text-lg text-slate-900">學員帳號與權限名冊維護 (完整 6 欄位架構)</h3>
+                <span class="text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold">學員專屬名冊</span>
               </div>
-              <input type="number" id="setting_card_speed_ms" min="500" max="3000" step="100" required class="w-full text-base font-black font-mono text-slate-800 border border-emerald-300 rounded-xl px-3 py-2 bg-white focus:ring-emerald-500">
-              <p class="text-[11px] text-emerald-700 font-semibold">1000 ms = 1 秒鐘閃過一張卡！節奏穩定好辨識</p>
+              <p class="text-xs text-slate-500 mt-1">支援【新增】、【修改】、【刪除】、【瀏覽】、【匯入】與【匯出】學員名單（管理員帳號已獨立至管理名單分頁）</p>
             </div>
+            <div class="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+              <input type="text" id="adminStudentSearch" oninput="loadAdminStudents(this.value)" class="text-xs border border-slate-300 rounded-xl px-3.5 py-2 w-44 bg-white focus:ring-emerald-500" placeholder="搜尋姓名/Email/分會">
+              <button type="button" onclick="openAddStudentModal()" class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm cursor-pointer">
+                ＋ 新增學員
+              </button>
+              <button type="button" onclick="openBatchImportModal()" class="px-3.5 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-bold shadow-sm cursor-pointer">
+                📥 匯入名單
+              </button>
+              <button type="button" onclick="exportStudentsCSV()" class="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold shadow-sm cursor-pointer">
+                📤 匯出名單 (CSV)
+              </button>
+              <button type="button" id="batchDeleteBtn" onclick="executeBatchDeleteStudents()" disabled class="px-3.5 py-2 bg-red-600 hover:bg-red-700 disabled:bg-slate-200 text-white rounded-xl text-xs font-bold cursor-pointer">
+                🗑️ 刪除選取 (<span id="selectedStudentCount">0</span>)
+              </button>
+            </div>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-100/80 border-b border-slate-200 text-slate-600 font-extrabold">
+                <tr>
+                  <th class="p-3.5 text-center w-8">
+                    <input type="checkbox" id="masterStudentCb" onclick="toggleSelectAllStudents(this)">
+                  </th>
+                  <th class="p-3.5">ID</th>
+                  <th class="p-3.5">學員姓名</th>
+                  <th class="p-3.5">Email（帳號）</th>
+                  <th class="p-3.5">Email（補課平台）</th>
+                  <th class="p-3.5">聯絡電話（密碼）</th>
+                  <th class="p-3.5">分會編號</th>
+                  <th class="p-3.5">所屬分會／童軍團（完整名稱）</th>
+                  <th class="p-3.5 text-right">操作</th>
+                </tr>
+              </thead>
+              <tbody id="adminStudentsTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
 
-            <!-- 初始愛心數 -->
-            <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-1.5">
-              <div class="flex justify-between items-center">
-                <label class="text-xs font-black text-slate-800 flex items-center gap-1">
-                  <span>❤️</span> 起始生命愛心數
-                </label>
-                <span class="text-[11px] font-mono font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded">顆心</span>
+      <!-- =================================================================== -->
+      <!-- 子頁籤 5：[遊戲參數與計分管理] -->
+      <!-- =================================================================== -->
+      <div id="adminSubPane_gamesettings" class="admin-subpane hidden space-y-6">
+        <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="p-5 sm:p-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-indigo-50/30">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="text-xl">🥊</span>
+                <h3 class="font-black text-base sm:text-lg text-slate-900">《SDGs 地球保衛戰》遊戲參數與計分管理</h3>
+                <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-extrabold">即時生效</span>
               </div>
-              <input type="number" id="setting_initial_lives" min="1" max="10" step="1" required class="w-full text-base font-black font-mono text-slate-800 border border-slate-300 rounded-xl px-3 py-2 bg-white focus:ring-purple-500">
-              <p class="text-[11px] text-slate-500">推薦值：3 顆心（誤打守護精靈扣 1 顆心，扣完提早結束）</p>
+              <p class="text-xs text-slate-500 mt-1">自訂遊戲倒數總秒數、卡片閃過節奏（預設 1 秒閃過一張卡）與各類目標得分/扣分規則</p>
             </div>
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="resetAdminGameSettingsToDefault()" class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer">
+                🔄 載入預設值
+              </button>
+              <button type="button" onclick="saveAdminGameSettings()" class="px-4 py-2 bg-purple-700 hover:bg-purple-800 text-white rounded-xl text-xs font-bold shadow-md transition-colors flex items-center gap-1.5 cursor-pointer">
+                <span>💾</span> 儲存遊戲設定
+              </button>
+            </div>
+          </div>
 
-            <!-- 危機怪獸得分 -->
-            <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-1.5">
-              <div class="flex justify-between items-center">
-                <label class="text-xs font-black text-slate-800 flex items-center gap-1">
-                  <span>🎯</span> 擊退危機怪獸得分 (基礎)
-                </label>
-                <span class="text-[11px] font-mono font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">＋分</span>
+          <div class="p-6">
+            <form id="adminGameSettingsForm" onsubmit="event.preventDefault(); saveAdminGameSettings();" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              <!-- 遊戲總秒數 -->
+              <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-1.5">
+                <div class="flex justify-between items-center">
+                  <label class="text-xs font-black text-slate-800 flex items-center gap-1">
+                    <span>⏱️</span> 遊戲倒數總秒數
+                  </label>
+                  <span class="text-[11px] font-mono font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">秒</span>
+                </div>
+                <input type="number" id="setting_game_duration" min="15" max="180" step="5" required class="w-full text-base font-black font-mono text-slate-800 border border-slate-300 rounded-xl px-3 py-2 bg-white focus:ring-purple-500">
+                <p class="text-[11px] text-slate-500">推薦值：45 秒（亦可設 60 秒或 90 秒，讓學員更充裕體驗）</p>
               </div>
-              <input type="number" id="setting_monster_pts" min="10" max="1000" step="10" required class="w-full text-base font-black font-mono text-slate-800 border border-slate-300 rounded-xl px-3 py-2 bg-white focus:ring-purple-500">
-              <p class="text-[11px] text-slate-500">推薦值：100 分（碳排煙囪怪、塑膠怪、濫伐推土怪等）</p>
-            </div>
 
-            <!-- 守護精靈扣分 -->
-            <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-1.5">
-              <div class="flex justify-between items-center">
-                <label class="text-xs font-black text-red-800 flex items-center gap-1">
-                  <span>🛡️</span> 誤打守護精靈扣分
-                </label>
-                <span class="text-[11px] font-mono font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded">－分</span>
+              <!-- 卡片閃過速度 (毫秒) -->
+              <div class="bg-emerald-50/50 p-4 rounded-2xl border border-emerald-200/80 space-y-1.5">
+                <div class="flex justify-between items-center">
+                  <label class="text-xs font-black text-emerald-900 flex items-center gap-1">
+                    <span>⚡</span> 卡片閃過時間 / 節奏
+                  </label>
+                  <span class="text-[11px] font-mono font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">毫秒 (ms)</span>
+                </div>
+                <input type="number" id="setting_card_speed_ms" min="500" max="3000" step="100" required class="w-full text-base font-black font-mono text-slate-800 border border-emerald-300 rounded-xl px-3 py-2 bg-white focus:ring-emerald-500">
+                <p class="text-[11px] text-emerald-700 font-semibold">1000 ms = 1 秒鐘閃過一張卡！節奏穩定好辨識</p>
               </div>
-              <input type="number" id="setting_guardian_penalty" min="0" max="1000" step="10" required class="w-full text-base font-black font-mono text-slate-800 border border-slate-300 rounded-xl px-3 py-2 bg-white focus:ring-purple-500">
-              <p class="text-[11px] text-slate-500">推薦值：150 分（海龜寶寶、原生小樹苗、太陽能小萌陽等）</p>
-            </div>
 
-            <!-- 彩虹金星得分 -->
-            <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-1.5">
-              <div class="flex justify-between items-center">
-                <label class="text-xs font-black text-pink-800 flex items-center gap-1">
-                  <span>⭐</span> 彩虹永續金星 (FEVER)
-                </label>
-                <span class="text-[11px] font-mono font-bold text-pink-600 bg-pink-50 px-1.5 py-0.5 rounded">＋分</span>
+              <!-- 初始愛心數 -->
+              <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-1.5">
+                <div class="flex justify-between items-center">
+                  <label class="text-xs font-black text-slate-800 flex items-center gap-1">
+                    <span>❤️</span> 起始生命愛心數
+                  </label>
+                  <span class="text-[11px] font-mono font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded">顆心</span>
+                </div>
+                <input type="number" id="setting_initial_lives" min="1" max="10" step="1" required class="w-full text-base font-black font-mono text-slate-800 border border-slate-300 rounded-xl px-3 py-2 bg-white focus:ring-purple-500">
+                <p class="text-[11px] text-slate-500">推薦值：3 顆心（誤打守護精靈扣 1 顆心，扣完提早結束）</p>
               </div>
-              <input type="number" id="setting_bonus_pts" min="50" max="2000" step="50" required class="w-full text-base font-black font-mono text-slate-800 border border-slate-300 rounded-xl px-3 py-2 bg-white focus:ring-purple-500">
-              <p class="text-[11px] text-slate-500">推薦值：500 分（敲中觸發 4 秒 FEVER 全場淨化超快感）</p>
-            </div>
-          </form>
+
+              <!-- 危機怪獸得分 -->
+              <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-1.5">
+                <div class="flex justify-between items-center">
+                  <label class="text-xs font-black text-slate-800 flex items-center gap-1">
+                    <span>🎯</span> 擊退危機怪獸得分 (基礎)
+                  </label>
+                  <span class="text-[11px] font-mono font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">＋分</span>
+                </div>
+                <input type="number" id="setting_monster_pts" min="10" max="1000" step="10" required class="w-full text-base font-black font-mono text-slate-800 border border-slate-300 rounded-xl px-3 py-2 bg-white focus:ring-purple-500">
+                <p class="text-[11px] text-slate-500">推薦值：100 分（碳排煙囪怪、塑膠怪、濫伐推土怪等）</p>
+              </div>
+
+              <!-- 守護精靈扣分 -->
+              <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-1.5">
+                <div class="flex justify-between items-center">
+                  <label class="text-xs font-black text-red-800 flex items-center gap-1">
+                    <span>🛡️</span> 誤打守護精靈扣分
+                  </label>
+                  <span class="text-[11px] font-mono font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded">－分</span>
+                </div>
+                <input type="number" id="setting_guardian_penalty" min="0" max="1000" step="10" required class="w-full text-base font-black font-mono text-slate-800 border border-slate-300 rounded-xl px-3 py-2 bg-white focus:ring-purple-500">
+                <p class="text-[11px] text-slate-500">推薦值：150 分（海龜寶寶、原生小樹苗、太陽能小萌陽等）</p>
+              </div>
+
+              <!-- 彩虹金星得分 -->
+              <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-1.5">
+                <div class="flex justify-between items-center">
+                  <label class="text-xs font-black text-pink-800 flex items-center gap-1">
+                    <span>⭐</span> 彩虹永續金星 (FEVER)
+                  </label>
+                  <span class="text-[11px] font-mono font-bold text-pink-600 bg-pink-50 px-1.5 py-0.5 rounded">＋分</span>
+                </div>
+                <input type="number" id="setting_bonus_pts" min="50" max="2000" step="50" required class="w-full text-base font-black font-mono text-slate-800 border border-slate-300 rounded-xl px-3 py-2 bg-white focus:ring-purple-500">
+                <p class="text-[11px] text-slate-500">推薦值：500 分（敲中觸發 4 秒 FEVER 全場淨化超快感）</p>
+              </div>
+            </form>
+          </div>
         </div>
       </div>
 
@@ -885,6 +1033,14 @@
         <label class="block text-[11px] font-bold text-slate-700 mb-0.5">重設新密碼（若不變更請留空）</label>
         <input type="password" id="editStudentPassword" class="w-full text-xs border border-slate-300 rounded-xl p-2" placeholder="輸入新密碼">
       </div>
+      <div id="editUserRoleBox">
+        <label class="block text-[11px] font-bold text-slate-700 mb-0.5">帳號權限角色</label>
+        <select id="editStudentRole" class="w-full text-xs border border-slate-300 rounded-xl p-2 bg-white">
+          <option value="student">🎓 學員 (student)</option>
+          <option value="teacher">👩‍🏫 授課講師／助教 (teacher)</option>
+          <option value="admin">🛡️ 系統管理員 (admin)</option>
+        </select>
+      </div>
       <div class="flex justify-end gap-2 pt-2">
         <button onclick="document.getElementById('editStudentModal').classList.add('hidden')" class="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-bold rounded-xl">取消</button>
         <button onclick="saveStudentEdit()" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl">儲存變更</button>
@@ -920,6 +1076,85 @@
     </div>
   </div>
 
+  <!-- Add Staff Modal -->
+  <div id="addStaffModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-purple-100 space-y-3">
+      <div class="flex justify-between items-center">
+        <div class="flex items-center gap-2">
+          <span class="text-lg">🛡️</span>
+          <h3 class="font-extrabold text-base text-slate-900">新增管理員／講師帳號</h3>
+        </div>
+        <button onclick="document.getElementById('addStaffModal').classList.add('hidden')" class="text-slate-400 hover:text-slate-600 text-lg">✕</button>
+      </div>
+      <div>
+        <label class="block text-[11px] font-bold text-slate-700 mb-0.5">管理員／講師姓名 *</label>
+        <input type="text" id="addStaffName" required class="w-full text-xs border border-slate-300 rounded-xl p-2" placeholder="例如：戴慶華 博士">
+      </div>
+      <div>
+        <label class="block text-[11px] font-bold text-slate-700 mb-0.5">登入帳號 / Email *</label>
+        <input type="text" id="addStaffEmail" required class="w-full text-xs border border-slate-300 rounded-xl p-2" placeholder="例如：admin2 或 teacher@fgu.edu.tw">
+      </div>
+      <div>
+        <label class="block text-[11px] font-bold text-slate-700 mb-0.5">備用 Email</label>
+        <input type="email" id="addStaffEmailBackup" class="w-full text-xs border border-slate-300 rounded-xl p-2" placeholder="選填">
+      </div>
+      <div>
+        <label class="block text-[11px] font-bold text-slate-700 mb-0.5">聯絡電話（預設密碼）*</label>
+        <input type="text" id="addStaffPhone" required class="w-full text-xs border border-slate-300 rounded-xl p-2" placeholder="0912345678">
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label class="block text-[11px] font-bold text-slate-700 mb-0.5">單位編號</label>
+          <input type="text" id="addStaffUnitCode" class="w-full text-xs border border-slate-300 rounded-xl p-2" placeholder="FGU">
+        </div>
+        <div>
+          <label class="block text-[11px] font-bold text-slate-700 mb-0.5">所屬學院／單位名稱</label>
+          <input type="text" id="addStaffUnitName" class="w-full text-xs border border-slate-300 rounded-xl p-2" placeholder="佛光永續學院">
+        </div>
+      </div>
+      <div>
+        <label class="block text-[11px] font-bold text-slate-700 mb-0.5">權限角色</label>
+        <select id="addStaffRole" class="w-full text-xs border border-slate-300 rounded-xl p-2 bg-white">
+          <option value="admin">🛡️ 系統管理員 (admin)</option>
+          <option value="teacher">👩‍🏫 授課講師／助教 (teacher)</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-[11px] font-bold text-slate-700 mb-0.5">自訂登入密碼（若留空預設為電話）</label>
+        <input type="password" id="addStaffPassword" class="w-full text-xs border border-slate-300 rounded-xl p-2" placeholder="留空即以電話為密碼">
+      </div>
+      <div class="flex justify-end gap-2 pt-2">
+        <button onclick="document.getElementById('addStaffModal').classList.add('hidden')" class="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-bold rounded-xl">取消</button>
+        <button onclick="saveNewStaff()" class="px-5 py-2 bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold rounded-xl shadow-md">確認新增</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Batch Import Staff Modal -->
+  <div id="batchImportStaffModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+    <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-purple-100 space-y-4">
+      <div class="flex justify-between items-center">
+        <h3 class="font-extrabold text-base text-slate-900">📥 批次匯入管理員／講師名單</h3>
+        <button onclick="document.getElementById('batchImportStaffModal').classList.add('hidden')" class="text-slate-400 hover:text-slate-600 text-lg">✕</button>
+      </div>
+      <p class="text-xs text-slate-500">
+        標準 6 欄位格式：<code class="bg-slate-100 text-slate-700 px-1 py-0.5 rounded font-mono">姓名, 登入帳號/Email, 備用Email, 聯絡電話（密碼）, 單位編號, 所屬單位名稱</code>
+      </p>
+      <div>
+        <label class="block text-xs font-bold text-slate-700 mb-1">方式一：上傳 CSV 檔案</label>
+        <input type="file" id="importStaffFileInput" accept=".csv,.txt" class="w-full text-xs border border-slate-300 rounded-xl p-2 bg-slate-50">
+      </div>
+      <div>
+        <label class="block text-xs font-bold text-slate-700 mb-1">方式二：直接貼上管理名單內容</label>
+        <textarea id="importStaffTextarea" rows="4" class="w-full text-xs border border-slate-300 rounded-xl p-2.5 font-mono" placeholder="張講師, teacher01@fgu.edu.tw, backup@fgu.edu.tw, 0912345678, FGU, 佛光永續學院"></textarea>
+      </div>
+      <div class="flex justify-end gap-2 pt-2">
+        <button onclick="document.getElementById('batchImportStaffModal').classList.add('hidden')" class="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-bold rounded-xl">取消</button>
+        <button onclick="executeBatchImportStaff()" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md">確認批次匯入</button>
+      </div>
+    </div>
+  </div>
+
   <!-- My Worksheets Modal -->
   <div id="myWorksheetsModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
     <div class="bg-white rounded-3xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl border border-slate-100 overflow-hidden">
@@ -942,6 +1177,6 @@
     </div>
   </footer>
 
-  <script src="/static/js/app.js?v=20261014_v31"></script>
+  <script src="/static/js/app.js?v=20261015_v35"></script>
 </body>
 </html>
