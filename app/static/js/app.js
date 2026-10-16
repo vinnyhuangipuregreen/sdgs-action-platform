@@ -41,6 +41,7 @@ const state = {
   selectedStudentIds: new Set(),
   selectedStaffIds: new Set(),
   activeAdminSubTab: "dashboard",
+  centerActions: [],
   lastAdminStats: null
 };
 
@@ -106,6 +107,7 @@ function updateDefenseRuleTexts() {
 // ==============================================================================
 document.addEventListener("DOMContentLoaded", async () => {
   initUIEvents();
+  await loadCenterActions();
   await checkAuth();
   await loadSDGsData();
   await loadGameSettings();
@@ -133,6 +135,7 @@ function initUIEvents() {
   if (logoutBtn) logoutBtn.addEventListener("click", handleLogout);
 
   initWorksheetEvents();
+  initCategoryAdminEvents();
 
   const sdgSearchInput = document.getElementById("sdgSearchInput");
   if (sdgSearchInput) sdgSearchInput.addEventListener("input", filterSDGsDisplay);
@@ -603,9 +606,28 @@ window.setTierFilter = function(tier, btn) {
 // ==============================================================================
 // 4. Worksheet Module (CRUD)
 // ==============================================================================
-function initCenterActionPicker() {
+async function loadCenterActions() {
+  const selected = document.querySelector("input[name='center_action']:checked");
+  const category = selected?.value || "";
+  const name = selected?.dataset.legacyCustom === "true" ? document.getElementById("ws_centerCustom").value : selected?.dataset.customValue || "";
+  try {
+    const response = await fetch(`${API_BASE}/center-actions`, { cache: "no-store" });
+    if (!response.ok) throw new Error("無法載入活動清單，請重新整理頁面");
+    state.centerActions = await response.json();
+    renderCenterActionPicker();
+    restoreCenterAction(category, name);
+    return true;
+  } catch (error) {
+    document.getElementById("centerActionResultCount").textContent = "活動清單載入失敗，請重新整理頁面";
+    showToast("活動清單載入失敗，請重新整理頁面", "error");
+    return false;
+  }
+}
+
+function renderCenterActionPicker() {
   const options = document.getElementById("centerActionOptions");
-  CENTER_ACTION_CATALOG.forEach(action => {
+  options.replaceChildren();
+  state.centerActions.forEach(action => {
     const label = document.createElement("label");
     label.className = "action-option";
     const radio = document.createElement("input");
@@ -613,6 +635,7 @@ function initCenterActionPicker() {
     radio.name = "center_action";
     radio.value = action.category;
     radio.dataset.action = action.name;
+    radio.dataset.customValue = action.name;
     const text = document.createElement("span");
     const category = document.createElement("span");
     category.className = "action-category-label";
@@ -625,37 +648,43 @@ function initCenterActionPicker() {
     options.appendChild(label);
   });
   const categories = document.getElementById("centerActionCategories");
-  ["全部", ...new Set(CENTER_ACTION_CATALOG.map(a => a.category))].forEach(category => {
+  categories.replaceChildren();
+  ["", ...new Set(state.centerActions.map(a => a.category))].forEach(category => {
     const button = document.createElement("button");
     button.type = "button";
     button.dataset.category = category;
-    button.setAttribute("aria-pressed", String(category === "全部"));
-    const count = CENTER_ACTION_CATALOG.filter(a => category === "全部" || a.category === category).length;
-    button.textContent = `${category} ${count}`;
+    button.setAttribute("aria-pressed", String(category === ""));
+    const count = state.centerActions.filter(a => !category || a.category === category).length;
+    button.textContent = `${category || "全部"} ${count}`;
     button.addEventListener("click", () => {
       categories.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b === button)));
       filterCenterActions();
     });
     categories.appendChild(button);
   });
-  document.getElementById("centerActionSearch").addEventListener("input", filterCenterActions);
-  document.getElementById("clearCenterActionFilters").addEventListener("click", resetCenterActionFilters);
-  options.addEventListener("change", () => {
-    const radio = options.querySelector("input:checked");
-    document.getElementById("centerCustomBox").classList.toggle("hidden", radio?.value !== "D");
-    updateChatTextSnippet();
-  });
   filterCenterActions();
 }
 
+function initCenterActionPicker() {
+  document.getElementById("centerActionSearch").addEventListener("input", filterCenterActions);
+  document.getElementById("clearCenterActionFilters").addEventListener("click", resetCenterActionFilters);
+  document.getElementById("centerActionOptions").addEventListener("change", () => {
+    const options = document.getElementById("centerActionOptions");
+    const radio = options.querySelector("input:checked");
+    document.getElementById("centerCustomBox").classList.toggle("hidden", radio?.dataset.legacyCustom !== "true");
+    updateChatTextSnippet();
+  });
+  document.getElementById("centerActionResultCount").textContent = "活動清單載入中…";
+}
+
 function filterCenterActions() {
-  const category = document.querySelector("#centerActionCategories button[aria-pressed='true']")?.dataset.category || "全部";
+  const category = document.querySelector("#centerActionCategories button[aria-pressed='true']")?.dataset.category || "";
   const terms = document.getElementById("centerActionSearch").value.normalize("NFKC").toLowerCase().trim().split(/\s+/).filter(Boolean);
   let count = 0;
   document.querySelectorAll("#centerActionOptions .action-option").forEach(label => {
     const radio = label.querySelector("input");
     const text = `${radio.value} ${radio.dataset.action || label.textContent}`.normalize("NFKC").toLowerCase();
-    const matches = (category === "全部" || radio.value === category) && terms.every(term => text.includes(term));
+    const matches = (!category || radio.value === category) && terms.every(term => text.includes(term));
     label.hidden = !matches;
     if (matches) count++;
   });
@@ -665,7 +694,7 @@ function filterCenterActions() {
 
 function resetCenterActionFilters() {
   document.getElementById("centerActionSearch").value = "";
-  document.querySelectorAll("#centerActionCategories button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.category === "全部")));
+  document.querySelectorAll("#centerActionCategories button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.category === "")));
   filterCenterActions();
 }
 
@@ -684,12 +713,14 @@ function restoreCenterAction(category, name) {
     radio.name = "center_action";
     radio.value = category;
     radio.dataset.action = name || ({ A: "一次淨灘", B: "社區二手衣物交換", C: "道場或家裡改用太陽能", D: "自選佛光活動" }[category] || category);
+    radio.dataset.customValue = name;
+    if (category === "D") radio.dataset.legacyCustom = "true";
     label.append(radio, document.createTextNode(`歷史紀錄：${radio.dataset.action}`));
     document.getElementById("centerActionOptions").prepend(label);
     if (category === "D") customInput.value = name || "";
   }
   if (radio) radio.checked = true;
-  document.getElementById("centerCustomBox").classList.toggle("hidden", category !== "D");
+  document.getElementById("centerCustomBox").classList.toggle("hidden", radio?.dataset.legacyCustom !== "true");
   resetCenterActionFilters();
   updateChatTextSnippet();
 }
@@ -840,10 +871,7 @@ function updateChatTextSnippet() {
   const actionCode = selectedActionRadio ? selectedActionRadio.value : "未選擇";
   
   let actionName = selectedActionRadio?.dataset.action || "請選擇中心行動";
-  if (actionCode === "A") actionName = "淨灘";
-  if (actionCode === "B") actionName = "二手衣物交換";
-  if (actionCode === "C") actionName = "改用太陽能";
-  if (actionCode === "D") {
+  if (selectedActionRadio?.dataset.legacyCustom === "true") {
     actionName = document.getElementById("ws_centerCustom")?.value.trim() || "自選佛光活動";
   }
   const selected = document.getElementById("centerActionSelected");
@@ -878,8 +906,7 @@ async function saveWorksheet(status = "submitted") {
     return;
   }
   const centerAction = actionRadio.value;
-  const centerCustom = centerAction === "D" ? document.getElementById("ws_centerCustom")?.value.trim() :
-    (["A", "B", "C"].includes(centerAction) ? "" : actionRadio.dataset.action || "");
+  const centerCustom = actionRadio.dataset.legacyCustom === "true" ? document.getElementById("ws_centerCustom")?.value.trim() : actionRadio.dataset.customValue || "";
 
   const radialData = [];
   document.querySelectorAll(".radial-line-row").forEach(row => {
@@ -1703,6 +1730,7 @@ window.switchAdminSubTab = function(subTab) {
   if (subTab === "dashboard" && state.lastAdminStats) {
     setTimeout(() => renderAdminCharts(state.lastAdminStats), 30);
   }
+  if (subTab === "categories") loadAdminCategories();
 };
 
 async function loadAdminDashboard() {
@@ -1767,7 +1795,7 @@ function renderAdminCharts(stats) {
   if (ctxPie) {
     if (chartPie) chartPie.destroy();
     const counts = stats.center_action_distribution || {};
-    const actionCategories = [...new Set(CENTER_ACTION_CATALOG.map(a => a.category))];
+    const actionCategories = [...new Set(state.centerActions.map(a => a.category))];
     const chartLabels = [...actionCategories, ...Object.keys(counts).filter(key => !actionCategories.includes(key))];
     const legacyLabels = { A: "A. 淨灘", B: "B. 二手衣交換", C: "C. 太陽能", D: "D. 自選佛光活動" };
     chartPie = new Chart(ctxPie, {

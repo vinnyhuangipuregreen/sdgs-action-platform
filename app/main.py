@@ -16,6 +16,7 @@ from app.auth import hash_password, verify_password, create_access_token, decode
 from app.docx_exporter import create_worksheet_docx
 from app.mailer import send_grade_notification
 from app.sdgs_check import ensure_sdgs_seeded, ensure_users_seeded
+from app.action_catalog import CategoryItem, list_actions, save_action, delete_action, read_import, import_actions, export_actions
 
 app = FastAPI(
     title="SDGs 與氣候行動連動分析與智慧學習平台",
@@ -72,6 +73,49 @@ def require_admin(current_user: dict = Depends(require_user)) -> dict:
     if current_user.get("role") not in ["admin", "teacher"]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="權限不足，需要管理員權限")
     return current_user
+
+
+@app.get("/api/center-actions")
+def get_center_actions():
+    return list_actions()
+
+
+@app.get("/api/admin/categories")
+def get_categories(search: str = "", user: dict = Depends(require_admin)):
+    return list_actions(search)
+
+
+@app.post("/api/admin/categories")
+def create_category(item: CategoryItem, user: dict = Depends(require_admin)):
+    return save_action(item)
+
+
+@app.put("/api/admin/categories/{item_id}")
+def update_category(item_id: int, item: CategoryItem, user: dict = Depends(require_admin)):
+    return save_action(item, item_id)
+
+
+@app.delete("/api/admin/categories/{item_id}")
+def remove_category(item_id: int, user: dict = Depends(require_admin)):
+    delete_action(item_id)
+    return {"success": True}
+
+
+@app.post("/api/admin/categories/import")
+def import_categories(file: UploadFile = File(...), user: dict = Depends(require_admin)):
+    if not (file.filename or "").lower().endswith(".xlsx"):
+        raise HTTPException(400, "請選擇 XLSX 檔案")
+    items = read_import(file.file.read(2 * 1024 * 1024 + 1))
+    return import_actions(items)
+
+
+@app.get("/api/admin/categories/export.xlsx")
+def export_categories(user: dict = Depends(require_admin)):
+    return StreamingResponse(
+        export_actions(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=action_categories.xlsx"}
+    )
 
 # ==============================================================================
 # 1. Frontend Entry

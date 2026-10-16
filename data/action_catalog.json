@@ -1,5 +1,4 @@
-// Source: 分類.xlsx, 分類!A2:B31. Preserve source order and wording.
-const CENTER_ACTION_CATALOG = [
+[
   {
     "category": "文化教育",
     "name": "各種講（研）習會／培訓課程"
@@ -120,4 +119,4 @@ const CENTER_ACTION_CATALOG = [
     "category": "聯誼交流",
     "name": "園遊會／社區活動"
   }
-];
+]

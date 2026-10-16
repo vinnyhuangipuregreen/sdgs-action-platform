@@ -145,6 +145,9 @@ class TursoCursor:
             )
             if not res.ok:
                 raise Exception(f"Turso Batch HTTP error {res.status_code}: {res.text}")
+            for result in res.json().get("results", []):
+                if result.get("type") == "error":
+                    raise Exception(f"SQL error: {result.get('error', {}).get('message')}")
         return self
 
     def execute_batch(self, statements: list):
@@ -177,6 +180,9 @@ class TursoCursor:
         )
         if not res.ok:
             raise Exception(f"Turso Batch HTTP error {res.status_code}: {res.text}")
+        for result in res.json().get("results", []):
+            if result.get("type") == "error":
+                raise Exception(f"SQL error: {result.get('error', {}).get('message')}")
         return self
 
     def fetchone(self):
@@ -276,6 +282,12 @@ def init_db():
         cursor = conn.cursor()
         
         ddl_statements = [
+            """CREATE TABLE IF NOT EXISTS action_catalog (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                category TEXT NOT NULL,
+                name TEXT NOT NULL,
+                UNIQUE(category, name)
+            );""",
             """CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
@@ -371,6 +383,17 @@ def init_db():
                     cursor.execute(item)
                 else:
                     cursor.execute(item[0], item[1])
+        cursor.execute("SELECT value FROM system_settings WHERE key = 'action_catalog_initialized'")
+        if not cursor.fetchone():
+            catalog_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "action_catalog.json")
+            with open(catalog_path, encoding="utf-8") as source:
+                catalog = json.load(source)
+            cursor.execute("""
+                INSERT OR IGNORE INTO action_catalog (category, name)
+                SELECT json_extract(value, '$.category'), json_extract(value, '$.name') FROM json_each(?)
+                WHERE NOT EXISTS (SELECT 1 FROM system_settings WHERE key = 'action_catalog_initialized')
+            """, (json.dumps(catalog, ensure_ascii=False),))
+            cursor.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('action_catalog_initialized', '1')")
         _DB_INITIALIZED = True
 
 # Default Game Settings for 《SDGs 地球保衛戰》

@@ -1,0 +1,148 @@
+import io
+import os
+import tempfile
+import unittest
+from unittest.mock import Mock, patch
+
+os.environ["DATABASE_PATH"] = ":memory:"
+os.environ.pop("TURSO_DATABASE_URL", None)
+os.environ.pop("TURSO_AUTH_TOKEN", None)
+
+from fastapi.testclient import TestClient
+from openpyxl import Workbook, load_workbook
+
+from app import database
+from app.auth import create_access_token
+from app.main import app
+
+
+def xlsx(rows):
+    book = Workbook()
+    for row in rows:
+        book.active.append(row)
+    content = io.BytesIO()
+    book.save(content)
+    return content.getvalue()
+
+
+class ActionCatalogTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        database.DB_PATH = os.path.join(self.temp.name, "catalog.db")
+        database._DB_INITIALIZED = False
+        database.init_db()
+        self.client = TestClient(app)
+        self.admin = self.headers("admin")
+
+    def tearDown(self):
+        self.client.close()
+        self.temp.cleanup()
+
+    def headers(self, role):
+        token = create_access_token({"id": 1, "name": "Test", "email": "test", "unit_name": "Test", "role": role})
+        return {"Authorization": "Bearer " + token}
+
+    def upload(self, content, filename="categories.xlsx", headers=None):
+        return self.client.post("/api/admin/categories/import", headers=headers or self.admin,
+                                files={"file": (filename, content)})
+
+    def test_seeds_once_and_does_not_restore_deleted_items(self):
+        self.assertEqual(len(self.client.get("/api/center-actions").json()), 30)
+        with database.get_db() as conn:
+            conn.cursor().execute("DELETE FROM action_catalog")
+        database._DB_INITIALIZED = False
+        self.assertEqual(self.client.get("/api/center-actions").json(), [])
+
+    def test_permissions_for_every_admin_operation(self):
+        operations = [("GET", "/api/admin/categories", {}),
+                      ("POST", "/api/admin/categories", {"json": {"category": "Test", "name": "Test"}}),
+                      ("PUT", "/api/admin/categories/1", {"json": {"category": "Test", "name": "Test"}}),
+                      ("DELETE", "/api/admin/categories/1", {}),
+                      ("GET", "/api/admin/categories/export.xlsx", {}),
+                      ("POST", "/api/admin/categories/import", {"files": {"file": ("x.xlsx", xlsx([["主題類別", "活動內容"], ["Test", "Test"]]))}})]
+        for method, path, args in operations:
+            for headers, expected in [({}, 401), (self.headers("student"), 403)]:
+                with self.subTest(method=method, path=path, status=expected):
+                    self.assertEqual(self.client.request(method, path, headers=headers, **args).status_code, expected)
+        self.assertEqual(self.client.get("/api/admin/categories", headers=self.headers("teacher")).status_code, 200)
+
+    def test_create_update_search_duplicates_and_delete(self):
+        item = {"category": " 測試分類 ", "name": " 測試活動 "}
+        response = self.client.post("/api/admin/categories", headers=self.admin, json=item)
+        self.assertEqual(response.status_code, 200)
+        item_id = response.json()["id"]
+        self.assertEqual(response.json()["category"], "測試分類")
+        self.assertEqual(self.client.post("/api/admin/categories", headers=self.admin, json=item).status_code, 409)
+        item = {"category": "新主題", "name": "新活動"}
+        self.assertEqual(self.client.put(f"/api/admin/categories/{item_id}", headers=self.admin, json=item).status_code, 200)
+        rows = self.client.get("/api/admin/categories", headers=self.admin, params={"search": "新主題 新活動"}).json()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["id"], item_id)
+        self.assertEqual(self.client.delete(f"/api/admin/categories/{item_id}", headers=self.admin).status_code, 200)
+        self.assertEqual(self.client.delete(f"/api/admin/categories/{item_id}", headers=self.admin).status_code, 404)
+        self.assertEqual(self.client.put(f"/api/admin/categories/{item_id}", headers=self.admin, json=item).status_code, 404)
+
+    def test_validation_and_conflicting_update(self):
+        for item in [{"category": " ", "name": "Test"}, {"category": "Test", "name": ""},
+                     {"category": "x" * 81, "name": "Test"}, {"category": "Test", "name": "x" * 301}]:
+            self.assertEqual(self.client.post("/api/admin/categories", headers=self.admin, json=item).status_code, 422)
+        rows = self.client.get("/api/center-actions").json()
+        self.assertEqual(self.client.put(f"/api/admin/categories/{rows[0]['id']}", headers=self.admin,
+                                        json={"category": rows[1]["category"], "name": rows[1]["name"]}).status_code, 409)
+
+    def test_import_skips_duplicates_and_export_round_trip(self):
+        content = xlsx([["主題類別", "活動內容"], ["新類別", "新活動"], ["新類別", "新活動"], [None, None]])
+        result = self.upload(content)
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.json(), {"imported_count": 1, "skipped_count": 1})
+        response = self.client.get("/api/admin/categories/export.xlsx", headers=self.admin)
+        self.assertEqual(response.status_code, 200)
+        book = load_workbook(io.BytesIO(response.content))
+        self.assertEqual(book.active.freeze_panes, "A2")
+        self.assertEqual(book.active.max_row, 32)
+        self.assertEqual(list(book.active.values)[-1], ("新類別", "新活動"))
+        self.assertEqual(self.upload(response.content).json(), {"imported_count": 0, "skipped_count": 31})
+
+    def test_invalid_import_never_partially_writes(self):
+        files = [xlsx([["主題類別", "活動內容"], ["不可部分寫入", "有效列"], ["不完整", None]]),
+                 xlsx([["錯誤標題", "活動內容"], ["Test", "Test"]]),
+                 xlsx([["主題類別", "活動內容"], ["Test", "=1+1"]]),
+                 xlsx([["主題類別", "活動內容"]]), b"invalid", b"x" * (2 * 1024 * 1024 + 1)]
+        for content in files:
+            self.assertEqual(self.upload(content).status_code, 400)
+        self.assertEqual(self.upload(b"invalid", filename="data.csv").status_code, 400)
+        self.assertEqual(len(self.client.get("/api/center-actions").json()), 30)
+
+    def test_export_preserves_formula_like_text_as_text(self):
+        self.client.post("/api/admin/categories", headers=self.admin, json={"category": "Test", "name": "=1+1"})
+        response = self.client.get("/api/admin/categories/export.xlsx", headers=self.admin)
+        book = load_workbook(io.BytesIO(response.content), data_only=False)
+        self.assertEqual(book.active["B32"].value, "=1+1")
+        self.assertEqual(book.active["B32"].data_type, "s")
+        self.assertEqual(self.upload(response.content).status_code, 200)
+
+    def test_existing_worksheet_keeps_snapshot(self):
+        item = self.client.get("/api/center-actions").json()[0]
+        with database.get_db() as conn:
+            conn.cursor().execute("""INSERT INTO worksheets
+                (user_id, user_name, unit_name, center_action, center_custom, radial_data, tradeoff_data, chat_text, self_checks, commitment)
+                VALUES (1, 'Test', 'Test', ?, ?, '[]', '[]', '', '[]', '{}')""", (item["category"], item["name"]))
+        self.client.put(f"/api/admin/categories/{item['id']}", headers=self.admin, json={"category": "New", "name": "New"})
+        self.client.delete(f"/api/admin/categories/{item['id']}", headers=self.admin)
+        with database.get_db() as conn:
+            row = conn.cursor().execute("SELECT center_action, center_custom FROM worksheets").fetchone()
+        self.assertEqual(tuple(row), (item["category"], item["name"]))
+
+    def test_turso_batches_surface_sql_errors(self):
+        response = Mock(ok=True)
+        response.json.return_value = {"results": [{"type": "error", "error": {"message": "test failure"}}]}
+        with patch("app.database.requests.post", return_value=response):
+            cursor = database.TursoConnection("https://example.invalid", "test").cursor()
+            with self.assertRaisesRegex(Exception, "test failure"):
+                cursor.execute_batch(["SELECT 1"])
+            with self.assertRaisesRegex(Exception, "test failure"):
+                cursor.executemany("SELECT ?", [(1,)])
+
+
+if __name__ == "__main__":
+    unittest.main()
