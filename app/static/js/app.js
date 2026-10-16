@@ -932,6 +932,26 @@ function updateCenterActionSelection() {
   if (selected) selected.textContent = selectedActionRadio ? `已選擇｜${actionCode} · ${actionName}` : "尚未選擇活動";
 }
 
+function getWorksheetSubmissionError(payload) {
+  const complete = (row, fields) => fields.every(field => typeof row?.[field] === "string" && row[field].trim());
+  if (payload.radial_data.filter(row => complete(row, ["goal", "mechanism", "observable"])).length < 3) {
+    return "三、放射型分析：請完整填寫至少 3 條連動線，每條的三個欄位都要填寫！";
+  }
+  if (!payload.tradeoff_data.some(row => complete(row, ["who", "situation", "how"]))) {
+    return "四、拉扯檢查：請完整填寫至少 1 條拉扯檢查，每條的三個欄位都要填寫！";
+  }
+  if (!payload.causal_data.chains.some(row => complete(row, ["start", "start_cond", "mid", "mid_cond", "result", "result_cond", "impact", "measurement"]))) {
+    return "五、因果型分析：請完整填寫至少 1 條因果鏈，A～D 階段的八個欄位都要填寫！";
+  }
+  if (payload.self_checks.length !== 4 || !payload.self_checks.every(Boolean)) {
+    return "六、自我檢核：請勾選確認全部 4 個項目！";
+  }
+  if (!complete(payload.commitment, ["start_action", "target_1", "target_2", "risk_aware", "metric"])) {
+    return "七、我的連動承諾宣言：請填寫全部 5 個欄位！";
+  }
+  return "";
+}
+
 async function saveWorksheet(status = "submitted") {
   if (!state.user) {
     showToast("請先登入後再進行提交！", "warning");
@@ -964,11 +984,6 @@ async function saveWorksheet(status = "submitted") {
       radialData.push({ goal, mechanism, observable });
     }
   });
-
-  if (status === "submitted" && radialData.length < 3) {
-    showToast("放射型分析至少需要填寫 3 條連動線！", "error");
-    return;
-  }
 
   const tradeoffData = [];
   document.querySelectorAll(".tradeoff-row").forEach(row => {
@@ -1011,6 +1026,14 @@ async function saveWorksheet(status = "submitted") {
     commitment: commitment,
     status: status
   };
+
+  if (status === "submitted") {
+    const error = getWorksheetSubmissionError(payload);
+    if (error) {
+      showToast(error, "error");
+      return;
+    }
+  }
 
   try {
     let url = `${API_BASE}/worksheets`;

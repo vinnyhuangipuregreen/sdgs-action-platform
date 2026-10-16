@@ -49,6 +49,9 @@ class ActivityDescriptionTests(unittest.TestCase):
         self.assertEqual(self.client.get(url, headers=self.student).json()["activity_description"], description)
         self.payload["activity_description"] += "\n進行方式：分類清理海岸"
         self.payload["status"] = "submitted"
+        from test_submission_validation import complete_payload
+        for field in ("radial_data", "tradeoff_data", "causal_data", "self_checks", "commitment"):
+            self.payload[field] = complete_payload()[field]
         response = self.client.put(url, headers=self.student, json=self.payload)
         self.assertEqual(response.status_code, 200, response.text)
         description = self.payload["activity_description"]

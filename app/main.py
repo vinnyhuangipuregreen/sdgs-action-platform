@@ -330,6 +330,25 @@ class WorksheetSchema(BaseModel):
             raise ValueError("請填寫活動簡介及說明！")
         return value
 
+def validate_worksheet_submission(data: WorksheetSchema):
+    if (data.status or "submitted") != "submitted":
+        return
+
+    def complete(row, fields):
+        return isinstance(row, dict) and all(isinstance(row.get(field), str) and row[field].strip() for field in fields)
+
+    if sum(complete(row, ("goal", "mechanism", "observable")) for row in data.radial_data) < 3:
+        raise HTTPException(status_code=400, detail="三、放射型分析：請完整填寫至少 3 條連動線，每條的三個欄位都要填寫！")
+    if not any(complete(row, ("who", "situation", "how")) for row in data.tradeoff_data):
+        raise HTTPException(status_code=400, detail="四、拉扯檢查：請完整填寫至少 1 條拉扯檢查，每條的三個欄位都要填寫！")
+    chains = (data.causal_data or {}).get("chains", [])
+    if not isinstance(chains, list) or not any(complete(row, ("start", "start_cond", "mid", "mid_cond", "result", "result_cond", "impact", "measurement")) for row in chains):
+        raise HTTPException(status_code=400, detail="五、因果型分析：請完整填寫至少 1 條因果鏈，A～D 階段的八個欄位都要填寫！")
+    if len(data.self_checks) != 4 or not all(data.self_checks):
+        raise HTTPException(status_code=400, detail="六、自我檢核：請勾選確認全部 4 個項目！")
+    if not complete(data.commitment, ("start_action", "target_1", "target_2", "risk_aware", "metric")):
+        raise HTTPException(status_code=400, detail="七、我的連動承諾宣言：請填寫全部 5 個欄位！")
+
 @app.get("/api/worksheets")
 def list_worksheets(
     user: dict = Depends(require_user),
@@ -441,6 +460,7 @@ def export_worksheet_docx(worksheet_id: int, user: dict = Depends(require_user))
 
 @app.post("/api/worksheets")
 def create_worksheet(data: WorksheetSchema, user: dict = Depends(require_user)):
+    validate_worksheet_submission(data)
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute("""
@@ -478,7 +498,8 @@ def update_worksheet(worksheet_id: int, data: WorksheetSchema, user: dict = Depe
         
         if user.get("role") not in ["admin", "teacher"] and row["user_id"] != user["user_id"]:
             raise HTTPException(status_code=403, detail="無權限修改他人練習單")
-            
+
+        validate_worksheet_submission(data)
         cursor.execute("""
         UPDATE worksheets SET
             unit_name = ?,
