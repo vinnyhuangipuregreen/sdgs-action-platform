@@ -314,9 +314,10 @@ class WorksheetSchema(BaseModel):
     unit_name: str
     center_action: str
     center_custom: Optional[str] = ""
+    activity_description: str = ""
     radial_data: List[Dict[str, Any]]
     tradeoff_data: List[Dict[str, Any]]
-    chat_text: str
+    chat_text: str = ""
     causal_data: Optional[Dict[str, Any]] = None
     self_checks: List[bool]
     commitment: Dict[str, Any]
@@ -437,16 +438,17 @@ def create_worksheet(data: WorksheetSchema, user: dict = Depends(require_user)):
         cursor = conn.cursor()
         cursor.execute("""
         INSERT INTO worksheets (
-            user_id, user_name, unit_name, center_action, center_custom,
+            user_id, user_name, unit_name, center_action, center_custom, activity_description,
             radial_data, tradeoff_data, chat_text, causal_data,
             self_checks, commitment, status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             user["user_id"],
             user["name"],
             data.unit_name.strip() or "佛光學員",
             data.center_action,
             data.center_custom,
+            data.activity_description,
             json.dumps(data.radial_data, ensure_ascii=False),
             json.dumps(data.tradeoff_data, ensure_ascii=False),
             data.chat_text,
@@ -475,6 +477,7 @@ def update_worksheet(worksheet_id: int, data: WorksheetSchema, user: dict = Depe
             unit_name = ?,
             center_action = ?,
             center_custom = ?,
+            activity_description = ?,
             radial_data = ?,
             tradeoff_data = ?,
             chat_text = ?,
@@ -488,6 +491,7 @@ def update_worksheet(worksheet_id: int, data: WorksheetSchema, user: dict = Depe
             data.unit_name.strip() or "佛光學員",
             data.center_action,
             data.center_custom,
+            data.activity_description,
             json.dumps(data.radial_data, ensure_ascii=False),
             json.dumps(data.tradeoff_data, ensure_ascii=False),
             data.chat_text,
@@ -1063,16 +1067,16 @@ def export_all_worksheets_csv(user: dict = Depends(require_admin)):
         writer = csv.writer(output)
         writer.writerow([
             "練習單ID", "學員姓名", "Email", "聯絡電話", "分會編號", "分會單位",
-            "中心行動", "自選活動名稱", "聊天室格式文字", "狀態", "成績", "講師講評",
-            "提交時間", "放射連動資料", "拉扯分析資料"
+            "中心行動", "自選活動名稱", "活動簡介及說明", "狀態", "成績", "講師講評",
+            "提交時間", "放射連動資料", "拉扯分析資料", "因果型分析資料"
         ])
         
         for r in rows:
             writer.writerow([
                 r["id"], r["user_name"], r["email"], r["phone"], r.get("unit_code", ""), r["unit_name"],
-                r["center_action"], r["center_custom"] or "", r["chat_text"],
+                r["center_action"], r["center_custom"] or "", r["activity_description"],
                 r["status"], r["score"] or "", r["teacher_comment"] or "",
-                r["created_at"], r["radial_data"], r["tradeoff_data"]
+                r["created_at"], r["radial_data"], r["tradeoff_data"], r["causal_data"]
             ])
             
         output.seek(0)

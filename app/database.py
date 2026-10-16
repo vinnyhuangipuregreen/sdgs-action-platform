@@ -324,6 +324,7 @@ def init_db():
                 unit_name TEXT NOT NULL,
                 center_action TEXT NOT NULL,
                 center_custom TEXT,
+                activity_description TEXT NOT NULL DEFAULT '',
                 radial_data TEXT NOT NULL,
                 tradeoff_data TEXT NOT NULL,
                 chat_text TEXT NOT NULL,
@@ -383,6 +384,9 @@ def init_db():
                     cursor.execute(item)
                 else:
                     cursor.execute(item[0], item[1])
+        cursor.execute("PRAGMA table_info(worksheets)")
+        if "activity_description" not in {row["name"] for row in cursor.fetchall()}:
+            cursor.execute("ALTER TABLE worksheets ADD COLUMN activity_description TEXT NOT NULL DEFAULT ''")
         cursor.execute("SELECT value FROM system_settings WHERE key = 'action_catalog_initialized'")
         if not cursor.fetchone():
             catalog_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "action_catalog.json")

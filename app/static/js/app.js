@@ -582,8 +582,7 @@ window.quoteTargetToWorksheet = function(goalCode, goalName, targetCode, targetC
     mechInput.dispatchEvent(new Event("input"));
   }
 
-  // 6. 更新聊天室預覽代碼並平滑切換捲動至該連動線
-  updateChatTextSnippet();
+  // 6. 平滑切換捲動至該連動線
   switchTab("worksheet");
   targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
   targetRow.classList.add("ring-2", "ring-emerald-500");
@@ -672,7 +671,7 @@ function initCenterActionPicker() {
     const options = document.getElementById("centerActionOptions");
     const radio = options.querySelector("input:checked");
     document.getElementById("centerCustomBox").classList.toggle("hidden", radio?.dataset.legacyCustom !== "true");
-    updateChatTextSnippet();
+    updateCenterActionSelection();
   });
   document.getElementById("centerActionResultCount").textContent = "活動清單載入中…";
 }
@@ -722,14 +721,14 @@ function restoreCenterAction(category, name) {
   if (radio) radio.checked = true;
   document.getElementById("centerCustomBox").classList.toggle("hidden", radio?.dataset.legacyCustom !== "true");
   resetCenterActionFilters();
-  updateChatTextSnippet();
+  updateCenterActionSelection();
 }
 
 function initWorksheetEvents() {
   initCenterActionPicker();
 
   const customInput = document.getElementById("ws_centerCustom");
-  if (customInput) customInput.addEventListener("input", updateChatTextSnippet);
+  if (customInput) customInput.addEventListener("input", updateCenterActionSelection);
 
   const addLineBtn = document.getElementById("addRadialLineBtn");
   if (addLineBtn) addLineBtn.addEventListener("click", () => addRadialLineRow());
@@ -746,18 +745,8 @@ function initWorksheetEvents() {
   const viewMyWorksheetsBtn = document.getElementById("viewMyWorksheetsBtn");
   if (viewMyWorksheetsBtn) viewMyWorksheetsBtn.addEventListener("click", openMyWorksheetsModal);
 
-  const copyChatBtn = document.getElementById("copyChatSnippetBtn");
-  if (copyChatBtn) {
-    copyChatBtn.addEventListener("click", () => {
-      const txt = document.getElementById("ws_chatSnippet")?.value;
-      if (txt) {
-        navigator.clipboard.writeText(txt).then(() => {
-          showToast("已成功複製聊天室格式字串！", "success");
-        });
-      }
-    });
-  }
-
+  document.getElementById("addCausalChainBtn").addEventListener("click", () => addCausalChain());
+  renderCausalChains();
   renderDefaultWorksheetRows();
 }
 
@@ -793,7 +782,7 @@ function addRadialLineRow(data = null) {
   row.innerHTML = `
     <div class="flex justify-between items-center">
       <span class="text-xs font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">連動線 #${count}</span>
-      ${count > 3 ? `<button type="button" class="text-red-500 hover:text-red-700 text-xs font-semibold" onclick="this.closest('.radial-line-row').remove(); updateChatTextSnippet();">✕ 刪除此線</button>` : ''}
+      ${count > 3 ? `<button type="button" class="text-red-500 hover:text-red-700 text-xs font-semibold" onclick="this.closest('.radial-line-row').remove();">✕ 刪除此線</button>` : ''}
     </div>
     <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
       <div>
@@ -818,8 +807,6 @@ function addRadialLineRow(data = null) {
 
   const sel = row.querySelector(".radial-goal-select");
   const mech = row.querySelector(".radial-mech-input");
-  sel.addEventListener("change", updateChatTextSnippet);
-  mech.addEventListener("input", updateChatTextSnippet);
 
   if (data) {
     sel.value = data.goal || "";
@@ -837,7 +824,7 @@ function addTradeoffRow(data = null) {
   row.innerHTML = `
     <div class="flex justify-between items-center">
       <span class="text-xs font-bold px-2 py-0.5 rounded bg-amber-200 text-amber-900">拉扯檢查 #${count}</span>
-      ${count > 1 ? `<button type="button" class="text-red-500 hover:text-red-700 text-xs font-semibold" onclick="this.closest('.tradeoff-row').remove(); updateChatTextSnippet();">✕ 刪除</button>` : ''}
+      ${count > 1 ? `<button type="button" class="text-red-500 hover:text-red-700 text-xs font-semibold" onclick="this.closest('.tradeoff-row').remove();">✕ 刪除</button>` : ''}
     </div>
     <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
       <div>
@@ -857,7 +844,6 @@ function addTradeoffRow(data = null) {
   container.appendChild(row);
 
   const who = row.querySelector(".tradeoff-who");
-  who.addEventListener("input", updateChatTextSnippet);
 
   if (data) {
     who.value = data.who || "";
@@ -866,7 +852,59 @@ function addTradeoffRow(data = null) {
   }
 }
 
-function updateChatTextSnippet() {
+function getCausalChains(data) {
+  if (Array.isArray(data?.chains)) return data.chains.length ? data.chains : [{}];
+  if (!data) return [{}];
+  // 舊版 C 的第二格填寫的是受影響對象，移到 D 影響保留原意。
+  return [{ ...data, result_cond: "", impact: data.result_cond || "" }];
+}
+
+function createCausalTable(chain, editable = false) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "overflow-x-auto";
+  wrapper.innerHTML = `<table class="causal-table">
+    <thead><tr><th scope="col">階段</th><th scope="col">發生了什麼？</th><th scope="col">這一步要成立，需要什麼條件？</th></tr></thead>
+    <tbody>
+      <tr><th scope="row">A 起點</th><td data-field="start"></td><td data-field="start_cond"></td></tr>
+      <tr><th scope="row">B 中介</th><td data-field="mid"></td><td data-field="mid_cond"></td></tr>
+      <tr><th scope="row">C 結果</th><td data-field="result"></td><td data-field="result_cond"></td></tr>
+      <tr class="causal-impact-heading"><th scope="col">階段</th><th scope="col">受到影響是那些人或環境？</th><th scope="col">如何衡量此影響？</th></tr>
+      <tr><th scope="row">D 影響</th><td data-field="impact"></td><td data-field="measurement"></td></tr>
+    </tbody>
+  </table>`;
+  wrapper.querySelectorAll("[data-field]").forEach(cell => {
+    const field = cell.dataset.field;
+    if (editable) {
+      const input = document.createElement("textarea");
+      input.dataset.causalField = field;
+      input.rows = 2;
+      input.value = chain[field] || "";
+      input.setAttribute("aria-label", `${cell.parentElement.cells[0].textContent} ${cell.cellIndex === 1 ? (field === 'impact' ? '受到影響是那些人或環境？' : '發生了什麼？') : (field === 'measurement' ? '如何衡量此影響？' : '這一步要成立，需要什麼條件？')}`);
+      cell.appendChild(input);
+    } else {
+      cell.textContent = chain[field] || "未填寫";
+    }
+  });
+  return wrapper;
+}
+
+function addCausalChain(chain = {}) {
+  const container = document.getElementById("causalChainsContainer");
+  const row = document.createElement("div");
+  row.className = "causal-chain space-y-2";
+  const title = document.createElement("h4");
+  title.className = "font-bold text-sm text-red-600";
+  title.textContent = `因果鏈 #${container.children.length + 1}`;
+  row.append(title, createCausalTable(chain, true));
+  container.appendChild(row);
+}
+
+function renderCausalChains(data) {
+  document.getElementById("causalChainsContainer").replaceChildren();
+  getCausalChains(data).forEach(chain => addCausalChain(chain));
+}
+
+function updateCenterActionSelection() {
   const selectedActionRadio = document.querySelector("input[name='center_action']:checked");
   const actionCode = selectedActionRadio ? selectedActionRadio.value : "未選擇";
   
@@ -876,20 +914,6 @@ function updateChatTextSnippet() {
   }
   const selected = document.getElementById("centerActionSelected");
   if (selected) selected.textContent = selectedActionRadio ? `已選擇｜${actionCode} · ${actionName}` : "尚未選擇活動";
-
-  const goals = [];
-  document.querySelectorAll(".radial-goal-select").forEach(sel => {
-    if (sel.value) {
-      const match = sel.value.match(/SDG\s*(\d+)/i);
-      if (match) goals.push(match[1]);
-    }
-  });
-  const goalsStr = goals.length > 0 ? goals.join("、") : "待選擇SDGs";
-  const firstRisk = document.querySelector(".tradeoff-who")?.value.trim() || "待填寫風險";
-
-  const chatSnippet = `${actionCode}｜${actionName}｜${goalsStr}｜風險：${firstRisk}`;
-  const outEl = document.getElementById("ws_chatSnippet");
-  if (outEl) outEl.value = chatSnippet;
 }
 
 async function saveWorksheet(status = "submitted") {
@@ -933,14 +957,9 @@ async function saveWorksheet(status = "submitted") {
     }
   });
 
-  const causalData = {
-    start: document.getElementById("ws_causalA")?.value.trim() || "",
-    start_cond: document.getElementById("ws_causalACond")?.value.trim() || "",
-    mid: document.getElementById("ws_causalB")?.value.trim() || "",
-    mid_cond: document.getElementById("ws_causalBCond")?.value.trim() || "",
-    result: document.getElementById("ws_causalC")?.value.trim() || "",
-    result_cond: document.getElementById("ws_causalCCond")?.value.trim() || ""
-  };
+  const causalData = { chains: Array.from(document.querySelectorAll(".causal-chain")).map(row =>
+    Object.fromEntries(Array.from(row.querySelectorAll("[data-causal-field]")).map(input => [input.dataset.causalField, input.value.trim()]))
+  ) };
 
   const selfChecks = [
     document.getElementById("ws_check1")?.checked || false,
@@ -957,15 +976,13 @@ async function saveWorksheet(status = "submitted") {
     metric: document.getElementById("ws_commitMetric")?.value.trim() || ""
   };
 
-  const chatText = document.getElementById("ws_chatSnippet")?.value.trim() || "";
-
   const payload = {
     unit_name: unitName,
     center_action: centerAction,
     center_custom: centerCustom,
+    activity_description: document.getElementById("ws_activityDescription").value,
     radial_data: radialData,
     tradeoff_data: tradeoffData,
-    chat_text: chatText,
     causal_data: causalData,
     self_checks: selfChecks,
     commitment: commitment,
@@ -1068,7 +1085,6 @@ function openMyWorksheetsModal() {
           <h4 class="font-bold text-slate-800 text-sm">行動：${ws.center_action} (${ws.center_custom || '標準活動'})</h4>
           <span class="text-xs text-slate-400">${new Date(ws.updated_at).toLocaleString('zh-TW')}</span>
         </div>
-        <p class="text-xs text-slate-600 font-mono bg-slate-50 p-1.5 rounded">${ws.chat_text}</p>
         ${ws.score ? `<div class="mt-2 text-xs font-bold text-purple-700">評分：${ws.score} 分 ｜ 講師講評：${ws.teacher_comment || '無'}</div>` : ''}
       </div>
       <div class="flex items-center gap-2">
@@ -1098,6 +1114,7 @@ window.loadWorksheetToForm = function(wsId, silent = false) {
   if (unitEl) unitEl.value = ws.unit_name || state.user?.unit_name || "佛光學員";
 
   restoreCenterAction(ws.center_action, ws.center_custom || "");
+  document.getElementById("ws_activityDescription").value = ws.activity_description || "";
 
   const radialContainer = document.getElementById("radialLinesContainer");
   if (radialContainer) {
@@ -1120,14 +1137,7 @@ window.loadWorksheetToForm = function(wsId, silent = false) {
     }
   }
 
-  if (ws.causal_data) {
-    document.getElementById("ws_causalA").value = ws.causal_data.start || "";
-    document.getElementById("ws_causalACond").value = ws.causal_data.start_cond || "";
-    document.getElementById("ws_causalB").value = ws.causal_data.mid || "";
-    document.getElementById("ws_causalBCond").value = ws.causal_data.mid_cond || "";
-    document.getElementById("ws_causalC").value = ws.causal_data.result || "";
-    document.getElementById("ws_causalCCond").value = ws.causal_data.result_cond || "";
-  }
+  renderCausalChains(ws.causal_data);
 
   if (Array.isArray(ws.self_checks)) {
     document.getElementById("ws_check1").checked = !!ws.self_checks[0];
@@ -1144,7 +1154,7 @@ window.loadWorksheetToForm = function(wsId, silent = false) {
     document.getElementById("ws_commitMetric").value = ws.commitment.metric || "";
   }
 
-  updateChatTextSnippet();
+  updateCenterActionSelection();
   const myWsModal = document.getElementById("myWorksheetsModal");
   if (myWsModal) myWsModal.classList.add("hidden");
   if (!silent) {
@@ -1178,13 +1188,16 @@ window.createNewWorksheet = function(showToastMsg = true) {
   if (unitEl) unitEl.value = state.user?.unit_name || "佛光學員";
 
   restoreCenterAction("", "");
+  document.getElementById("ws_activityDescription").value = "";
   
   const rc = document.getElementById("radialLinesContainer");
   if (rc) { rc.innerHTML = ""; for(let i=0; i<3; i++) addRadialLineRow(); }
   const tc = document.getElementById("tradeoffContainer");
   if (tc) { tc.innerHTML = ""; addTradeoffRow(); }
 
-  ["ws_causalA", "ws_causalACond", "ws_causalB", "ws_causalBCond", "ws_causalC", "ws_causalCCond", "ws_commitStart", "ws_commitT1", "ws_commitT2", "ws_commitRisk", "ws_commitMetric"].forEach(id => {
+  renderCausalChains();
+
+  ["ws_commitStart", "ws_commitT1", "ws_commitT2", "ws_commitRisk", "ws_commitMetric"].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = "";
   });
@@ -1192,7 +1205,7 @@ window.createNewWorksheet = function(showToastMsg = true) {
     const el = document.getElementById(id);
     if (el) el.checked = false;
   });
-  updateChatTextSnippet();
+  updateCenterActionSelection();
   if (showToastMsg) {
     showToast("已重置為新練習單！", "info");
   }
@@ -1888,7 +1901,7 @@ window.viewWorksheetDetailModal = async function(id) {
       </tr>
     `).join("");
 
-    const causal = ws.causal_data || {};
+    const causalHtml = getCausalChains(ws.causal_data).map((chain, i) => `<div class="space-y-2"><h5 class="font-bold text-red-600">因果鏈 #${i + 1}</h5>${createCausalTable(chain).outerHTML}</div>`).join("");
     const commit = ws.commitment || {};
 
     document.getElementById("detailModalBody").innerHTML = `
@@ -1896,7 +1909,8 @@ window.viewWorksheetDetailModal = async function(id) {
         <div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
           <span class="font-bold text-slate-500">中心行動：</span>
           <span class="font-black text-slate-900 text-sm ml-2">${ws.center_action} (${ws.center_custom || '標準行動'})</span>
-          <span class="ml-4 font-mono text-teal-800 font-bold bg-teal-50 px-2 py-0.5 rounded border border-teal-200">${ws.chat_text}</span>
+          <h4 class="font-bold text-slate-500 mt-3 mb-1">活動簡介及說明：</h4>
+          <p id="detailActivityDescription" class="whitespace-pre-wrap break-words text-sm text-slate-700"></p>
         </div>
 
         <div>
@@ -1920,12 +1934,17 @@ window.viewWorksheetDetailModal = async function(id) {
         </div>
 
         <div class="bg-indigo-50/50 p-3 rounded-xl border border-indigo-100">
-          <h4 class="font-bold text-indigo-900 mb-1">課後進階因果鏈：</h4>
-          <p><strong>起點：</strong>${causal.start || '無'}（條件：${causal.start_cond || '無'}） ➔ <strong>中介：</strong>${causal.mid || '無'}（條件：${causal.mid_cond || '無'}） ➔ <strong>結果：</strong>${causal.result || '無'}（條件：${causal.result_cond || '無'}）</p>
+          <h4 class="font-bold text-indigo-900 mb-1">五、因果型分析</h4>
+          <div class="space-y-5">${causalHtml}</div>
+        </div>
+
+        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
+          <h4 class="font-bold text-slate-900 mb-1">六、自我檢核</h4>
+          ${Array.from(document.querySelectorAll('#ws_check1, #ws_check2, #ws_check3, #ws_check4')).map((input, i) => `<p>${ws.self_checks?.[i] ? '☑ 已勾選' : '☐ 未勾選'}：${input.nextElementSibling.textContent}</p>`).join('')}
         </div>
 
         <div class="bg-emerald-50/50 p-3 rounded-xl border border-emerald-200">
-          <h4 class="font-bold text-emerald-900 mb-1">連動承諾宣言：</h4>
+          <h4 class="font-bold text-emerald-900 mb-1">七、我的連動承諾宣言</h4>
           <p>「我願意從 <u>${commit.start_action || ''}</u> 開始，希望促進 <u>${commit.target_1 || ''}</u> 與 <u>${commit.target_2 || ''}</u>，也會留意 <u>${commit.risk_aware || ''}</u> 的風險。一個月後，我會用 <u>${commit.metric || ''}</u> 來確認自己有沒有做到。」</p>
         </div>
 
@@ -1936,6 +1955,7 @@ window.viewWorksheetDetailModal = async function(id) {
         </div>` : '<div class="text-slate-400 italic">目前尚未評分</div>'}
       </div>
     `;
+    document.getElementById("detailActivityDescription").textContent = ws.activity_description || "未填寫";
   } catch (err) {
     showToast("無法載入練習單詳情", "error");
   }

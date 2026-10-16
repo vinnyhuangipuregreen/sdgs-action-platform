@@ -91,6 +91,9 @@ def create_worksheet_docx(ws: dict) -> io.BytesIO:
         p_act.add_run(f" — 自訂名稱：{ws.get('center_custom')}")
     p_act.runs[0].font.bold = True
     p_act.paragraph_format.space_after = Pt(8)
+    if ws.get("activity_description"):
+        doc.add_paragraph("活動簡介及說明：").runs[0].font.bold = True
+        doc.add_paragraph(ws["activity_description"])
 
     # Section 2: Radial Analysis
     h2 = doc.add_paragraph()
@@ -201,24 +204,12 @@ def create_worksheet_docx(ws: dict) -> io.BytesIO:
 
     doc.add_paragraph().paragraph_format.space_after = Pt(6)
 
-    # Section 4: Chat Snippet
-    p_chat = doc.add_paragraph()
-    p_chat.paragraph_format.space_before = Pt(8)
-    p_chat.paragraph_format.space_after = Pt(8)
-    r_chat_lbl = p_chat.add_run("四、聊天室提交格式代碼：\n")
-    r_chat_lbl.font.bold = True
-    r_chat_lbl.font.size = Pt(11)
-    r_chat_val = p_chat.add_run(ws.get("chat_text", "無"))
-    r_chat_val.font.size = Pt(11)
-    r_chat_val.font.bold = True
-    r_chat_val.font.color.rgb = RGBColor(0x02, 0x84, 0xC7)
-
     # Section 5: Causal Chain
     h5 = doc.add_paragraph()
     h5.paragraph_format.space_before = Pt(12)
     h5.paragraph_format.space_after = Pt(4)
     h5.paragraph_format.keep_with_next = True
-    r_h5 = h5.add_run("五、課後進階：真正的「因果鏈」推導")
+    r_h5 = h5.add_run("五、因果型分析")
     r_h5.font.size = Pt(14)
     r_h5.font.bold = True
     r_h5.font.color.rgb = RGBColor(0x43, 0x38, 0xCA)
@@ -230,44 +221,65 @@ def create_worksheet_docx(ws: dict) -> io.BytesIO:
         except:
             causal = {}
             
-    c_table = doc.add_table(rows=4, cols=3)
-    c_table.alignment = WD_TABLE_ALIGNMENT.CENTER
-    c_th = ["階段", "發生了什麼？", "這一步要成立，需要什麼條件？"]
-    for i, t in enumerate(c_th):
-        c = c_table.rows[0].cells[i]
-        c.text = t
-        set_cell_bg(c, "4F46E5")
-        c.paragraphs[0].runs[0].font.bold = True
-        c.paragraphs[0].runs[0].font.size = Pt(10.5)
-        c.paragraphs[0].runs[0].font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
-
-    c_rows_data = [
-        ("A 起點", causal.get("start", ""), causal.get("start_cond", "")),
-        ("B 中介", causal.get("mid", ""), causal.get("mid_cond", "")),
-        ("C 結果", causal.get("result", ""), causal.get("result_cond", ""))
-    ]
-    for idx, (stage, ev, cond) in enumerate(c_rows_data, start=1):
-        row = c_table.rows[idx]
-        row.cells[0].text = stage
-        row.cells[1].text = ev
-        row.cells[2].text = cond
-        set_cell_bg(row.cells[0], "EEF2FF")
-        row.cells[0].paragraphs[0].runs[0].font.bold = True
-        for c in row.cells:
-            for p in c.paragraphs:
-                p.paragraph_format.space_before = Pt(3)
-                p.paragraph_format.space_after = Pt(3)
-                for run in p.runs:
-                    run.font.size = Pt(10)
+    causal = causal or {}
+    chains = causal.get("chains")
+    if chains is None:
+        chains = [{**causal, "result_cond": "", "impact": causal.get("result_cond", "")}]
+    for chain_number, chain in enumerate(chains or [{}], start=1):
+        title = doc.add_paragraph()
+        title.paragraph_format.keep_with_next = True
+        title.add_run(f"因果鏈 #{chain_number}").font.color.rgb = RGBColor(0xDC, 0x26, 0x26)
+        c_table = doc.add_table(rows=6, cols=3)
+        c_table.style = "Table Grid"
+        c_table.alignment = WD_TABLE_ALIGNMENT.CENTER
+        c_rows_data = [
+            ("階段", "發生了什麼？", "這一步要成立，需要什麼條件？"),
+            ("A 起點", chain.get("start", ""), chain.get("start_cond", "")),
+            ("B 中介", chain.get("mid", ""), chain.get("mid_cond", "")),
+            ("C 結果", chain.get("result", ""), chain.get("result_cond", "")),
+            ("階段", "受到影響是那些人或環境？", "如何衡量此影響？"),
+            ("D 影響", chain.get("impact", ""), chain.get("measurement", "")),
+        ]
+        for idx, values in enumerate(c_rows_data):
+            row = c_table.rows[idx]
+            for cell, value in zip(row.cells, values):
+                cell.text = value
+                for paragraph in cell.paragraphs:
+                    paragraph.paragraph_format.space_before = Pt(3)
+                    paragraph.paragraph_format.space_after = Pt(3)
+                    for run in paragraph.runs:
+                        run.font.size = Pt(10)
+                        if idx in (0, 4):
+                            run.font.bold = True
+            if idx in (0, 4):
+                for cell in row.cells:
+                    set_cell_bg(cell, "F1F5F9")
+            else:
+                row.cells[0].paragraphs[0].runs[0].font.color.rgb = RGBColor(0x43, 0x38, 0xCA)
 
     doc.add_paragraph().paragraph_format.space_after = Pt(6)
 
-    # Section 6: Commitment & Self check
+    # Section 6: Self-check
+    doc.add_heading("六、自我檢核", level=2)
+    checks = ws.get("self_checks") or []
+    if isinstance(checks, str):
+        checks = json.loads(checks)
+    check_labels = [
+        "我沒有只列 SDGs 編號，每一條線都說得出「怎麼影響」。",
+        "我分得清「可能的效益」和「已經證實的成果」。",
+        "我找出至少一項負面影響，或可能被遺漏的人。",
+        "我提出了做得到改善方法。",
+    ]
+    for index, label in enumerate(check_labels):
+        checked = index < len(checks) and checks[index]
+        doc.add_paragraph(f"{'已勾選' if checked else '未勾選'}：{label}")
+
+    # Section 7: Commitment
     h6 = doc.add_paragraph()
     h6.paragraph_format.space_before = Pt(12)
     h6.paragraph_format.space_after = Pt(4)
     h6.paragraph_format.keep_with_next = True
-    r_h6 = h6.add_run("六、我的連動承諾宣言")
+    r_h6 = h6.add_run("七、我的連動承諾宣言")
     r_h6.font.size = Pt(14)
     r_h6.font.bold = True
     r_h6.font.color.rgb = RGBColor(0x04, 0x78, 0x57)
@@ -303,12 +315,12 @@ def create_worksheet_docx(ws: dict) -> io.BytesIO:
     r_mt.font.underline = True
     commit_p.add_run(" 來確認自己有沒有做到。」")
 
-    # Section 7: Teacher Review Block
+    # Section 8: Teacher Review Block
     h7 = doc.add_paragraph()
     h7.paragraph_format.space_before = Pt(16)
     h7.paragraph_format.space_after = Pt(4)
     h7.paragraph_format.keep_with_next = True
-    r_h7 = h7.add_run("七、導師審閱成績與指導講評")
+    r_h7 = h7.add_run("八、導師審閱成績與指導講評")
     r_h7.font.size = Pt(14)
     r_h7.font.bold = True
     r_h7.font.color.rgb = RGBColor(0x6D, 0x28, 0xD9)
