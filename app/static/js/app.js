@@ -891,11 +891,27 @@ function createCausalTable(chain, editable = false) {
 function addCausalChain(chain = {}) {
   const container = document.getElementById("causalChainsContainer");
   const row = document.createElement("div");
-  row.className = "causal-chain space-y-2";
+  row.className = "causal-chain space-y-3";
+  const header = document.createElement("div");
+  header.className = "flex justify-between items-center gap-3";
   const title = document.createElement("h4");
-  title.className = "font-bold text-sm text-red-600";
+  title.className = "causal-chain-title";
   title.textContent = `因果鏈 #${container.children.length + 1}`;
-  row.append(title, createCausalTable(chain, true));
+  header.appendChild(title);
+  if (container.children.length > 0) {
+    const removeButton = document.createElement("button");
+    removeButton.type = "button";
+    removeButton.className = "text-red-500 hover:text-red-700 text-xs font-semibold";
+    removeButton.textContent = "✕ 刪除此因果鏈";
+    removeButton.addEventListener("click", () => {
+      row.remove();
+      container.querySelectorAll(".causal-chain-title").forEach((heading, index) => {
+        heading.textContent = `因果鏈 #${index + 1}`;
+      });
+    });
+    header.appendChild(removeButton);
+  }
+  row.append(header, createCausalTable(chain, true));
   container.appendChild(row);
 }
 

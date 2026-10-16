@@ -193,6 +193,12 @@ body {
 }
 
 /* 因果型分析：A–D 階段表格 */
+.causal-chain { padding: 16px; border: 1px solid #c7d2fe; border-radius: 12px; background: #f8f9ff; }
+.causal-chain-title { padding: 3px 8px; border-radius: 4px; background: #eef2ff; color: #4338ca; font-size: 12px; font-weight: 700; }
+.causal-chain .causal-table { background: transparent; }
+.causal-chain .causal-table th, .causal-chain .causal-table td { border: 0; }
+.causal-chain .causal-table thead th, .causal-chain .causal-table .causal-impact-heading th { color: #4338ca; background: transparent; }
+.causal-chain .causal-table textarea { border-color: #c7d2fe; border-radius: 8px; background: white; }
 .causal-table { width: 100%; min-width: 580px; table-layout: fixed; border-collapse: collapse; background: white; font-size: 13px; }
 .causal-table th, .causal-table td { border: 1px solid #64748b; padding: 8px; text-align: left; vertical-align: top; overflow-wrap: anywhere; white-space: pre-wrap; }
 .causal-table tr > :first-child { width: 82px; }
