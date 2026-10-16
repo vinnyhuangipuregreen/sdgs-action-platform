@@ -26,7 +26,7 @@ class ActivityDescriptionTests(unittest.TestCase):
         self.client = TestClient(app)
         self.student = self.headers("student")
         self.admin = self.headers("admin")
-        self.payload = {"unit_name": "Test", "center_action": "環保", "center_custom": "淨灘", "radial_data": [], "tradeoff_data": [], "self_checks": [], "commitment": {}, "status": "draft"}
+        self.payload = {"unit_name": "Test", "center_action": "環保", "center_custom": "淨灘", "activity_description": "親子共同參與淨灘", "radial_data": [], "tradeoff_data": [], "self_checks": [], "commitment": {}, "status": "draft"}
 
     def headers(self, role):
         token = create_access_token({"id": 1, "name": "Test", "email": "test@example.invalid", "role": role})
@@ -63,13 +63,21 @@ class ActivityDescriptionTests(unittest.TestCase):
         document = Document(io.BytesIO(exported.content))
         self.assertIn(description, [paragraph.text for paragraph in document.paragraphs])
         self.payload["activity_description"] = ""
-        self.assertEqual(self.client.put(url, headers=self.student, json=self.payload).status_code, 200)
-        self.assertEqual(self.client.get(url, headers=self.student).json()["activity_description"], "")
+        self.assertEqual(self.client.put(url, headers=self.student, json=self.payload).status_code, 422)
+        self.assertEqual(self.client.get(url, headers=self.student).json()["activity_description"], description)
 
-    def test_omitted_description_is_optional(self):
+    def test_description_is_required_for_create_and_update(self):
         worksheet_id = self.save()
-        response = self.client.get(f"/api/worksheets/{worksheet_id}", headers=self.student)
-        self.assertEqual(response.json()["activity_description"], "")
+        for status in ("draft", "submitted"):
+            for description in (None, "", " \n\t "):
+                payload = {**self.payload, "status": status}
+                if description is None:
+                    payload.pop("activity_description")
+                else:
+                    payload["activity_description"] = description
+                with self.subTest(status=status, description=description):
+                    self.assertEqual(self.client.post("/api/worksheets", headers=self.student, json=payload).status_code, 422)
+                    self.assertEqual(self.client.put(f"/api/worksheets/{worksheet_id}", headers=self.student, json=payload).status_code, 422)
 
     def test_existing_database_migration_keeps_records_and_is_repeatable(self):
         worksheet_id = self.save()

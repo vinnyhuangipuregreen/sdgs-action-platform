@@ -33,7 +33,7 @@ class CausalWorksheetTests(unittest.TestCase):
         self.temp.cleanup()
 
     def save(self, causal):
-        payload = {"unit_name": "Test", "center_action": "Test", "radial_data": [], "tradeoff_data": [], "causal_data": causal, "self_checks": [True, False, True, False], "commitment": {}, "status": "draft"}
+        payload = {"unit_name": "Test", "center_action": "Test", "activity_description": "Test activity", "radial_data": [], "tradeoff_data": [], "causal_data": causal, "self_checks": [True, False, True, False], "commitment": {}, "status": "draft"}
         response = self.client.post("/api/worksheets", headers=self.headers, json=payload)
         self.assertEqual(response.status_code, 200, response.text)
         return response.json()["id"], payload

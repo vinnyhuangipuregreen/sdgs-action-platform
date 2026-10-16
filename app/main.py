@@ -9,7 +9,7 @@ from fastapi import FastAPI, Depends, HTTPException, Header, Query, Response, st
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from app.database import get_db, init_db, get_game_settings, set_game_settings, DEFAULT_GAME_SETTINGS
 from app.auth import hash_password, verify_password, create_access_token, decode_access_token
@@ -314,7 +314,7 @@ class WorksheetSchema(BaseModel):
     unit_name: str
     center_action: str
     center_custom: Optional[str] = ""
-    activity_description: str = ""
+    activity_description: str
     radial_data: List[Dict[str, Any]]
     tradeoff_data: List[Dict[str, Any]]
     chat_text: str = ""
@@ -322,6 +322,13 @@ class WorksheetSchema(BaseModel):
     self_checks: List[bool]
     commitment: Dict[str, Any]
     status: Optional[str] = "submitted"
+
+    @field_validator("activity_description")
+    @classmethod
+    def require_activity_description(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("請填寫活動簡介及說明！")
+        return value
 
 @app.get("/api/worksheets")
 def list_worksheets(

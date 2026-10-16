@@ -932,6 +932,13 @@ async function saveWorksheet(status = "submitted") {
   const centerAction = actionRadio.value;
   const centerCustom = actionRadio.dataset.legacyCustom === "true" ? document.getElementById("ws_centerCustom")?.value.trim() : actionRadio.dataset.customValue || "";
 
+  const descriptionInput = document.getElementById("ws_activityDescription");
+  if (!descriptionInput.value.trim()) {
+    showToast("請填寫活動簡介及說明！", "error");
+    descriptionInput.focus();
+    return;
+  }
+
   const radialData = [];
   document.querySelectorAll(".radial-line-row").forEach(row => {
     const goal = row.querySelector(".radial-goal-select")?.value;
