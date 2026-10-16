@@ -188,14 +188,16 @@
 
         <!-- Causal Chain -->
         <div class="space-y-4">
-          <div class="flex items-center gap-2">
-            <span class="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-black text-sm">五</span>
-            <div>
-              <h3 class="font-extrabold text-base text-slate-900">因果型分析</h3>
-              <p class="text-xs text-slate-500">提醒：「有關聯」不等於「有因果」；「可能影響」不等於「已經達成」。</p>
+          <div class="flex justify-between items-start gap-3">
+            <div class="flex items-center gap-2">
+              <span class="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-black text-sm">五</span>
+              <div>
+                <h3 class="font-extrabold text-base text-slate-900">因果型分析</h3>
+                <p class="text-xs text-slate-500">提醒：「有關聯」不等於「有因果」；「可能影響」不等於「已經達成」。</p>
+              </div>
             </div>
+            <button type="button" id="addCausalChainBtn" class="shrink-0 whitespace-nowrap px-3 py-1.5 bg-indigo-50 text-indigo-800 hover:bg-indigo-100 rounded-lg text-xs font-bold border border-indigo-300">＋ 增加一項因果鏈</button>
           </div>
-          <button type="button" id="addCausalChainBtn" class="px-3 py-1.5 bg-indigo-50 text-indigo-800 hover:bg-indigo-100 rounded-lg text-xs font-bold border border-indigo-300">＋ 新增因果鏈</button>
           <div id="causalChainsContainer" class="space-y-5"></div>
         </div>
 
@@ -1215,7 +1217,7 @@
     </div>
   </footer>
 
-  <script src="/static/js/app.js?v=20261017_causal_cards"></script>
+  <script src="/static/js/app.js?v=20261017_tradeoff_default"></script>
   <script src="/static/js/category-admin.js?v=20261016_category_admin"></script>
 </body>
 </html>

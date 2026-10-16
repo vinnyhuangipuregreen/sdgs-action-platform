@@ -766,9 +766,9 @@ function populateSDGSelectors() {
 
 function renderDefaultWorksheetRows() {
   const container = document.getElementById("radialLinesContainer");
-  if (!container || container.children.length > 0) return;
-  container.innerHTML = "";
-  for (let i = 0; i < 3; i++) addRadialLineRow();
+  if (container && container.children.length === 0) {
+    for (let i = 0; i < 3; i++) addRadialLineRow();
+  }
   const toContainer = document.getElementById("tradeoffContainer");
   if (toContainer && toContainer.children.length === 0) addTradeoffRow();
 }
@@ -1158,6 +1158,7 @@ window.loadWorksheetToForm = function(wsId, silent = false) {
     if (Array.isArray(ws.tradeoff_data)) {
       ws.tradeoff_data.forEach(to => addTradeoffRow(to));
     }
+    if (tradeoffContainer.children.length === 0) addTradeoffRow();
   }
 
   renderCausalChains(ws.causal_data);
