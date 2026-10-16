@@ -603,15 +603,99 @@ window.setTierFilter = function(tier, btn) {
 // ==============================================================================
 // 4. Worksheet Module (CRUD)
 // ==============================================================================
-function initWorksheetEvents() {
-  document.querySelectorAll("input[name='center_action']").forEach(radio => {
-    radio.addEventListener("change", (e) => {
-      const customBox = document.getElementById("centerCustomBox");
-      if (e.target.value === "D") customBox.classList.remove("hidden");
-      else customBox.classList.add("hidden");
-      updateChatTextSnippet();
-    });
+function initCenterActionPicker() {
+  const options = document.getElementById("centerActionOptions");
+  CENTER_ACTION_CATALOG.forEach(action => {
+    const label = document.createElement("label");
+    label.className = "action-option";
+    const radio = document.createElement("input");
+    radio.type = "radio";
+    radio.name = "center_action";
+    radio.value = action.category;
+    radio.dataset.action = action.name;
+    const text = document.createElement("span");
+    const category = document.createElement("span");
+    category.className = "action-category-label";
+    category.textContent = action.category;
+    const name = document.createElement("span");
+    name.className = "action-name";
+    name.textContent = action.name;
+    text.append(category, name);
+    label.append(radio, text);
+    options.appendChild(label);
   });
+  const categories = document.getElementById("centerActionCategories");
+  ["全部", ...new Set(CENTER_ACTION_CATALOG.map(a => a.category))].forEach(category => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.dataset.category = category;
+    button.setAttribute("aria-pressed", String(category === "全部"));
+    const count = CENTER_ACTION_CATALOG.filter(a => category === "全部" || a.category === category).length;
+    button.textContent = `${category} ${count}`;
+    button.addEventListener("click", () => {
+      categories.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b === button)));
+      filterCenterActions();
+    });
+    categories.appendChild(button);
+  });
+  document.getElementById("centerActionSearch").addEventListener("input", filterCenterActions);
+  document.getElementById("clearCenterActionFilters").addEventListener("click", resetCenterActionFilters);
+  options.addEventListener("change", () => {
+    const radio = options.querySelector("input:checked");
+    document.getElementById("centerCustomBox").classList.toggle("hidden", radio?.value !== "D");
+    updateChatTextSnippet();
+  });
+  filterCenterActions();
+}
+
+function filterCenterActions() {
+  const category = document.querySelector("#centerActionCategories button[aria-pressed='true']")?.dataset.category || "全部";
+  const terms = document.getElementById("centerActionSearch").value.normalize("NFKC").toLowerCase().trim().split(/\s+/).filter(Boolean);
+  let count = 0;
+  document.querySelectorAll("#centerActionOptions .action-option").forEach(label => {
+    const radio = label.querySelector("input");
+    const text = `${radio.value} ${radio.dataset.action || label.textContent}`.normalize("NFKC").toLowerCase();
+    const matches = (category === "全部" || radio.value === category) && terms.every(term => text.includes(term));
+    label.hidden = !matches;
+    if (matches) count++;
+  });
+  document.getElementById("centerActionResultCount").textContent = `符合 ${count} 項活動・單選`;
+  document.getElementById("centerActionEmpty").classList.toggle("hidden", count > 0);
+}
+
+function resetCenterActionFilters() {
+  document.getElementById("centerActionSearch").value = "";
+  document.querySelectorAll("#centerActionCategories button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.category === "全部")));
+  filterCenterActions();
+}
+
+function restoreCenterAction(category, name) {
+  document.getElementById("centerActionLegacy")?.remove();
+  document.querySelectorAll("input[name='center_action']").forEach(r => { r.checked = false; });
+  const customInput = document.getElementById("ws_centerCustom");
+  customInput.value = "";
+  let radio = [...document.querySelectorAll("input[name='center_action']")].find(r => r.value === category && r.dataset.action === name);
+  if (!radio && category) {
+    const label = document.createElement("label");
+    label.id = "centerActionLegacy";
+    label.className = "action-option";
+    radio = document.createElement("input");
+    radio.type = "radio";
+    radio.name = "center_action";
+    radio.value = category;
+    radio.dataset.action = name || ({ A: "一次淨灘", B: "社區二手衣物交換", C: "道場或家裡改用太陽能", D: "自選佛光活動" }[category] || category);
+    label.append(radio, document.createTextNode(`歷史紀錄：${radio.dataset.action}`));
+    document.getElementById("centerActionOptions").prepend(label);
+    if (category === "D") customInput.value = name || "";
+  }
+  if (radio) radio.checked = true;
+  document.getElementById("centerCustomBox").classList.toggle("hidden", category !== "D");
+  resetCenterActionFilters();
+  updateChatTextSnippet();
+}
+
+function initWorksheetEvents() {
+  initCenterActionPicker();
 
   const customInput = document.getElementById("ws_centerCustom");
   if (customInput) customInput.addEventListener("input", updateChatTextSnippet);
@@ -753,15 +837,17 @@ function addTradeoffRow(data = null) {
 
 function updateChatTextSnippet() {
   const selectedActionRadio = document.querySelector("input[name='center_action']:checked");
-  const actionCode = selectedActionRadio ? selectedActionRadio.value : "A";
+  const actionCode = selectedActionRadio ? selectedActionRadio.value : "未選擇";
   
-  let actionName = "淨灘";
+  let actionName = selectedActionRadio?.dataset.action || "請選擇中心行動";
   if (actionCode === "A") actionName = "淨灘";
   if (actionCode === "B") actionName = "二手衣物交換";
   if (actionCode === "C") actionName = "改用太陽能";
   if (actionCode === "D") {
     actionName = document.getElementById("ws_centerCustom")?.value.trim() || "自選佛光活動";
   }
+  const selected = document.getElementById("centerActionSelected");
+  if (selected) selected.textContent = selectedActionRadio ? `已選擇｜${actionCode} · ${actionName}` : "尚未選擇活動";
 
   const goals = [];
   document.querySelectorAll(".radial-goal-select").forEach(sel => {
@@ -770,8 +856,8 @@ function updateChatTextSnippet() {
       if (match) goals.push(match[1]);
     }
   });
-  const goalsStr = goals.length > 0 ? goals.join("、") : "14、12、3";
-  const firstRisk = document.querySelector(".tradeoff-who")?.value.trim() || "清出的垃圾未妥善處置造成二次污染";
+  const goalsStr = goals.length > 0 ? goals.join("、") : "待選擇SDGs";
+  const firstRisk = document.querySelector(".tradeoff-who")?.value.trim() || "待填寫風險";
 
   const chatSnippet = `${actionCode}｜${actionName}｜${goalsStr}｜風險：${firstRisk}`;
   const outEl = document.getElementById("ws_chatSnippet");
@@ -792,7 +878,8 @@ async function saveWorksheet(status = "submitted") {
     return;
   }
   const centerAction = actionRadio.value;
-  const centerCustom = centerAction === "D" ? document.getElementById("ws_centerCustom")?.value.trim() : "";
+  const centerCustom = centerAction === "D" ? document.getElementById("ws_centerCustom")?.value.trim() :
+    (["A", "B", "C"].includes(centerAction) ? "" : actionRadio.dataset.action || "");
 
   const radialData = [];
   document.querySelectorAll(".radial-line-row").forEach(row => {
@@ -983,15 +1070,7 @@ window.loadWorksheetToForm = function(wsId, silent = false) {
   const unitEl = document.getElementById("ws_unitName");
   if (unitEl) unitEl.value = ws.unit_name || state.user?.unit_name || "佛光學員";
 
-  const radio = document.querySelector(`input[name='center_action'][value='${ws.center_action}']`);
-  if (radio) {
-    radio.checked = true;
-    radio.dispatchEvent(new Event("change"));
-  }
-  if (ws.center_action === "D") {
-    const custEl = document.getElementById("ws_centerCustom");
-    if (custEl) custEl.value = ws.center_custom || "";
-  }
+  restoreCenterAction(ws.center_action, ws.center_custom || "");
 
   const radialContainer = document.getElementById("radialLinesContainer");
   if (radialContainer) {
@@ -1071,10 +1150,7 @@ window.createNewWorksheet = function(showToastMsg = true) {
   const unitEl = document.getElementById("ws_unitName");
   if (unitEl) unitEl.value = state.user?.unit_name || "佛光學員";
 
-  const radA = document.querySelector("input[name='center_action'][value='A']");
-  if (radA) { radA.checked = true; radA.dispatchEvent(new Event("change")); }
-  const custEl = document.getElementById("ws_centerCustom");
-  if (custEl) custEl.value = "";
+  restoreCenterAction("", "");
   
   const rc = document.getElementById("radialLinesContainer");
   if (rc) { rc.innerHTML = ""; for(let i=0; i<3; i++) addRadialLineRow(); }
@@ -1691,13 +1767,16 @@ function renderAdminCharts(stats) {
   if (ctxPie) {
     if (chartPie) chartPie.destroy();
     const counts = stats.center_action_distribution || {};
+    const actionCategories = [...new Set(CENTER_ACTION_CATALOG.map(a => a.category))];
+    const chartLabels = [...actionCategories, ...Object.keys(counts).filter(key => !actionCategories.includes(key))];
+    const legacyLabels = { A: "A. 淨灘", B: "B. 二手衣交換", C: "C. 太陽能", D: "D. 自選佛光活動" };
     chartPie = new Chart(ctxPie, {
       type: "doughnut",
       data: {
-        labels: ["A. 淨灘", "B. 二手衣交換", "C. 太陽能", "D. 自選佛光活動"],
+        labels: chartLabels.map(key => legacyLabels[key] || key),
         datasets: [{
-          data: [counts["A"] || 0, counts["B"] || 0, counts["C"] || 0, counts["D"] || 0],
-          backgroundColor: ["#0284c7", "#f59e0b", "#10b981", "#8b5cf6"]
+          data: chartLabels.map(key => counts[key] || 0),
+          backgroundColor: ["#0284c7", "#f59e0b", "#10b981", "#8b5cf6", "#64748b", "#f43f5e", "#14b8a6", "#a855f7"]
         }]
       },
       options: { responsive: true, plugins: { legend: { position: "bottom" } } }

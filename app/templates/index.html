@@ -6,7 +6,7 @@
   <title>SDGs 與氣候行動—連動分析與學習平台</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <link rel="stylesheet" href="/static/css/style.css?v=20261014_v31">
+  <link rel="stylesheet" href="/static/css/style.css?v=20261016_actions">
   <script>
     tailwind.config = {
       theme: {
@@ -126,26 +126,24 @@
             <span class="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-black text-sm">二</span>
             <h3 class="font-extrabold text-base text-slate-900">選擇你的中心行動</h3>
           </div>
-          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-            <label class="flex items-center p-3.5 rounded-xl border border-slate-200 hover:border-emerald-500 bg-slate-50 cursor-pointer transition-all">
-              <input type="radio" name="center_action" value="A" checked class="text-emerald-600 focus:ring-emerald-500">
-              <span class="ml-2.5 text-xs sm:text-sm font-bold text-slate-800">A．一次淨灘</span>
-            </label>
-            <label class="flex items-center p-3.5 rounded-xl border border-slate-200 hover:border-emerald-500 bg-slate-50 cursor-pointer transition-all">
-              <input type="radio" name="center_action" value="B" class="text-emerald-600 focus:ring-emerald-500">
-              <span class="ml-2.5 text-xs sm:text-sm font-bold text-slate-800">B．社區二手衣物交換</span>
-            </label>
-            <label class="flex items-center p-3.5 rounded-xl border border-slate-200 hover:border-emerald-500 bg-slate-50 cursor-pointer transition-all">
-              <input type="radio" name="center_action" value="C" class="text-emerald-600 focus:ring-emerald-500">
-              <span class="ml-2.5 text-xs sm:text-sm font-bold text-slate-800">C．道場或家裡改用太陽能</span>
-            </label>
-            <label class="flex items-center p-3.5 rounded-xl border border-slate-200 hover:border-emerald-500 bg-slate-50 cursor-pointer transition-all">
-              <input type="radio" name="center_action" value="D" class="text-emerald-600 focus:ring-emerald-500">
-              <span class="ml-2.5 text-xs sm:text-sm font-bold text-slate-800">D．自選佛光活動</span>
-            </label>
+          <div class="action-picker">
+            <p class="text-sm text-slate-500">從主題分類探索，或輸入關鍵字找到你的活動。請選擇一項作為分析起點。</p>
+            <div class="action-search-row">
+              <div class="flex-1">
+                <label for="centerActionSearch" class="block text-xs font-bold text-slate-700 mb-2">搜尋活動</label>
+                <input type="search" id="centerActionSearch" placeholder="搜尋活動或類別，例如：捐血、親子、環保" class="w-full text-sm border border-slate-300 rounded-xl px-4 py-3" aria-controls="centerActionOptions">
+              </div>
+              <button type="button" id="clearCenterActionFilters" class="text-sm font-bold text-emerald-700 px-3 py-3 rounded-lg hover:bg-emerald-50">清除篩選</button>
+            </div>
+            <div id="centerActionCategories" class="action-categories" role="group" aria-label="主題分類"></div>
+            <p id="centerActionResultCount" class="text-xs text-slate-500" role="status" aria-live="polite"></p>
+            <div id="centerActionOptions" class="action-options" role="radiogroup" aria-label="中心行動" tabindex="0"></div>
+            <div id="centerActionEmpty" class="hidden text-center py-8 text-sm text-slate-500">找不到符合的活動，請縮短關鍵字或清除篩選。</div>
+            <div id="centerActionSelected" class="action-selected" role="status" aria-live="polite">尚未選擇活動</div>
           </div>
           <div id="centerCustomBox" class="hidden mt-2">
-            <input type="text" id="ws_centerCustom" class="w-full text-xs sm:text-sm border border-emerald-300 rounded-xl p-2.5 bg-emerald-50/40 focus:ring-emerald-500" placeholder="請自訂佛光活動名稱（例：佛光蔬食A計畫、綠色公益捐血市集）">
+            <label for="ws_centerCustom" class="block text-xs font-bold text-slate-700 mb-1">歷史紀錄的自選活動名稱</label>
+            <input type="text" id="ws_centerCustom" class="w-full text-xs sm:text-sm border border-emerald-300 rounded-xl p-2.5 bg-emerald-50/40 focus:ring-emerald-500">
           </div>
         </div>
 
@@ -195,7 +193,7 @@
             </button>
           </div>
           <input type="text" id="ws_chatSnippet" class="w-full text-xs sm:text-sm font-mono bg-white border border-teal-300 rounded-xl px-3 py-2 text-teal-900 font-bold" readonly>
-          <p class="text-[11px] text-teal-700">格式範例：A｜淨灘｜14、12、3｜風險：清出的垃圾沒有妥善處理</p>
+          <p class="text-[11px] text-teal-700">格式：主題類別｜活動內容｜SDGs 編號｜風險：可能造成的負面影響</p>
         </div>
 
         <!-- Causal Chain -->
@@ -576,7 +574,7 @@
               <h4 class="font-extrabold text-sm sm:text-base text-slate-800">🎯 中心行動選擇比例 (甜甜圈圖)</h4>
               <span class="text-[11px] px-2.5 py-0.5 rounded-full bg-sky-50 text-sky-700 font-bold">行動主題佔比</span>
             </div>
-            <p class="text-xs text-slate-400 mb-4">A淨灘 vs B二手衣 vs C太陽能 vs D自選活動</p>
+            <p class="text-xs text-slate-400 mb-4">依主題類別統計，包含歷史活動紀錄</p>
             <div class="h-72 flex items-center justify-center">
               <canvas id="adminPieChart"></canvas>
             </div>
@@ -1177,6 +1175,7 @@
     </div>
   </footer>
 
-  <script src="/static/js/app.js?v=20261015_v35"></script>
+  <script src="/static/js/action-catalog.js?v=20261016_actions"></script>
+  <script src="/static/js/app.js?v=20261016_actions"></script>
 </body>
 </html>
