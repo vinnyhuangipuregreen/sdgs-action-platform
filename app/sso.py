@@ -45,7 +45,7 @@ def profile(user_id, account_type):
 def install_sso(app, require_user):
     @app.get("/sso/authorize", response_class=HTMLResponse)
     def authorize_page():
-        return HTMLResponse((Path(__file__).parent / "templates/sso-authorize.html").read_text(encoding="utf-8"),
+        return HTMLResponse((Path(__file__).parent / "templates/index.html").read_text(encoding="utf-8"),
                             headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"})
 
     @app.post("/api/auth/logout")

@@ -55,6 +55,13 @@ class IdentitySsoTests(unittest.TestCase):
         self.assertEqual(response.status_code,200,response.text)
         return response.json()["code"]
 
+    def test_authorization_uses_the_normal_platform_interface(self):
+        response = self.client.get("/sso/authorize")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('id="loginModal"', response.text)
+        self.assertNotIn("正在驗證系統登入", response.text)
+        self.assertIn("no-store", response.headers["cache-control"])
+
     def exchange(self,code,verifier=None):
         return self.client.post("/api/auth/sso/exchange",json={"client_id":"attendance","redirect_uri":CALLBACK,"code":code,"code_verifier":verifier or self.verifier})
 

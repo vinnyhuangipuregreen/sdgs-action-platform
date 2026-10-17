@@ -114,6 +114,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const initialTab = location.hash.slice(1);
   const publicTabs = ["home", "worksheet", "carbon", "food", "sdgs", "earth_defense", "leaderboard"];
   switchTab(publicTabs.includes(initialTab) ? initialTab : "home");
+  if (resumeCourseSignIn()) return;
   await loadCenterActions();
   await checkAuth();
   if (new URLSearchParams(location.search).get("sso_logout") === "1") {
@@ -304,9 +305,9 @@ async function handleLogin(e, explicitStudentId = null) {
     showLoginModal(false);
     updateUserUI();
     showToast(`歡迎回來，${data.user.name}！`, "success");
+    if (resumeCourseSignIn()) return;
     // 切換或登入新帳號時，自動載入該帳號之表單資料
     await loadMyWorksheets(true);
-    resumeCourseSignIn();
   } catch (err) {
     errorEl.textContent = "連線異常，請稍後再試";
     errorEl.classList.remove("hidden");
@@ -2753,12 +2754,39 @@ function showToast(message, type = "info") {
 }
 
 function resumeCourseSignIn() {
-  const destination = new URLSearchParams(location.search).get("sso_return");
+  const destination = location.pathname === "/sso/authorize" ? location.href : new URLSearchParams(location.search).get("sso_return");
   if (!destination) return false;
   const url = new URL(destination, location.origin);
   if (url.origin !== location.origin || url.pathname !== "/sso/authorize") return false;
-  if (state.user && state.token) { location.replace(url.pathname + url.search); return true; }
-  if (url.searchParams.get("login_type") === "staff") handleAdminAccess();
-  else showLoginModal(true);
-  return false;
+  const query = url.searchParams;
+  const callback = "https://sdgs-attendance-record.vercel.app/auth/sso/callback";
+  if (query.get("client_id") !== "attendance" || query.get("redirect_uri") !== callback ||
+      !/^[A-Za-z0-9_-]{43}$/.test(query.get("code_challenge") || "") ||
+      !/^[A-Za-z0-9_-]{32,128}$/.test(query.get("state") || "")) {
+    showToast("登入連結無效，請從課程登錄重新開始。", "error");
+    return true;
+  }
+  const signIn = () => {
+    if (query.get("login_type") === "staff") { showLoginModal(false); handleAdminAccess(); }
+    else showLoginModal(true);
+  };
+  if (!state.token) { signIn(); return true; }
+  (async () => {
+    try {
+      const response = await fetch(`${API_BASE}/auth/sso/ticket`, {
+        method: "POST", headers: {"Content-Type": "application/json", Authorization: `Bearer ${state.token}`},
+        body: JSON.stringify({client_id: "attendance", redirect_uri: callback, code_challenge: query.get("code_challenge")})
+      });
+      if (response.status === 401) { handleLogout(); signIn(); return; }
+      if (!response.ok) throw new Error();
+      const data = await response.json();
+      const target = new URL(callback);
+      target.searchParams.set("code", data.code);
+      target.searchParams.set("state", query.get("state"));
+      location.replace(target.href);
+    } catch {
+      showToast("目前無法完成登入，請稍後再從課程登錄重試。", "error");
+    }
+  })();
+  return true;
 }

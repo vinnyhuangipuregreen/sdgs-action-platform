@@ -75,11 +75,12 @@ def get_current_user(
         table = "admin" if get_account_type(payload) == "staff" else "student"
         with get_accounts_db() as conn:
             cursor = conn.cursor()
-            cursor.execute(f"SELECT role, email FROM {table} WHERE id = ?", (payload["user_id"],))
+            cursor.execute(f"SELECT id, name, email, email_backup, phone, unit_code, unit_name, role FROM {table} WHERE id = ?", (payload["user_id"],))
             account = cursor.fetchone()
             if not account or account["email"] != payload.get("email"):
                 return None
             payload["role"] = account["role"]
+            payload["profile"] = dict(account)
     return payload
 
 def require_user(current_user: Optional[dict] = Depends(get_current_user)) -> dict:
@@ -198,14 +199,7 @@ def login(req: LoginRequest):
 
 @app.get("/api/auth/me")
 def get_me(user: dict = Depends(require_user)):
-    with get_accounts_db() as conn:
-        cursor = conn.cursor()
-        table = "admin" if get_account_type(user) == "staff" else "student"
-        cursor.execute(f"SELECT id, name, email, email_backup, phone, unit_code, unit_name, role FROM {table} WHERE id = ?", (user["user_id"],))
-        row = cursor.fetchone()
-        if not row:
-            raise HTTPException(status_code=404, detail="使用者不存在")
-        return {**dict(row), "account_type": get_account_type(user)}
+    return {**user["profile"], "account_type": get_account_type(user)}
 
 # ==============================================================================
 # 3. SDGs Reference APIs
