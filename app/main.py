@@ -747,7 +747,7 @@ def get_admin_stats(user: dict = Depends(require_admin)):
 @app.get("/api/admin/students")
 def get_admin_students(
     search: Optional[str] = None,
-    limit: int = 300,
+    limit: int = 100,
     offset: int = 0,
     user: dict = Depends(require_admin)
 ):

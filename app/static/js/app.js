@@ -39,6 +39,10 @@ const state = {
   },
 
   selectedStudentIds: new Set(),
+  studentPage: 1,
+  studentSearch: "",
+  studentTotalPages: 1,
+  studentRequestId: 0,
   selectedStaffIds: new Set(),
   activeAdminSubTab: "dashboard",
   centerActions: [],
@@ -2306,9 +2310,16 @@ window.exportStaffCSV = function() {
 // ==============================================================================
 // 8. Student Management (6-column CRUD, Batch Delete, Import & Export)
 // ==============================================================================
-async function loadAdminStudents(search = "") {
+async function loadAdminStudents(search = state.studentSearch, page = state.studentPage) {
   const container = document.getElementById("adminStudentsTableBody");
   if (!container) return;
+  if (search !== state.studentSearch) page = 1;
+  state.studentSearch = search;
+  state.studentPage = Math.max(1, page);
+  const requestId = ++state.studentRequestId;
+  document.getElementById("studentPrevPage").disabled = true;
+  document.getElementById("studentNextPage").disabled = true;
+  document.getElementById("studentPageInfo").textContent = "載入中…";
   container.innerHTML = '<tr><td colspan="9" class="p-6 text-center text-slate-400">載入學員名單...</td></tr>';
   state.selectedStudentIds.clear();
   updateSelectedCountUI();
@@ -2316,12 +2327,21 @@ async function loadAdminStudents(search = "") {
   if (masterCb) masterCb.checked = false;
 
   try {
-    const url = search ? `${API_BASE}/admin/students?search=${encodeURIComponent(search)}&limit=300` : `${API_BASE}/admin/students?limit=150`;
+    const url = `${API_BASE}/admin/students?search=${encodeURIComponent(search)}&limit=100&offset=${(state.studentPage - 1) * 100}`;
     const res = await fetch(url, {
       headers: { "Authorization": `Bearer ${state.token}` }
     });
+    if (!res.ok) throw new Error("無法讀取名單");
     if (res.ok) {
       const data = await res.json();
+      if (requestId !== state.studentRequestId) return;
+      state.studentTotalPages = Math.max(1, Math.ceil(data.total / 100));
+      if (state.studentPage > state.studentTotalPages) {
+        return loadAdminStudents(search, state.studentTotalPages);
+      }
+      document.getElementById("studentPageInfo").textContent = `第 ${state.studentPage} / ${state.studentTotalPages} 頁，共 ${data.total} 筆（每頁 100 筆）`;
+      document.getElementById("studentPrevPage").disabled = state.studentPage === 1;
+      document.getElementById("studentNextPage").disabled = state.studentPage === state.studentTotalPages;
       container.innerHTML = "";
       if (!data.items || data.items.length === 0) {
         container.innerHTML = '<tr><td colspan="9" class="p-6 text-center text-slate-400">無符合條件之學員資料</td></tr>';
@@ -2356,11 +2376,17 @@ async function loadAdminStudents(search = "") {
       });
     }
   } catch (err) {
+    if (requestId !== state.studentRequestId) return;
+    document.getElementById("studentPageInfo").textContent = "名單載入失敗，請重新整理數據";
     container.innerHTML = '<tr><td colspan="9" class="p-6 text-center text-red-400">無法讀取名單</td></tr>';
   }
 }
 
 window.loadAdminStudents = loadAdminStudents;
+window.changeStudentPage = function(delta) {
+  const page = state.studentPage + delta;
+  if (page >= 1 && page <= state.studentTotalPages) return loadAdminStudents(state.studentSearch, page);
+};
 
 window.handleStudentSelectChange = function(id, isChecked) {
   if (isChecked) state.selectedStudentIds.add(id);

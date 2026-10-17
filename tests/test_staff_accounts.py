@@ -159,6 +159,23 @@ class StaffAccountsTests(unittest.TestCase):
             self.assertEqual(conn.execute("SELECT COUNT(*) FROM admin").fetchone()[0], 2)
         self.assertEqual(self.client.get("/api/auth/me", headers=self.admin).status_code, 200)
 
+    def test_student_list_returns_100_per_page_and_searches_all_students(self):
+        with database.get_db() as conn:
+            conn.executemany("INSERT INTO student (id,name,email,phone,password_hash) VALUES (?,?,?,'000','test')",
+                [(i, f"Student {i}", f"student{i}@example.invalid") for i in range(2, 428)])
+        ids = []
+        for offset, size in ((0, 100), (100, 100), (200, 100), (300, 100), (400, 27)):
+            response = self.client.get("/api/admin/students", headers=self.admin, params={"offset": offset})
+            self.assertEqual(response.status_code, 200, response.text)
+            data = response.json()
+            self.assertEqual(data["total"], 427)
+            self.assertEqual(len(data["items"]), size)
+            ids.extend(row["id"] for row in data["items"])
+        self.assertEqual(ids, list(range(1, 428)))
+        data = self.client.get("/api/admin/students", headers=self.admin, params={"search": "Student 42"}).json()
+        self.assertEqual(data["total"], 9)
+        self.assertEqual([row["id"] for row in data["items"]], [42, *range(420, 428)])
+
     def test_login_uses_separate_tables_and_changed_staff_password_is_respected(self):
         for account, source, expected in (("admin", "staff", "admin"), ("Teacher@example.invalid", "staff", "teacher"), ("Student@example.invalid", "student", "student")):
             response = self.client.post("/api/auth/login", json={"account": account, "password": "test-password", "account_type": source})
