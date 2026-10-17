@@ -489,7 +489,7 @@ def retain_requested_admin_accounts(cursor):
 def renumber_admin_accounts(cursor):
     pending = "NOT EXISTS (SELECT 1 FROM system_settings WHERE key = 'admin_ids_compacted_v1')"
     statements = [
-        f"""CREATE TEMP TABLE admin_id_map AS
+        f"""CREATE TABLE admin_id_map AS
             SELECT id AS old_id, ROW_NUMBER() OVER (ORDER BY CASE WHEN email = 'admin' THEN 0 ELSE 1 END, id) AS new_id
             FROM admin WHERE {pending}""",
         "UPDATE admin SET id = -id WHERE id IN (SELECT old_id FROM admin_id_map)",
