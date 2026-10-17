@@ -24,7 +24,7 @@ class DesignSystemTests(unittest.TestCase):
     def test_unconnected_modules_are_disabled_and_assets_exist(self):
         html = (ROOT / "app/templates/index.html").read_text(encoding="utf-8")
         self.assertEqual(html.count('class="ds-button module-enter" disabled>尚未開放'), 2)
-        for filename in ("hero", "matching", "worksheet", "carbon", "food"):
+        for filename in ("hero", "matching", "worksheet", "carbon", "toolbox"):
             self.assertTrue((ROOT / f"app/static/images/{filename}.png").is_file())
 
     def test_course_registration_is_once_and_immediately_before_admin(self):

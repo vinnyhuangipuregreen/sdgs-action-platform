@@ -1,0 +1,6 @@
+Tool: imagegen built-in image generation. Transparent background: false.
+Saved asset: app/static/images/toolbox.png
+
+Final prompt:
+
+Use case: stylized-concept. Asset type: production website module illustration for a Traditional Chinese sustainability learning platform called 智慧工具箱 (Smart Toolbox). Generate a single landscape 3:2 illustration, 1536x1024 style composition. A polished friendly 3D clay-render open green smart toolbox sits on a pale mint platform; emerging from it are a digital tablet showing a simple chart, a calculator, a magnifying glass, and a glowing small lightbulb representing useful digital learning and analysis tools. A few fresh green leaves and subtle turquoise circular shapes connect the scene with sustainability. Main palette emerald green #16A34A, teal #0EA5A4, natural green #65A30D, white, small blue #3B82F6 accents. Bright white to very pale mint background, soft studio lighting, rounded forms, detailed but uncluttered, premium academic educational platform feeling. Center the complete object group with generous safe margins so it works in both a cropped card and large module hero. Match the glossy-soft 3D eco illustrations in the user's existing website. Image contains NO text, letters, numbers, badges, branding, watermarks, food, porridge, bowls, or ingredients.
