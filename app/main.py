@@ -22,6 +22,7 @@ from app.action_catalog import CategoryItem, list_actions, save_action, delete_a
 from app.matching_bridge import proxy_matching_request
 from app.accounts import get_accounts_db, enrich_worksheets
 from app.sso import install_sso
+from app.attendance_bridge import install_attendance_admin
 
 app = FastAPI(
     title="SDGs 與氣候行動連動分析與智慧學習平台",
@@ -92,6 +93,9 @@ def require_admin(current_user: dict = Depends(require_user)) -> dict:
     if current_user.get("role") not in ["admin", "teacher"]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="權限不足，需要管理員權限")
     return current_user
+
+
+install_attendance_admin(app, require_admin, get_current_user)
 
 
 @app.api_route("/api/matching-admin/{path:path}", methods=["GET", "PUT", "DELETE"])

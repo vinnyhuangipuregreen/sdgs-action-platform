@@ -122,9 +122,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     history.replaceState(null, "", "/");
   }
   if (resumeCourseSignIn()) return;
-  if (["admin", "admin-matching"].includes(initialTab)) {
+  if (["admin", "admin-matching", "admin-attendance"].includes(initialTab)) {
     handleAdminAccess();
     if (initialTab === "admin-matching" && state.user && ["admin", "teacher"].includes(state.user.role)) switchAdminSubTab("matching");
+    if (initialTab === "admin-attendance" && state.user && ["admin", "teacher"].includes(state.user.role)) switchAdminSubTab("attendance");
   }
   await loadSDGsData();
   await loadGameSettings();
@@ -134,6 +135,8 @@ function initUIEvents() {
   window.addEventListener("message", event => {
     const frame = document.getElementById("matchingAdminFrame");
     if (event.origin === location.origin && event.source === frame?.contentWindow && event.data?.type === "sdgs-admin-expired") handleLogout();
+    const attendanceFrame = document.getElementById("attendanceAdminFrame");
+    if (event.origin === location.origin && event.source === attendanceFrame?.contentWindow && event.data?.type === "attendance-admin-expired") handleLogout();
   });
   document.querySelectorAll("[data-open-tab]").forEach(btn => {
     btn.addEventListener("click", () => switchTab(btn.dataset.openTab));
@@ -345,6 +348,7 @@ async function handleAdminLogin(e) {
     if (resumeCourseSignIn()) return;
     switchTab("admin");
     if (location.hash === "#admin-matching") switchAdminSubTab("matching");
+    if (location.hash === "#admin-attendance") switchAdminSubTab("attendance");
   } catch (err) {
     document.getElementById("adminPassword").value = "";
     errEl.textContent = "連線異常，請重試";
@@ -353,6 +357,9 @@ async function handleAdminLogin(e) {
 }
 
 function handleLogout() {
+  const attendanceFrame = document.getElementById("attendanceAdminFrame");
+  if (attendanceFrame) attendanceFrame.src = "about:blank";
+  state.attendanceAdminSession = null;
   if (state.token) fetch(`${API_BASE}/auth/logout`, {method: "POST", headers: {Authorization: `Bearer ${state.token}`}, keepalive: true}).catch(() => {});
   state.token = null;
   state.user = null;
@@ -1814,6 +1821,7 @@ window.switchAdminSubTab = function(subTab) {
     document.getElementById("matchingAdminFrame").src = "/matching-admin";
     state.matchingAdminSession = state.token;
   }
+  if (subTab === "attendance" && state.attendanceAdminSession !== state.token) loadAttendanceAdmin();
 
   document.querySelectorAll(".admin-subtab-btn").forEach(btn => {
     const btnTab = btn.getAttribute("data-admin-subtab");
@@ -1829,6 +1837,26 @@ window.switchAdminSubTab = function(subTab) {
   }
   if (subTab === "categories") loadAdminCategories();
 };
+
+async function loadAttendanceAdmin() {
+  if (!state.token || !["admin", "teacher"].includes(state.user?.role)) return;
+  const token = state.token;
+  const status = document.getElementById("attendanceAdminStatus");
+  status.textContent = "正在載入課程管理…";
+  try {
+    const response = await fetch(`${API_BASE}/attendance-admin/session`, {
+      method: "POST", headers: {Authorization: `Bearer ${token}`}
+    });
+    if (state.token !== token) return;
+    if (response.status === 401) { handleLogout(); return; }
+    if (!response.ok) throw new Error();
+    document.getElementById("attendanceAdminFrame").src = "/attendance-admin/admin";
+    state.attendanceAdminSession = token;
+    status.textContent = "";
+  } catch {
+    status.textContent = "課程管理暫時無法載入，請按「重新載入課程管理」重試。";
+  }
+}
 
 async function loadAdminDashboard() {
   if (!state.token || !state.user || !["admin", "teacher"].includes(state.user.role)) return;

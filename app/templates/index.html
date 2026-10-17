@@ -461,7 +461,7 @@
                 <h2 class="text-lg sm:text-xl font-black text-slate-900 tracking-tight">統一管理後台</h2>
                 <span class="text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-extrabold">系統管理</span>
               </div>
-              <p class="text-xs text-slate-500 mt-0.5">配對挑戰賽 × 連動分析練習單 ｜ 教學數據、學員名冊與系統參數集中管理</p>
+              <p class="text-xs text-slate-500 mt-0.5">配對挑戰賽 × 連動分析練習單 × 課程登錄 ｜ 教學數據、學員名冊與課程紀錄集中管理</p>
             </div>
           </div>
           <div class="flex items-center gap-2 self-end md:self-center">
@@ -478,6 +478,7 @@
             <span>📊</span> 儀錶板
           </button>
           <button type="button" data-admin-subtab="matching" onclick="switchAdminSubTab('matching')" class="admin-subtab-btn px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-slate-100 text-slate-600 flex items-center gap-2">🏆 配對挑戰賽管理</button>
+          <button type="button" data-admin-subtab="attendance" onclick="switchAdminSubTab('attendance')" class="admin-subtab-btn px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-slate-100 text-slate-600 flex items-center gap-2">📚 課程簽到／請假／補課管理</button>
           <button type="button" data-admin-subtab="categories" onclick="switchAdminSubTab('categories')"
             class="admin-subtab-btn px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer">
             <span>🗂️</span> 分類
@@ -506,6 +507,15 @@
       <div id="adminSubPane_matching" class="admin-subpane hidden">
         <div class="ds-card matching-admin-intro"><h3>SDGs 配對挑戰賽管理</h3><p>以統一管理帳號檢視遊戲數據、管理挑戰紀錄、維護 SDGs 指標與遊戲參數。</p></div>
         <iframe id="matchingAdminFrame" class="matching-admin-frame" title="SDGs 配對挑戰賽管理工具" src="about:blank" loading="lazy"></iframe>
+      </div>
+      <div id="adminSubPane_attendance" class="admin-subpane hidden space-y-4">
+        <div class="ds-card matching-admin-intro">
+          <h3>課程簽到／請假／補課管理</h3>
+          <p>維護課程與匯入課程清單，查詢簽到、請假紀錄及管理補課名冊。</p>
+          <button type="button" onclick="loadAttendanceAdmin()" class="ds-button">重新載入課程管理</button>
+          <p id="attendanceAdminStatus" role="status"></p>
+        </div>
+        <iframe id="attendanceAdminFrame" class="matching-admin-frame" title="課程簽到、請假與補課管理工具" src="about:blank" loading="lazy"></iframe>
       </div>
       <div id="adminSubPane_categories" class="admin-subpane hidden space-y-5">
         <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
@@ -1234,7 +1244,7 @@
     </div>
   </footer>
 
-  <script src="/static/js/app.js?v=20261017_sso_background"></script>
+  <script src="/static/js/app.js?v=20261017_attendance_admin"></script>
   <script src="/static/js/category-admin.js?v=20261016_category_admin"></script>
 </body>
 </html>
