@@ -185,6 +185,28 @@ class TursoCursor:
                 raise Exception(f"SQL error: {result.get('error', {}).get('message')}")
         return self
 
+    def execute_transaction(self, statements):
+        steps = [{"stmt": {"sql": "BEGIN IMMEDIATE"}}]
+        for sql in [*statements, "COMMIT"]:
+            steps.append({"condition": {"type": "ok", "step": len(steps) - 1}, "stmt": {"sql": sql}})
+        steps.append({"condition": {"type": "and", "conds": [
+            {"type": "ok", "step": 0},
+            {"type": "not", "cond": {"type": "ok", "step": len(steps) - 1}}
+        ]}, "stmt": {"sql": "ROLLBACK"}})
+        response = requests.post(
+            f"{self.client.base_url}/v2/pipeline",
+            headers={"Authorization": f"Bearer {self.client.auth_token}", "Content-Type": "application/json"},
+            json={"requests": [{"type": "batch", "batch": {"steps": steps}}, {"type": "close"}]},
+            timeout=30,
+        )
+        response.raise_for_status()
+        result = response.json()["results"][0]
+        if result.get("type") == "error":
+            raise RuntimeError(result["error"]["message"])
+        for error in result["response"]["result"]["step_errors"]:
+            if error:
+                raise RuntimeError(error["message"])
+
     def fetchone(self):
         if self._idx < len(self._results):
             r = self._results[self._idx]
@@ -300,6 +322,18 @@ def init_db():
                 role TEXT NOT NULL DEFAULT 'student',
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             );""",
+            """CREATE TABLE IF NOT EXISTS staff_accounts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                email TEXT NOT NULL,
+                email_backup TEXT,
+                phone TEXT NOT NULL,
+                unit_code TEXT DEFAULT '',
+                unit_name TEXT DEFAULT '佛光永續學院',
+                password_hash TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'admin' CHECK (role IN ('admin', 'teacher')),
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );""",
             """CREATE TABLE IF NOT EXISTS sdgs_goals (
                 id INTEGER PRIMARY KEY,
                 code TEXT NOT NULL,
@@ -387,6 +421,16 @@ def init_db():
         cursor.execute("PRAGMA table_info(worksheets)")
         if "activity_description" not in {row["name"] for row in cursor.fetchall()}:
             cursor.execute("ALTER TABLE worksheets ADD COLUMN activity_description TEXT NOT NULL DEFAULT ''")
+        for table in ("worksheets", "game_scores"):
+            cursor.execute(f"PRAGMA table_info({table})")
+            if "account_type" not in {row["name"] for row in cursor.fetchall()}:
+                cursor.execute(f"ALTER TABLE {table} ADD COLUMN account_type TEXT NOT NULL DEFAULT 'student'")
+        migrate_staff_accounts(cursor)
+        cursor.execute("""CREATE VIEW IF NOT EXISTS account_profiles AS
+            SELECT id, name, email, email_backup, phone, unit_code, unit_name, role, created_at, 'student' AS account_type FROM users
+            UNION ALL
+            SELECT id, name, email, email_backup, phone, unit_code, unit_name, role, created_at, 'staff' AS account_type FROM staff_accounts
+        """)
         cursor.execute("SELECT value FROM system_settings WHERE key = 'action_catalog_initialized'")
         if not cursor.fetchone():
             catalog_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "action_catalog.json")
@@ -399,6 +443,22 @@ def init_db():
             """, (json.dumps(catalog, ensure_ascii=False),))
             cursor.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('action_catalog_initialized', '1')")
         _DB_INITIALIZED = True
+
+def migrate_staff_accounts(cursor):
+    pending = "NOT EXISTS (SELECT 1 FROM system_settings WHERE key = 'staff_accounts_separated_v1')"
+    columns = "id, name, email, email_backup, phone, unit_code, unit_name, password_hash, role, created_at"
+    statements = [
+        f"INSERT INTO staff_accounts ({columns}) SELECT {columns} FROM users WHERE role IN ('admin', 'teacher') AND {pending}",
+        *[f"UPDATE {table} SET account_type = 'staff' WHERE user_id IN (SELECT id FROM users WHERE role IN ('admin', 'teacher')) AND {pending}"
+          for table in ("worksheets", "game_scores")],
+        f"DELETE FROM users WHERE role IN ('admin', 'teacher') AND {pending}",
+        "INSERT OR IGNORE INTO system_settings (key, value) VALUES ('staff_accounts_separated_v1', '1')",
+    ]
+    if hasattr(cursor, "execute_transaction"):
+        cursor.execute_transaction(statements)
+    else:
+        for sql in statements:
+            cursor.execute(sql)
 
 # Default Game Settings for 《SDGs 地球保衛戰》
 DEFAULT_GAME_SETTINGS = {

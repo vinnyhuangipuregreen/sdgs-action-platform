@@ -297,10 +297,10 @@ async function handleAdminLogin(e) {
     const res = await fetch(`${API_BASE}/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ account, password })
+      body: JSON.stringify({ account, password, account_type: "staff" })
     });
     const data = await res.json();
-    if (!res.ok || !['admin', 'teacher'].includes(data.user.role)) {
+    if (!res.ok || !['admin', 'teacher'].includes(data.user?.role)) {
       errEl.textContent = data.detail || "管理員驗證失敗，需要管理權限";
       errEl.classList.remove("hidden");
       return;
@@ -1752,7 +1752,7 @@ function renderLeaderboardTable(list, myBest) {
     if (rank === 3) badge = '<span class="text-xl">🥉</span>';
 
     const tr = document.createElement("tr");
-    tr.className = `border-b border-slate-100 hover:bg-slate-50 transition-colors ${state.user && item.user_id === state.user.id ? 'bg-emerald-50/60 font-semibold' : ''}`;
+    tr.className = `border-b border-slate-100 hover:bg-slate-50 transition-colors ${state.user && item.user_id === state.user.id && item.account_type === (state.user.account_type || (['admin', 'teacher'].includes(state.user.role) ? 'staff' : 'student')) ? 'bg-emerald-50/60 font-semibold' : ''}`;
     tr.innerHTML = `
       <td class="p-3 text-center">${badge}</td>
       <td class="p-3 font-bold text-slate-800">${item.user_name}</td>
@@ -2092,7 +2092,7 @@ async function loadAdminStaff(search = "") {
           <td class="p-3">${roleBadge}</td>
           <td class="p-3 text-right space-x-1">
             <button class="px-2.5 py-1 bg-amber-50 text-amber-800 hover:bg-amber-100 rounded font-semibold text-[11px]"
-              onclick="openEditStudentModal(${s.id}, '${(s.name || '').replace(/'/g, "\\'")}', '${(s.email || '').replace(/'/g, "\\'")}', '${(s.email_backup || '').replace(/'/g, "\\'")}', '${(s.phone || '').replace(/'/g, "\\'")}', '${(s.unit_code || '').replace(/'/g, "\\'")}', '${(s.unit_name || '佛光永續學院').replace(/'/g, "\\'")}', '${s.role}')">
+              onclick="openEditStudentModal(${s.id}, '${(s.name || '').replace(/'/g, "\\'")}', '${(s.email || '').replace(/'/g, "\\'")}', '${(s.email_backup || '').replace(/'/g, "\\'")}', '${(s.phone || '').replace(/'/g, "\\'")}', '${(s.unit_code || '').replace(/'/g, "\\'")}', '${(s.unit_name || '佛光永續學院').replace(/'/g, "\\'")}', '${s.role}', 'staff')">
               修改
             </button>
             ${!isPrimaryRootAdmin ? `
@@ -2184,7 +2184,7 @@ window.saveNewStaff = async function() {
 window.deleteSingleStaff = async function(id, name) {
   if (!confirm(`確定要刪除管理員／講師帳號「${name}」嗎？`)) return;
   try {
-    const res = await fetch(`${API_BASE}/admin/students/${id}`, {
+    const res = await fetch(`${API_BASE}/admin/staff/${id}`, {
       method: "DELETE",
       headers: { "Authorization": `Bearer ${state.token}` }
     });
@@ -2206,7 +2206,7 @@ window.executeBatchDeleteStaff = async function() {
   if (!confirm(`確定要批次刪除選取的 ${ids.length} 個管理帳號嗎？此操作無法復原。`)) return;
 
   try {
-    const res = await fetch(`${API_BASE}/admin/students/batch-delete`, {
+    const res = await fetch(`${API_BASE}/admin/staff/batch-delete`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -2274,7 +2274,7 @@ window.executeBatchImportStaff = async function() {
   }
 
   try {
-    const res = await fetch(`${API_BASE}/admin/students/batch-import`, {
+    const res = await fetch(`${API_BASE}/admin/staff/batch-import`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -2425,7 +2425,8 @@ window.saveNewStudent = async function() {
   }
 };
 
-window.openEditStudentModal = function(id, name, email, email_backup, phone, unit_code, unit_name, role) {
+window.openEditStudentModal = function(id, name, email, email_backup, phone, unit_code, unit_name, role, accountType = "student") {
+  state.editingAccountType = accountType;
   const modal = document.getElementById("editStudentModal");
   if (!modal) return;
   modal.classList.remove("hidden");
@@ -2439,8 +2440,11 @@ window.openEditStudentModal = function(id, name, email, email_backup, phone, uni
   document.getElementById("editStudentPassword").value = "";
   const roleSel = document.getElementById("editStudentRole");
   if (roleSel) {
+    roleSel.innerHTML = accountType === "staff"
+      ? '<option value="teacher">授課講師／助教</option><option value="admin">系統管理員</option>'
+      : '<option value="student">學員</option>';
     roleSel.value = role || "student";
-    roleSel.disabled = (email === "admin");
+    roleSel.disabled = accountType === "student" || email === "admin";
   }
 };
 
@@ -2461,7 +2465,7 @@ window.saveStudentEdit = async function() {
   }
 
   try {
-    const res = await fetch(`${API_BASE}/admin/students/${id}`, {
+    const res = await fetch(`${API_BASE}/admin/${state.editingAccountType === "staff" ? "staff" : "students"}/${id}`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",

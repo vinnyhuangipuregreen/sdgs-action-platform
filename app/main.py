@@ -4,7 +4,7 @@ import json
 import csv
 import io
 import random
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Literal
 from fastapi import FastAPI, Depends, HTTPException, Header, Query, Response, status, UploadFile, File
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, field_validator
 
 from app.database import get_db, init_db, get_game_settings, set_game_settings, DEFAULT_GAME_SETTINGS
-from app.auth import hash_password, verify_password, create_access_token, decode_access_token
+from app.auth import hash_password, verify_password, create_access_token, decode_access_token, get_account_type
 from app.docx_exporter import create_worksheet_docx
 from app.mailer import send_grade_notification
 from app.sdgs_check import ensure_sdgs_seeded, ensure_users_seeded
@@ -135,6 +135,7 @@ class LoginRequest(BaseModel):
     account: str # email, phone, or 'admin'
     password: str
     student_id: Optional[int] = None # For disambiguation when multiple students share email
+    account_type: Optional[Literal["student", "staff"]] = None
 
 @app.post("/api/auth/login")
 def login(req: LoginRequest):
@@ -143,110 +144,39 @@ def login(req: LoginRequest):
         cursor = conn.cursor()
         acc = req.account.strip()
         pwd = req.password.strip()
-
-        # 1. Admin login
-        if acc in ["admin", "admin@fgu.edu.tw"] and pwd == "sdgs2030admin":
-            cursor.execute("SELECT * FROM users WHERE role = 'admin' LIMIT 1")
-            u = cursor.fetchone()
-            if u:
-                u_dict = dict(u)
-                token = create_access_token(u_dict)
-                return {
-                    "success": True,
-                    "token": token,
-                    "user": {
-                        "id": u_dict["id"],
-                        "name": u_dict["name"],
-                        "email": u_dict["email"],
-                        "role": "admin",
-                        "unit_code": u_dict.get("unit_code", "FGU"),
-                        "unit_name": u_dict.get("unit_name", "佛光永續學院"),
-                        "phone": u_dict["phone"]
-                    }
-                }
-
-        # 2. If specific student_id provided
+        account_type = req.account_type or ("staff" if acc in ("admin", "admin@fgu.edu.tw") else "student")
+        table = "staff_accounts" if account_type == "staff" else "users"
         if req.student_id:
-            cursor.execute("SELECT * FROM users WHERE id = ?", (req.student_id,))
-            user = cursor.fetchone()
-            if not user:
-                raise HTTPException(status_code=400, detail="找不到指定的學員身分")
-            user_dict = dict(user)
-            if not verify_password(pwd, user_dict["password_hash"]) and pwd != user_dict["phone"]:
-                raise HTTPException(status_code=400, detail="密碼錯誤，請重新輸入")
-            token = create_access_token(user_dict)
-            return {
-                "success": True,
-                "token": token,
-                "user": {
-                    "id": user_dict["id"],
-                    "name": user_dict["name"],
-                    "email": user_dict["email"],
-                    "role": user_dict["role"],
-                    "unit_code": user_dict.get("unit_code", ""),
-                    "unit_name": user_dict.get("unit_name", "佛光學員"),
-                    "phone": user_dict["phone"]
-                }
-            }
-
-        # 3. Search matching users by email or phone
-        cursor.execute("SELECT * FROM users WHERE email = ? OR phone = ?", (acc, acc))
-        matching_users = [dict(r) for r in cursor.fetchall()]
-        
-        if not matching_users:
-            raise HTTPException(status_code=400, detail="找不到此帳號，請確認 Email 或電話")
-        
-        # Verify passwords for matching users
-        valid_users = []
-        for u in matching_users:
-            if verify_password(pwd, u["password_hash"]) or pwd == u["phone"]:
-                valid_users.append(u)
-                
-        if not valid_users:
-            raise HTTPException(status_code=400, detail="密碼錯誤，請重新輸入（預設密碼為手機號碼）")
-
-        # If multiple users share the same account (e.g. testing with shared email)
-        if len(valid_users) > 1:
-            return {
-                "success": True,
-                "multiple_matches": True,
-                "students": [
-                    {
-                        "id": u["id"],
-                        "name": u["name"],
-                        "unit_code": u.get("unit_code", ""),
-                        "unit_name": u.get("unit_name", "")
-                    }
-                    for u in valid_users
-                ]
-            }
-
-        # Single match - log in directly
-        user_dict = valid_users[0]
-        token = create_access_token(user_dict)
-        return {
-            "success": True,
-            "token": token,
-            "user": {
-                "id": user_dict["id"],
-                "name": user_dict["name"],
-                "email": user_dict["email"],
-                "role": user_dict["role"],
-                "unit_code": user_dict.get("unit_code", ""),
-                "unit_name": user_dict.get("unit_name", "佛光學員"),
-                "phone": user_dict["phone"]
-            }
-        }
+            cursor.execute(f"SELECT * FROM {table} WHERE id = ? AND (email = ? OR phone = ?)", (req.student_id, acc, acc))
+        else:
+            if account_type == "staff" and acc == "admin@fgu.edu.tw":
+                acc = "admin"
+            cursor.execute(f"SELECT * FROM {table} WHERE email = ? OR phone = ?", (acc, acc))
+        matches = [dict(row) for row in cursor.fetchall()]
+        valid = [row for row in matches if verify_password(pwd, row["password_hash"]) or
+                 (account_type == "student" and pwd == row["phone"])]
+        if not valid:
+            raise HTTPException(status_code=400, detail="帳號或密碼錯誤，請重新輸入")
+        if len(valid) > 1:
+            return {"success": True, "multiple_matches": True, "students": [
+                {key: row[key] for key in ("id", "name", "unit_code", "unit_name")} for row in valid
+            ]}
+        row = valid[0]
+        return {"success": True, "token": create_access_token(row), "user": {
+            **{key: row[key] for key in ("id", "name", "email", "role", "unit_code", "unit_name", "phone")},
+            "account_type": account_type,
+        }}
 
 @app.get("/api/auth/me")
 def get_me(user: dict = Depends(require_user)):
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id, name, email, email_backup, phone, unit_code, unit_name, role FROM users WHERE id = ?", (user["user_id"],))
+        table = "staff_accounts" if get_account_type(user) == "staff" else "users"
+        cursor.execute(f"SELECT id, name, email, email_backup, phone, unit_code, unit_name, role FROM {table} WHERE id = ?", (user["user_id"],))
         row = cursor.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="使用者不存在")
-        return dict(row)
+        return {**dict(row), "account_type": get_account_type(user)}
 
 # ==============================================================================
 # 3. SDGs Reference APIs
@@ -366,8 +296,8 @@ def list_worksheets(
         params = []
         
         if mine or not is_staff:
-            query += " AND user_id = ?"
-            params.append(user["user_id"])
+            query += " AND user_id = ? AND account_type = ?"
+            params.extend([user["user_id"], get_account_type(user)])
         
         if status_filter:
             query += " AND status = ?"
@@ -400,7 +330,7 @@ def get_worksheet(worksheet_id: int, user: dict = Depends(require_user)):
         cursor.execute("""
         SELECT w.*, u.email as user_email, u.email_backup, u.unit_code 
         FROM worksheets w
-        JOIN users u ON w.user_id = u.id
+        JOIN account_profiles u ON w.user_id = u.id AND w.account_type = u.account_type
         WHERE w.id = ?
         """, (worksheet_id,))
         row = cursor.fetchone()
@@ -408,7 +338,7 @@ def get_worksheet(worksheet_id: int, user: dict = Depends(require_user)):
             raise HTTPException(status_code=404, detail="找不到該練習單")
         
         w = dict(row)
-        if user.get("role") not in ["admin", "teacher"] and w["user_id"] != user["user_id"]:
+        if user.get("role") not in ["admin", "teacher"] and (w["user_id"] != user["user_id"] or w["account_type"] != get_account_type(user)):
             raise HTTPException(status_code=403, detail="無權存取他人練習單")
             
         for field in ["radial_data", "tradeoff_data", "causal_data", "self_checks", "commitment"]:
@@ -426,7 +356,7 @@ def export_worksheet_docx(worksheet_id: int, user: dict = Depends(require_user))
         cursor.execute("""
         SELECT w.*, u.email as user_email, u.unit_code 
         FROM worksheets w
-        JOIN users u ON w.user_id = u.id
+        JOIN account_profiles u ON w.user_id = u.id AND w.account_type = u.account_type
         WHERE w.id = ?
         """, (worksheet_id,))
         row = cursor.fetchone()
@@ -434,7 +364,7 @@ def export_worksheet_docx(worksheet_id: int, user: dict = Depends(require_user))
             raise HTTPException(status_code=404, detail="找不到該練習單")
         
         w = dict(row)
-        if user.get("role") not in ["admin", "teacher"] and w["user_id"] != user["user_id"]:
+        if user.get("role") not in ["admin", "teacher"] and (w["user_id"] != user["user_id"] or w["account_type"] != get_account_type(user)):
             raise HTTPException(status_code=403, detail="無權存取他人練習單")
             
         for field in ["radial_data", "tradeoff_data", "causal_data", "self_checks", "commitment"]:
@@ -465,12 +395,13 @@ def create_worksheet(data: WorksheetSchema, user: dict = Depends(require_user)):
         cursor = conn.cursor()
         cursor.execute("""
         INSERT INTO worksheets (
-            user_id, user_name, unit_name, center_action, center_custom, activity_description,
+            user_id, account_type, user_name, unit_name, center_action, center_custom, activity_description,
             radial_data, tradeoff_data, chat_text, causal_data,
             self_checks, commitment, status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             user["user_id"],
+            get_account_type(user),
             user["name"],
             data.unit_name.strip() or "佛光學員",
             data.center_action,
@@ -491,12 +422,12 @@ def create_worksheet(data: WorksheetSchema, user: dict = Depends(require_user)):
 def update_worksheet(worksheet_id: int, data: WorksheetSchema, user: dict = Depends(require_user)):
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT user_id, status FROM worksheets WHERE id = ?", (worksheet_id,))
+        cursor.execute("SELECT user_id, account_type, status FROM worksheets WHERE id = ?", (worksheet_id,))
         row = cursor.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="找不到該練習單")
         
-        if user.get("role") not in ["admin", "teacher"] and row["user_id"] != user["user_id"]:
+        if user.get("role") not in ["admin", "teacher"] and (row["user_id"] != user["user_id"] or row["account_type"] != get_account_type(user)):
             raise HTTPException(status_code=403, detail="無權限修改他人練習單")
 
         validate_worksheet_submission(data)
@@ -535,12 +466,12 @@ def update_worksheet(worksheet_id: int, data: WorksheetSchema, user: dict = Depe
 def delete_worksheet(worksheet_id: int, user: dict = Depends(require_user)):
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT user_id FROM worksheets WHERE id = ?", (worksheet_id,))
+        cursor.execute("SELECT user_id, account_type FROM worksheets WHERE id = ?", (worksheet_id,))
         row = cursor.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="找不到該練習單")
         
-        if user.get("role") not in ["admin", "teacher"] and row["user_id"] != user["user_id"]:
+        if user.get("role") not in ["admin", "teacher"] and (row["user_id"] != user["user_id"] or row["account_type"] != get_account_type(user)):
             raise HTTPException(status_code=403, detail="無權限刪除他人練習單")
             
         cursor.execute("DELETE FROM worksheets WHERE id = ?", (worksheet_id,))
@@ -681,10 +612,11 @@ def submit_game_score(req: GameScoreSubmit, user: dict = Depends(require_user)):
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-        INSERT INTO game_scores (user_id, user_name, game_type, score, max_combo, earth_health, risks_solved, title_earned)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO game_scores (user_id, account_type, user_name, game_type, score, max_combo, earth_health, risks_solved, title_earned)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             user["user_id"],
+            get_account_type(user),
             user["name"],
             req.game_type or "earth_defense",
             req.score,
@@ -708,7 +640,7 @@ def submit_game_score(req: GameScoreSubmit, user: dict = Depends(require_user)):
 def get_leaderboard(game_type: Optional[str] = None, user: Optional[dict] = Depends(get_current_user)):
     with get_db() as conn:
         cursor = conn.cursor()
-        query = "SELECT id, user_id, user_name, game_type, score, max_combo, earth_health, risks_solved, title_earned, played_at FROM game_scores WHERE 1=1"
+        query = "SELECT id, user_id, account_type, user_name, game_type, score, max_combo, earth_health, risks_solved, title_earned, played_at FROM game_scores WHERE 1=1"
         params = []
         if game_type:
             query += " AND game_type = ?"
@@ -720,8 +652,8 @@ def get_leaderboard(game_type: Optional[str] = None, user: Optional[dict] = Depe
         
         user_best = None
         if user:
-            u_query = "SELECT * FROM game_scores WHERE user_id = ?"
-            u_params = [user["user_id"]]
+            u_query = "SELECT * FROM game_scores WHERE user_id = ? AND account_type = ?"
+            u_params = [user["user_id"], get_account_type(user)]
             if game_type:
                 u_query += " AND game_type = ?"
                 u_params.append(game_type)
@@ -840,7 +772,7 @@ def get_admin_staff(
     with get_db() as conn:
         ensure_users_seeded(conn)
         cursor = conn.cursor()
-        query = "SELECT id, name, email, email_backup, phone, unit_code, unit_name, role, created_at FROM users WHERE role IN ('admin', 'teacher')"
+        query = "SELECT id, name, email, email_backup, phone, unit_code, unit_name, role, created_at FROM staff_accounts WHERE role IN ('admin', 'teacher')"
         params = []
         if search:
             s = f"%{search.strip()}%"
@@ -863,128 +795,118 @@ class StudentSaveSchema(BaseModel):
     phone: str
     unit_code: Optional[str] = ""
     unit_name: Optional[str] = "佛光學員"
-    role: Optional[str] = "student"
+    role: Literal["student"] = "student"
     password: Optional[str] = None
+
+class StaffSaveSchema(StudentSaveSchema):
+    role: Literal["admin", "teacher"] = "admin"
+
+
+def save_account(req, table, account_id=None):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        if account_id is not None:
+            cursor.execute(f"SELECT email FROM {table} WHERE id = ?", (account_id,))
+            existing = cursor.fetchone()
+            if not existing:
+                raise HTTPException(status_code=404, detail="找不到該帳號")
+            if table == "staff_accounts" and existing["email"] == "admin" and (req.email.strip() != "admin" or req.role != "admin"):
+                raise HTTPException(status_code=400, detail="預設最高管理員不可變更登入帳號或角色")
+        values = (req.name.strip(), req.email.strip(), req.email_backup or "", req.phone.strip(), req.unit_code or "", req.unit_name or "佛光學員", req.role)
+        if account_id is None:
+            cursor.execute(f"""INSERT INTO {table} (name, email, email_backup, phone, unit_code, unit_name, role, password_hash)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""", (*values, hash_password(req.password or req.phone or "sdgs2030admin")))
+            account_id = cursor.lastrowid
+        else:
+            password_sql = ", password_hash = ?" if req.password and req.password.strip() else ""
+            if password_sql:
+                values += (hash_password(req.password.strip()),)
+            cursor.execute(f"""UPDATE {table} SET name = ?, email = ?, email_backup = ?, phone = ?, unit_code = ?, unit_name = ?, role = ?{password_sql}
+                WHERE id = ?""", (*values, account_id))
+        return {"success": True, "id": account_id, "message": f"帳號 {req.name} 已成功儲存！"}
 
 @app.post("/api/admin/students")
 def create_student(req: StudentSaveSchema, user: dict = Depends(require_admin)):
-    with get_db() as conn:
-        cursor = conn.cursor()
-        role_val = req.role if req.role in ["admin", "teacher", "student"] else "student"
-        p_hash = hash_password(req.password or req.phone or "sdgs2030admin")
-        cursor.execute("""
-        INSERT INTO users (name, email, email_backup, phone, unit_code, unit_name, password_hash, role)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (req.name.strip(), req.email.strip(), req.email_backup or "", req.phone.strip(), req.unit_code or "", req.unit_name or "佛光學員", p_hash, role_val))
-        new_id = cursor.lastrowid
-        label = "管理帳號" if role_val in ["admin", "teacher"] else "學員"
-        return {"success": True, "id": new_id, "message": f"{label} {req.name} 已成功新增！"}
+    return save_account(req, "users")
 
 @app.post("/api/admin/staff")
-def create_staff(req: StudentSaveSchema, user: dict = Depends(require_admin)):
-    with get_db() as conn:
-        cursor = conn.cursor()
-        role_val = req.role if req.role in ["admin", "teacher"] else "admin"
-        p_hash = hash_password(req.password or req.phone or "sdgs2030admin")
-        cursor.execute("""
-        INSERT INTO users (name, email, email_backup, phone, unit_code, unit_name, password_hash, role)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (req.name.strip(), req.email.strip(), req.email_backup or "", req.phone.strip(), req.unit_code or "FGU", req.unit_name or "佛光永續學院", p_hash, role_val))
-        new_id = cursor.lastrowid
-        return {"success": True, "id": new_id, "message": f"管理帳號 {req.name} 已成功新增！"}
+def create_staff(req: StaffSaveSchema, user: dict = Depends(require_admin)):
+    return save_account(req, "staff_accounts")
 
 @app.put("/api/admin/students/{student_id}")
 def update_student(student_id: int, req: StudentSaveSchema, user: dict = Depends(require_admin)):
+    return save_account(req, "users", student_id)
+
+@app.put("/api/admin/staff/{staff_id}")
+def update_staff(staff_id: int, req: StaffSaveSchema, user: dict = Depends(require_admin)):
+    return save_account(req, "staff_accounts", staff_id)
+
+
+def delete_accounts(ids, table):
+    if not ids:
+        raise HTTPException(status_code=400, detail="未選取任何名單")
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id, role FROM users WHERE id = ?", (student_id,))
-        existing = cursor.fetchone()
-        if not existing:
-            raise HTTPException(status_code=404, detail="找不到該帳號")
-
-        role_val = req.role if req.role in ["admin", "teacher", "student"] else existing["role"]
-
-        if req.password and req.password.strip():
-            p_hash = hash_password(req.password.strip())
-            cursor.execute("""
-            UPDATE users SET
-                name = ?, email = ?, email_backup = ?, phone = ?, unit_code = ?, unit_name = ?, role = ?, password_hash = ?
-            WHERE id = ?
-            """, (req.name.strip(), req.email.strip(), req.email_backup or "", req.phone.strip(), req.unit_code or "", req.unit_name or "佛光學員", role_val, p_hash, student_id))
-        else:
-            cursor.execute("""
-            UPDATE users SET
-                name = ?, email = ?, email_backup = ?, phone = ?, unit_code = ?, unit_name = ?, role = ?
-            WHERE id = ?
-            """, (req.name.strip(), req.email.strip(), req.email_backup or "", req.phone.strip(), req.unit_code or "", req.unit_name or "佛光學員", role_val, student_id))
-        return {"success": True, "message": f"帳號 {req.name} 資料已成功更新！"}
+        placeholders = ",".join("?" for _ in ids)
+        if table == "staff_accounts":
+            cursor.execute(f"SELECT id FROM staff_accounts WHERE id IN ({placeholders}) AND email = 'admin'", ids)
+            if cursor.fetchone():
+                raise HTTPException(status_code=400, detail="預設最高系統管理員帳號不可刪除，但可修改資料與密碼")
+        cursor.execute(f"DELETE FROM {table} WHERE id IN ({placeholders})", ids)
+        return {"success": True, "deleted_count": cursor.rowcount, "message": "帳號資料已成功刪除！"}
 
 @app.delete("/api/admin/students/{student_id}")
 def delete_single_student(student_id: int, user: dict = Depends(require_admin)):
-    with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT email, role FROM users WHERE id = ?", (student_id,))
-        row = cursor.fetchone()
-        if row and row["email"] == "admin" and row["role"] == "admin":
-            raise HTTPException(status_code=400, detail="預設最高系統管理員帳號不可刪除，但可修改資料與密碼")
-        cursor.execute("DELETE FROM users WHERE id = ?", (student_id,))
-        return {"success": True, "message": "帳號資料已成功刪除！"}
+    return delete_accounts([student_id], "users")
+
+@app.delete("/api/admin/staff/{staff_id}")
+def delete_single_staff(staff_id: int, user: dict = Depends(require_admin)):
+    return delete_accounts([staff_id], "staff_accounts")
 
 class BatchDeleteRequest(BaseModel):
     ids: List[int]
 
 @app.post("/api/admin/students/batch-delete")
 def batch_delete_students(req: BatchDeleteRequest, user: dict = Depends(require_admin)):
-    if not req.ids:
-        raise HTTPException(status_code=400, detail="未選取任何名單")
-    with get_db() as conn:
-        cursor = conn.cursor()
-        placeholders = ",".join("?" for _ in req.ids)
-        cursor.execute(f"DELETE FROM users WHERE id IN ({placeholders}) AND NOT (email = 'admin' AND role = 'admin')", req.ids)
-        deleted_count = cursor.rowcount
-        return {"success": True, "deleted_count": deleted_count, "message": f"已成功批次刪除 {deleted_count} 筆帳號資料！"}
+    return delete_accounts(req.ids, "users")
+
+@app.post("/api/admin/staff/batch-delete")
+def batch_delete_staff(req: BatchDeleteRequest, user: dict = Depends(require_admin)):
+    return delete_accounts(req.ids, "staff_accounts")
 
 class BatchImportRequest(BaseModel):
     students: List[Dict[str, str]]
     default_role: Optional[str] = "student"
 
-@app.post("/api/admin/students/batch-import")
-def batch_import_students(req: BatchImportRequest, user: dict = Depends(require_admin)):
+
+def import_accounts(req, table):
     if not req.students:
         raise HTTPException(status_code=400, detail="匯入名單為空")
-    
+    staff = table == "staff_accounts"
+    allowed = ("admin", "teacher") if staff else ("student",)
+    params = []
+    for row in req.students:
+        role = row.get("role", "admin" if staff else "student").strip()
+        role = {"系統管理員": "admin", "授課講師/助教": "teacher"}.get(role, role)
+        if role not in allowed:
+            raise HTTPException(status_code=400, detail="管理帳號與學員名單必須分開匯入，請確認角色與匯入區域")
+        name, email = row.get("name", "").strip(), row.get("email", "").strip()
+        if not name or not email:
+            continue
+        phone = row.get("phone", "").strip()
+        params.append((name, email, row.get("email_backup", ""), phone, row.get("unit_code", ""), row.get("unit_name", "") or ("佛光永續學院" if staff else "佛光學員"), hash_password(phone or "0920111111"), role))
     with get_db() as conn:
-        cursor = conn.cursor()
-        imported = 0
-        skipped = 0
-        for s in req.students:
-            name = s.get("name", "").strip()
-            email = s.get("email", "").strip()
-            email_backup = s.get("email_backup", "").strip()
-            phone = s.get("phone", "").strip()
-            unit_code = s.get("unit_code", "").strip()
-            unit_name = s.get("unit_name", "").strip() or "佛光學員"
-            role_val = s.get("role", req.default_role or "student").strip()
-            if role_val not in ["admin", "teacher", "student"]:
-                role_val = req.default_role or "student"
-            
-            if not name or not email:
-                skipped += 1
-                continue
-                
-            p_hash = hash_password(phone or "0920111111")
-            cursor.execute("""
-            INSERT INTO users (name, email, email_backup, phone, unit_code, unit_name, password_hash, role)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (name, email, email_backup, phone, unit_code, unit_name, p_hash, role_val))
-            imported += 1
-            
-        return {
-            "success": True,
-            "imported_count": imported,
-            "skipped_count": skipped,
-            "message": f"匯入完成！成功新增 {imported} 筆帳號，跳過無效 {skipped} 筆。"
-        }
+        conn.cursor().executemany(f"""INSERT INTO {table} (name, email, email_backup, phone, unit_code, unit_name, password_hash, role)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)""", params)
+    return {"success": True, "imported_count": len(params), "skipped_count": len(req.students) - len(params), "message": f"匯入完成！成功新增 {len(params)} 筆帳號。"}
+
+@app.post("/api/admin/students/batch-import")
+def batch_import_students(req: BatchImportRequest, user: dict = Depends(require_admin)):
+    return import_accounts(req, "users")
+
+@app.post("/api/admin/staff/batch-import")
+def batch_import_staff(req: BatchImportRequest, user: dict = Depends(require_admin)):
+    return import_accounts(req, "staff_accounts")
 
 @app.get("/api/admin/students/export-csv")
 def export_students_csv(user: dict = Depends(require_admin)):
@@ -1019,7 +941,7 @@ def export_staff_csv(user: dict = Depends(require_admin)):
         cursor = conn.cursor()
         cursor.execute("""
         SELECT name, email, email_backup, phone, unit_code, unit_name, role 
-        FROM users 
+        FROM staff_accounts
         WHERE role IN ('admin', 'teacher')
         ORDER BY id ASC
         """)
@@ -1053,7 +975,7 @@ def grade_worksheet(worksheet_id: int, req: GradeSubmit, user: dict = Depends(re
         cursor.execute("""
         SELECT w.*, u.email as student_email, u.email_backup 
         FROM worksheets w
-        JOIN users u ON w.user_id = u.id
+        JOIN account_profiles u ON w.user_id = u.id AND w.account_type = u.account_type
         WHERE w.id = ?
         """, (worksheet_id,))
         row = cursor.fetchone()
@@ -1089,7 +1011,7 @@ def export_all_worksheets_csv(user: dict = Depends(require_admin)):
         cursor.execute("""
         SELECT w.*, u.email, u.phone, u.unit_code 
         FROM worksheets w
-        JOIN users u ON w.user_id = u.id
+        JOIN account_profiles u ON w.user_id = u.id AND w.account_type = u.account_type
         ORDER BY w.id ASC
         """)
         rows = [dict(r) for r in cursor.fetchall()]

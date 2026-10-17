@@ -13,12 +13,16 @@ def hash_password(password: str) -> str:
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return hmac.compare_digest(hash_password(plain_password), hashed_password)
 
+def get_account_type(user_data: dict) -> str:
+    return "staff" if user_data.get("role") in ("admin", "teacher") else "student"
+
 def create_access_token(user_data: dict, expires_in: int = 86400 * 7) -> str:
     payload = {
         "user_id": user_data["id"],
         "email": user_data["email"],
         "name": user_data["name"],
         "role": user_data["role"],
+        "account_type": get_account_type(user_data),
         "unit_name": user_data.get("unit_name", "佛光學員"),
         "exp": int(time.time()) + expires_in
     }

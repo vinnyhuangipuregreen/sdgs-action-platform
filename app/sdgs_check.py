@@ -75,25 +75,22 @@ def ensure_users_seeded(conn):
     try:
         init_db()
         cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM users")
-        row_u = cursor.fetchone()
-        user_count = row_u[0] if row_u else 0
-
-        if user_count >= 10:
-            _USERS_VERIFIED = True
-            return
-
         from app.auth import hash_password
         root_dir = os.path.dirname(CURRENT_DIR)
 
         # 1. Admin user
         admin_pass = hash_password("sdgs2030admin")
-        cursor.execute("SELECT id FROM users WHERE email = 'admin'")
+        cursor.execute("SELECT id FROM staff_accounts WHERE email = 'admin'")
         if not cursor.fetchone():
             cursor.execute("""
-            INSERT INTO users (name, email, email_backup, phone, unit_code, unit_name, password_hash, role)
+            INSERT INTO staff_accounts (name, email, email_backup, phone, unit_code, unit_name, password_hash, role)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, ("系統管理員 (戴慶華 博士)", "admin", "admin@fgu.edu.tw", "0912345678", "FGU", "佛光永續學院", admin_pass, "admin"))
+
+        cursor.execute("SELECT COUNT(*) FROM users WHERE role = 'student'")
+        if cursor.fetchone()[0] >= 10:
+            _USERS_VERIFIED = True
+            return
 
         # 2. Batch insert 427 students
         students_path = os.path.join(root_dir, "data", "students_seed_v4.json")

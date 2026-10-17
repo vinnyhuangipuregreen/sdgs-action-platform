@@ -41,16 +41,16 @@ def seed():
 
         # 2. Seed Admin user (admin / sdgs2030admin)
         admin_pass = hash_password("sdgs2030admin")
-        cursor.execute("SELECT id FROM users WHERE email = 'admin'")
+        cursor.execute("SELECT id FROM staff_accounts WHERE email = 'admin'")
         admin_row = cursor.fetchone()
         if not admin_row:
             cursor.execute("""
-            INSERT INTO users (name, email, email_backup, phone, unit_code, unit_name, password_hash, role)
+            INSERT INTO staff_accounts (name, email, email_backup, phone, unit_code, unit_name, password_hash, role)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, ("系統管理員 (戴慶華 博士)", "admin", "admin@fgu.edu.tw", "0912345678", "FGU", "佛光永續學院", admin_pass, "admin"))
             print("Admin user created: admin / sdgs2030admin")
         else:
-            cursor.execute("UPDATE users SET password_hash = ?, role = 'admin' WHERE id = ?", (admin_pass, admin_row[0]))
+            cursor.execute("UPDATE staff_accounts SET password_hash = ?, role = 'admin' WHERE id = ?", (admin_pass, admin_row[0]))
 
         # 3. Seed Students (427 students with test001@gmail.com ~ test427@gmail.com and full 6 columns)
         students_path = os.path.join(CURRENT_DIR, "data", "students_seed_v4.json")
