@@ -2745,6 +2745,7 @@ function resumeCourseSignIn() {
   const url = new URL(destination, location.origin);
   if (url.origin !== location.origin || url.pathname !== "/sso/authorize") return false;
   if (state.user && state.token) { location.replace(url.pathname + url.search); return true; }
-  showLoginModal(true);
+  if (url.searchParams.get("login_type") === "staff") handleAdminAccess();
+  else showLoginModal(true);
   return false;
 }
