@@ -145,6 +145,20 @@ class StaffAccountsTests(unittest.TestCase):
         response = self.client.post("/api/admin/staff", headers=headers, json={"name": "Next", "email": "next@example.invalid", "phone": "123"})
         self.assertEqual(response.json()["id"], 3)
 
+    def test_legacy_tables_do_not_block_completed_renames(self):
+        with database.get_db() as conn:
+            student_before = dict(conn.execute("SELECT * FROM student WHERE id=1").fetchone())
+            conn.execute("CREATE TABLE users AS SELECT * FROM student")
+            conn.execute("CREATE TABLE staff_accounts AS SELECT * FROM admin")
+            conn.execute("UPDATE users SET name='Legacy value' WHERE id=1")
+        database._DB_INITIALIZED = False
+        database.init_db()
+        with database.get_db() as conn:
+            self.assertEqual(dict(conn.execute("SELECT * FROM student WHERE id=1").fetchone()), student_before)
+            self.assertEqual(conn.execute("SELECT name FROM users WHERE id=1").fetchone()[0], "Legacy value")
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM admin").fetchone()[0], 2)
+        self.assertEqual(self.client.get("/api/auth/me", headers=self.admin).status_code, 200)
+
     def test_login_uses_separate_tables_and_changed_staff_password_is_respected(self):
         for account, source, expected in (("admin", "staff", "admin"), ("Teacher@example.invalid", "staff", "teacher"), ("Student@example.invalid", "student", "student")):
             response = self.client.post("/api/auth/login", json={"account": account, "password": "test-password", "account_type": source})

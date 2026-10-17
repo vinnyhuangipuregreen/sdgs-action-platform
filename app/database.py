@@ -304,13 +304,11 @@ def init_db():
         cursor = conn.cursor()
         cursor.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('staff_accounts', 'admin', 'users', 'student')")
         account_tables = {row["name"] for row in cursor.fetchall()}
-        if "staff_accounts" in account_tables:
-            if "admin" in account_tables:
-                raise RuntimeError("Both staff_accounts and admin exist; refusing to overwrite account data")
+        # Older deployments may recreate legacy tables after a successful rename.
+        # Keep the renamed tables authoritative without deleting legacy data.
+        if "staff_accounts" in account_tables and "admin" not in account_tables:
             cursor.execute("ALTER TABLE staff_accounts RENAME TO admin")
-        if "users" in account_tables:
-            if "student" in account_tables:
-                raise RuntimeError("Both users and student exist; refusing to overwrite account data")
+        if "users" in account_tables and "student" not in account_tables:
             cursor.execute("ALTER TABLE users RENAME TO student")
 
         ddl_statements = [
