@@ -5,10 +5,11 @@ import csv
 import io
 import random
 from typing import Optional, List, Dict, Any, Literal
-from fastapi import FastAPI, Depends, HTTPException, Header, Query, Response, status, UploadFile, File
+from fastapi import FastAPI, Depends, HTTPException, Header, Query, Response, status, UploadFile, File, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, field_validator
 
 from app.database import get_db, init_db, get_game_settings, set_game_settings, DEFAULT_GAME_SETTINGS
@@ -17,6 +18,7 @@ from app.docx_exporter import create_worksheet_docx
 from app.mailer import send_grade_notification
 from app.sdgs_check import ensure_sdgs_seeded, ensure_users_seeded
 from app.action_catalog import CategoryItem, list_actions, save_action, delete_action, read_import, import_actions, export_actions
+from app.matching_bridge import proxy_matching_request
 
 app = FastAPI(
     title="SDGs 與氣候行動連動分析與智慧學習平台",
@@ -81,6 +83,17 @@ def require_admin(current_user: dict = Depends(require_user)) -> dict:
     if current_user.get("role") not in ["admin", "teacher"]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="權限不足，需要管理員權限")
     return current_user
+
+
+@app.api_route("/api/matching-admin/{path:path}", methods=["GET", "PUT", "DELETE"])
+async def matching_admin_api(path: str, request: Request, user: dict = Depends(require_admin)):
+    return await run_in_threadpool(proxy_matching_request, request, path, await request.body())
+
+
+@app.get("/matching-admin", response_class=HTMLResponse)
+def matching_admin_page():
+    with open(os.path.join(TEMPLATES_DIR, "matching-admin.html"), encoding="utf-8") as source:
+        return source.read()
 
 
 @app.get("/api/center-actions")

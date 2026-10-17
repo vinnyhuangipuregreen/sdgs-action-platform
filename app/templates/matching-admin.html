@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SDGs 配對遊戲 · 後台管理系統</title>
+  <link rel="stylesheet" href="/static/css/matching-base.css">
+  <style>
+    .admin-container {
+      display: flex;
+      min-height: calc(100vh - 120px);
+      gap: 1.5rem;
+    }
+    .admin-sidebar {
+      width: 240px;
+      background: white;
+      border-radius: 0.75rem;
+      padding: 1.5rem 1rem;
+      border: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .sidebar-btn {
+      padding: 0.75rem 1rem;
+      border-radius: 0.5rem;
+      border: none;
+      background: transparent;
+      color: #334155;
+      font-weight: 600;
+      text-align: left;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: all 0.2s;
+    }
+    .sidebar-btn:hover {
+      background: #f1f5f9;
+      color: #0f172a;
+    }
+    .sidebar-btn.active {
+      background: #eff6ff;
+      color: #2563eb;
+    }
+    .admin-content {
+      flex: 1;
+    }
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .kpi-card {
+      background: white;
+      border-radius: 0.75rem;
+      padding: 1.25rem;
+      border: 1px solid var(--border-color);
+    }
+    .kpi-title {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+    .kpi-value {
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-top: 0.25rem;
+    }
+    .panel {
+      background: white;
+      border-radius: 0.75rem;
+      padding: 1.5rem;
+      border: 1px solid var(--border-color);
+      margin-bottom: 1.5rem;
+    }
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.25rem;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+    .badge-mode {
+      padding: 0.2rem 0.6rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      background: #e0e7ff;
+      color: #3730a3;
+    }
+  </style>
+  <link rel="stylesheet" href="/static/css/design-system.css?v=20261017_design">
+  <script>if (window.top === window.self) location.replace("https://sdgs-action-platform.vercel.app/#admin-matching");</script>
+</head>
+<body class="sdgs-shell matching-embedded">
+
+  <header>
+    <div class="logo-area">
+      <div class="logo-icon">🛡️</div>
+      <div class="logo-title">
+        <h1>SDGs 社會科學實踐系統｜配對賽管理</h1>
+        <p>系統數據分析 · 挑戰者紀錄審查 · 169項指標維護</p>
+      </div>
+    </div>
+    <div class="nav-actions">
+      <a href="/" class="btn btn-outline">🎮 返回前台遊戲</a>
+      <button id="btn-logout" class="btn btn-secondary" style="display:none;">登出</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- Login Card -->
+    <div id="section-login" style="max-width: 420px; margin: 4rem auto; background: white; padding: 2.5rem; border-radius: 1rem; border: 1px solid var(--border-color); box-shadow: 0 10px 25px rgba(0,0,0,0.05);">
+      <h2 style="font-size: 1.4rem; margin-bottom: 1.5rem; text-align: center;">🔐 管理員身分驗證</h2>
+      
+      <div class="form-group">
+        <label>管理帳號</label>
+        <input type="text" id="admin-user" class="form-input" placeholder="請輸入管理帳號" required>
+      </div>
+      <div class="form-group">
+        <label>登入密碼</label>
+        <input type="password" id="admin-pass" class="form-input" placeholder="請輸入管理密碼" required>
+      </div>
+      <button id="btn-do-login" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem; justify-content: center;">
+        立即登入後台
+      </button>
+    </div>
+
+    <!-- Admin Main App -->
+    <div id="section-admin-app" class="admin-container" style="display:none;">
+      <!-- Sidebar -->
+      <aside class="admin-sidebar">
+        <button class="sidebar-btn active" data-tab="tab-dashboard">📊 數據分析儀表板</button>
+        <button class="sidebar-btn" data-tab="tab-records">👥 挑戰紀錄管理</button>
+        <button class="sidebar-btn" data-tab="tab-targets">📋 169細項指標維護</button>
+        <button class="sidebar-btn" data-tab="tab-settings">⚙️ 系統參數設定</button>
+      </aside>
+
+      <!-- Content Area -->
+      <section class="admin-content">
+        <!-- Tab 1: Dashboard -->
+        <div id="tab-dashboard" class="tab-pane">
+          <div class="kpi-grid">
+            <div class="kpi-card">
+              <div class="kpi-title">總挑戰人數</div>
+              <div id="kpi-challengers" class="kpi-value">-</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-title">累積對局次數</div>
+              <div id="kpi-sessions" class="kpi-value">-</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-title">全服平均得分</div>
+              <div id="kpi-avg-score" class="kpi-value" style="color:#10b981;">-</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-title">平均答對率</div>
+              <div id="kpi-avg-accuracy" class="kpi-value" style="color:#2563eb;">-</div>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <!-- Top Confused Targets -->
+            <div class="panel">
+              <h3 style="font-size: 1.1rem; margin-bottom: 1rem;">⚠️ 最常配對錯誤之細項目標 Top 5</h3>
+              <div id="list-most-mistaken" style="display:flex; flex-direction:column; gap:0.75rem;">
+                <p style="color:#64748b; font-size:0.85rem;">載入中...</p>
+              </div>
+            </div>
+
+            <!-- Mode Distribution -->
+            <div class="panel">
+              <h3 style="font-size: 1.1rem; margin-bottom: 1rem;">🎮 遊戲模式參與分佈</h3>
+              <div id="list-mode-stats" style="display:flex; flex-direction:column; gap:0.75rem;">
+                <p style="color:#64748b; font-size:0.85rem;">載入中...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 2: Challenger Records -->
+        <div id="tab-records" class="tab-pane" style="display:none;">
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <h3 style="font-size: 1.15rem; font-weight:700; color:#1e293b;">挑戰紀錄審查與匯出</h3>
+                <p style="font-size: 0.82rem; color: #64748b; margin-top:2px;">依四大挑戰模式分頁審查對局成績，並支援各別獨立匯出 CSV 報表</p>
+              </div>
+              <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+                <input type="text" id="record-search" class="form-input" style="width:190px; padding:0.4rem 0.75rem; font-size:0.85rem;" placeholder="搜尋挑戰者或組織...">
+                <button id="btn-export-csv" class="btn btn-success" style="font-size:0.85rem; padding:0.45rem 0.9rem;">
+                  📥 匯出「生活情境入門」CSV 報表
+                </button>
+              </div>
+            </div>
+
+            <!-- 4 個模式獨立頁籤 -->
+            <div class="admin-mode-tabs" style="display:flex; gap:0.4rem; margin-bottom:1rem; border-bottom:2px solid #e2e8f0; padding-bottom:0.1rem; overflow-x:auto;">
+              <button class="admin-tab-btn active" data-mode="scenario" onclick="AdminApp.switchRecordMode('scenario')">
+                🏡 生活情境入門
+              </button>
+              <button class="admin-tab-btn" data-mode="standard" onclick="AdminApp.switchRecordMode('standard')">
+                🎯 標準細項配對
+              </button>
+              <button class="admin-tab-btn" data-mode="cards" onclick="AdminApp.switchRecordMode('cards')">
+                🃏 翻牌記憶連連看
+              </button>
+              <button class="admin-tab-btn" data-mode="master169" onclick="AdminApp.switchRecordMode('master169')">
+                👑 169細項極限闖關
+              </button>
+            </div>
+
+            <!-- 當前模式狀態條 -->
+            <div id="admin-mode-banner" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:0.6rem 1rem; margin-bottom:1rem; display:flex; justify-content:space-between; align-items:center; font-size:0.85rem; color:#475569;">
+              <span id="admin-mode-desc"><strong>🏡 生活情境入門排行榜：</strong>日常生活案例與 17 目標配對之挑戰紀錄</span>
+              <span id="admin-mode-count" style="font-weight:700; color:#2563eb;">載入中...</span>
+            </div>
+
+            <div class="table-container">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>對局ID</th>
+                    <th>挑戰者</th>
+                    <th>所屬組織</th>
+                    <th>模式</th>
+                    <th>總得分</th>
+                    <th>正確率</th>
+                    <th>最高連擊</th>
+                    <th>耗時</th>
+                    <th>挑戰時間</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody id="records-tbody">
+                  <tr><td colspan="10" style="text-align:center;">載入紀錄中...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 3: 169 Targets Management -->
+        <div id="tab-targets" class="tab-pane" style="display:none;">
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <h3 style="font-size: 1.1rem;">SDGs 17項目標與169項細項管理維護</h3>
+                <p style="font-size: 0.8rem; color: #64748b;">支援檢視、編輯細項敘述或切換題目啟用狀態</p>
+              </div>
+              <div style="display:flex; gap:0.5rem;">
+                <select id="target-goal-filter" class="form-input" style="width:160px; padding:0.4rem 0.6rem;">
+                  <option value="">全部 17 目標</option>
+                </select>
+                <input type="text" id="target-search" class="form-input" style="width:180px; padding:0.4rem 0.8rem;" placeholder="搜尋指標編號或關鍵字...">
+              </div>
+            </div>
+
+            <div class="table-container">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>編號</th>
+                    <th>所屬目標</th>
+                    <th>指標類別</th>
+                    <th>細項文字說明</th>
+                    <th>狀態</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody id="targets-tbody">
+                  <tr><td colspan="6" style="text-align:center;">載入指標清單中...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 4: System Settings -->
+        <div id="tab-settings" class="tab-pane" style="display:none;">
+          <div class="panel">
+            <h3 style="font-size: 1.1rem; margin-bottom: 0.5rem;">系統遊戲與計分規則設定</h3>
+            <p style="font-size: 0.8rem; color: #64748b; margin-bottom: 1.5rem;">可動態即時調整計分獎勵、連擊倍率與作答倒數時間</p>
+
+            <div id="settings-form" style="max-width: 600px; display:flex; flex-direction:column; gap:1.25rem;">
+              <!-- Loaded dynamically -->
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <!-- Edit Target Modal -->
+  <div id="admin-modal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="admin-modal-title">編輯細項目標</h3>
+        <button id="admin-modal-close" class="modal-close">&times;</button>
+      </div>
+      <div id="admin-modal-body"></div>
+    </div>
+  </div>
+
+  <footer>
+    <p>綠色公益基金會 © 2026・版權所有</p>
+  </footer>
+
+  <script src="/static/js/matching-admin.js?v=20261017_design"></script>
+<script>
+AdminApp.init = function() {
+  this.token = localStorage.getItem("sdgs_token");
+  this.bindEvents();
+  if (this.token) this.showApp(); else this.handleLogout();
+};
+AdminApp.handleLogout = function() {
+  window.parent.postMessage({type: "sdgs-admin-expired"}, location.origin);
+};
+</script></body>
+</html>

@@ -8,7 +8,7 @@ const state = {
   targets: [],
   currentWorksheetId: null,
   worksheetsList: [],
-  activeTab: "worksheet",
+  activeTab: "home",
   
   // Game: 《SDGs 地球保衛戰》(Whac-A-Mole Style)
   earthDefense: {
@@ -111,13 +111,27 @@ function updateDefenseRuleTexts() {
 // ==============================================================================
 document.addEventListener("DOMContentLoaded", async () => {
   initUIEvents();
+  const initialTab = location.hash.slice(1);
+  const publicTabs = ["home", "worksheet", "carbon", "food", "sdgs", "earth_defense", "leaderboard"];
+  switchTab(publicTabs.includes(initialTab) ? initialTab : "home");
   await loadCenterActions();
   await checkAuth();
+  if (["admin", "admin-matching"].includes(initialTab)) {
+    handleAdminAccess();
+    if (initialTab === "admin-matching" && state.user && ["admin", "teacher"].includes(state.user.role)) switchAdminSubTab("matching");
+  }
   await loadSDGsData();
   await loadGameSettings();
 });
 
 function initUIEvents() {
+  window.addEventListener("message", event => {
+    const frame = document.getElementById("matchingAdminFrame");
+    if (event.origin === location.origin && event.source === frame?.contentWindow && event.data?.type === "sdgs-admin-expired") handleLogout();
+  });
+  document.querySelectorAll("[data-open-tab]").forEach(btn => {
+    btn.addEventListener("click", () => switchTab(btn.dataset.openTab));
+  });
   document.querySelectorAll("[data-nav-tab]").forEach(btn => {
     btn.addEventListener("click", () => {
       const tab = btn.getAttribute("data-nav-tab");
@@ -181,6 +195,7 @@ function switchTab(tabId) {
   state.activeTab = tabId;
   document.querySelectorAll(".tab-pane").forEach(el => el.classList.add("hidden"));
   document.querySelectorAll("[data-nav-tab]").forEach(el => {
+    el.removeAttribute("aria-current");
     el.classList.remove("text-emerald-700", "bg-emerald-50", "border-b-2", "border-emerald-600");
     el.classList.add("text-slate-600");
   });
@@ -190,6 +205,7 @@ function switchTab(tabId) {
 
   if (targetPane) targetPane.classList.remove("hidden");
   if (targetTabBtn) {
+    targetTabBtn.setAttribute("aria-current", "page");
     targetTabBtn.classList.add("text-emerald-700", "bg-emerald-50", "border-b-2", "border-emerald-600");
     targetTabBtn.classList.remove("text-slate-600");
   }
@@ -213,7 +229,7 @@ function switchTab(tabId) {
 // ==============================================================================
 async function checkAuth() {
   if (!state.token) {
-    showLoginModal(true);
+    if (state.activeTab !== "home") showLoginModal(true);
     return;
   }
   try {
@@ -318,6 +334,7 @@ async function handleAdminLogin(e) {
     updateUserUI();
     showToast(`管理員登入成功，歡迎 ${data.user.name}！`, "success");
     switchTab("admin");
+    if (location.hash === "#admin-matching") switchAdminSubTab("matching");
   } catch (err) {
     document.getElementById("adminPassword").value = "";
     errEl.textContent = "連線異常，請重試";
@@ -360,7 +377,7 @@ function updateUserUI() {
     if (userRoleEl) {
       userRoleEl.textContent = state.user.role === 'admin' ? '系統管理員' : (state.user.role === 'teacher' ? '授課講師/助教' : '學員');
       userRoleEl.className = state.user.role === 'admin' 
-        ? "text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 font-semibold"
+        ? "text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-semibold"
         : "text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-semibold";
     }
     const formName = document.getElementById("ws_userName");
@@ -443,7 +460,7 @@ function renderSDGsDirectory(filterTier = "all", filter5P = "all", keyword = "")
             <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200/60 text-xs">
               <div class="flex justify-between items-center mb-1">
                 <span class="font-bold text-slate-800">${t.code}</span>
-                <span class="text-[10px] px-1.5 py-0.5 rounded ${t.target_type === '成果目標' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'}">${t.target_type}</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded ${t.target_type === '成果目標' ? 'bg-blue-100 text-blue-800' : 'bg-emerald-100 text-emerald-800'}">${t.target_type}</span>
               </div>
               <p class="text-slate-600 text-[11px] leading-relaxed mb-2">${t.content}</p>
               <button type="button" class="w-full py-1 text-center bg-white hover:bg-emerald-50 text-emerald-700 border border-emerald-300 rounded font-medium text-[11px] transition-colors"
@@ -513,8 +530,8 @@ window.quoteTargetToWorksheet = function(goalCode, goalName, targetCode, targetC
     if (isSameGoal && isSameTarget) {
       switchTab("worksheet");
       r.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      r.classList.add("ring-2", "ring-amber-500");
-      setTimeout(() => r.classList.remove("ring-2", "ring-amber-500"), 3000);
+      r.classList.add("ring-2", "ring-emerald-500");
+      setTimeout(() => r.classList.remove("ring-2", "ring-emerald-500"), 3000);
       alert(`您已經將「${rawTargetCode || expectedGoalString}」設定在[連動線#${lineNumber}]中！`);
       return;
     }
@@ -824,10 +841,10 @@ function addTradeoffRow(data = null) {
   if (!container) return;
   const count = container.children.length + 1;
   const row = document.createElement("div");
-  row.className = "tradeoff-row bg-amber-50/60 p-4 rounded-xl border border-amber-200/80 space-y-3 relative";
+  row.className = "tradeoff-row bg-emerald-50/60 p-4 rounded-xl border border-emerald-200/80 space-y-3 relative";
   row.innerHTML = `
     <div class="flex justify-between items-center">
-      <span class="text-xs font-bold px-2 py-0.5 rounded bg-amber-200 text-amber-900">拉扯檢查 #${count}</span>
+      <span class="text-xs font-bold px-2 py-0.5 rounded bg-emerald-200 text-emerald-900">拉扯檢查 #${count}</span>
       ${count > 1 ? `<button type="button" class="text-red-500 hover:text-red-700 text-xs font-semibold" onclick="this.closest('.tradeoff-row').remove();">✕ 刪除</button>` : ''}
     </div>
     <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -1126,7 +1143,7 @@ function openMyWorksheetsModal() {
     const card = document.createElement("div");
     card.className = "bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-3";
     const statusLabel = ws.status === 'reviewed' ? '已批閱' : (ws.status === 'submitted' ? '已送出' : '草稿');
-    const statusColor = ws.status === 'reviewed' ? 'bg-purple-100 text-purple-800' : (ws.status === 'submitted' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700');
+    const statusColor = ws.status === 'reviewed' ? 'bg-emerald-100 text-emerald-800' : (ws.status === 'submitted' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700');
 
     card.innerHTML = `
       <div>
@@ -1135,7 +1152,7 @@ function openMyWorksheetsModal() {
           <h4 class="font-bold text-slate-800 text-sm">行動：${ws.center_action} (${ws.center_custom || '標準活動'})</h4>
           <span class="text-xs text-slate-400">${new Date(ws.updated_at).toLocaleString('zh-TW')}</span>
         </div>
-        ${ws.score ? `<div class="mt-2 text-xs font-bold text-purple-700">評分：${ws.score} 分 ｜ 講師講評：${ws.teacher_comment || '無'}</div>` : ''}
+        ${ws.score ? `<div class="mt-2 text-xs font-bold text-emerald-700">評分：${ws.score} 分 ｜ 講師講評：${ws.teacher_comment || '無'}</div>` : ''}
       </div>
       <div class="flex items-center gap-2">
         <button type="button" onclick="downloadWorksheetDocx(${ws.id})" class="cursor-pointer px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-xs font-semibold flex items-center gap-1">
@@ -1479,7 +1496,7 @@ window.hitMoleTarget = function(holeIdx, e) {
     g.score += gained;
 
     floatEl.innerHTML = `<span class="text-emerald-400 font-black">+${gained} 🍃</span>`;
-    if (g.combo > 1) floatEl.innerHTML += `<span class="block text-[10px] text-amber-300 font-bold">${g.combo} COMBO!</span>`;
+    if (g.combo > 1) floatEl.innerHTML += `<span class="block text-[10px] text-emerald-300 font-bold">${g.combo} 連擊！</span>`;
 
     // 擊中動畫
     targetEl.classList.add("hit");
@@ -1781,11 +1798,15 @@ window.switchAdminSubTab = function(subTab) {
   document.querySelectorAll(".admin-subpane").forEach(el => el.classList.add("hidden"));
   const targetPane = document.getElementById(`adminSubPane_${subTab}`);
   if (targetPane) targetPane.classList.remove("hidden");
+  if (subTab === "matching" && state.matchingAdminSession !== state.token) {
+    document.getElementById("matchingAdminFrame").src = "/matching-admin";
+    state.matchingAdminSession = state.token;
+  }
 
   document.querySelectorAll(".admin-subtab-btn").forEach(btn => {
     const btnTab = btn.getAttribute("data-admin-subtab");
     if (btnTab === subTab) {
-      btn.className = "admin-subtab-btn px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center gap-2 bg-purple-700 text-white shadow-sm cursor-pointer";
+      btn.className = "admin-subtab-btn px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center gap-2 bg-emerald-700 text-white shadow-sm cursor-pointer";
     } else {
       btn.className = "admin-subtab-btn px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer";
     }
@@ -1869,7 +1890,7 @@ function renderAdminCharts(stats) {
         labels: chartLabels.map(key => legacyLabels[key] || key),
         datasets: [{
           data: chartLabels.map(key => counts[key] || 0),
-          backgroundColor: ["#0284c7", "#f59e0b", "#10b981", "#8b5cf6", "#64748b", "#f43f5e", "#14b8a6", "#a855f7"]
+          backgroundColor: ["#3b82f6", "#65a30d", "#16a34a", "#0ea5a4", "#526176", "#15803d", "#0f766e", "#4d7c0f"]
         }]
       },
       options: { responsive: true, plugins: { legend: { position: "bottom" } } }
@@ -1901,12 +1922,12 @@ async function loadAdminWorksheets() {
           <td class="p-3 font-semibold text-slate-800">${w.user_name}</td>
           <td class="p-3 text-slate-500">${w.unit_name}</td>
           <td class="p-3 font-medium text-slate-700">${w.center_action} (${w.center_custom || '標準'})</td>
-          <td class="p-3"><span class="px-2 py-0.5 rounded font-bold ${w.status === 'reviewed' ? 'bg-purple-100 text-purple-800' : 'bg-emerald-100 text-emerald-800'}">${w.status}</span></td>
-          <td class="p-3 font-bold text-purple-700">${w.score ? w.score + '分' : '未評分'}</td>
+          <td class="p-3"><span class="px-2 py-0.5 rounded font-bold ${w.status === 'reviewed' ? 'bg-emerald-100 text-emerald-800' : 'bg-emerald-100 text-emerald-800'}">${w.status}</span></td>
+          <td class="p-3 font-bold text-emerald-700">${w.score ? w.score + '分' : '未評分'}</td>
           <td class="p-3 text-right space-x-1">
             <button class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded font-semibold text-xs" onclick="viewWorksheetDetailModal(${w.id})">詳情</button>
             <button type="button" onclick="downloadWorksheetDocx(${w.id})" class="cursor-pointer inline-block px-2.5 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded font-semibold text-xs">Word匯出</button>
-            <button class="px-2.5 py-1 bg-purple-50 text-purple-700 hover:bg-purple-100 rounded font-semibold text-xs" onclick="openGradeModal(${w.id}, '${w.user_name}', ${w.score || 0}, '${(w.teacher_comment || '').replace(/'/g, "\\'")}')">批閱評分</button>
+            <button class="px-2.5 py-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded font-semibold text-xs" onclick="openGradeModal(${w.id}, '${w.user_name}', ${w.score || 0}, '${(w.teacher_comment || '').replace(/'/g, "\\'")}')">批閱評分</button>
           </td>
         `;
         container.appendChild(tr);
@@ -1947,7 +1968,7 @@ window.viewWorksheetDetailModal = async function(id) {
 
     const tradeoffHtml = (ws.tradeoff_data || []).map((t, i) => `
       <tr class="border-b border-slate-100">
-        <td class="p-2 font-bold text-amber-900">${t.who || ''}</td>
+        <td class="p-2 font-bold text-emerald-900">${t.who || ''}</td>
         <td class="p-2 text-slate-700">${t.situation || ''}</td>
         <td class="p-2 text-slate-600">${t.how || ''}</td>
       </tr>
@@ -1976,17 +1997,17 @@ window.viewWorksheetDetailModal = async function(id) {
         </div>
 
         <div>
-          <h4 class="font-extrabold text-amber-900 mb-2">善意拉扯檢核（負面影響與對策）：</h4>
+          <h4 class="font-extrabold text-emerald-900 mb-2">善意拉扯檢核（負面影響與對策）：</h4>
           <table class="w-full text-left bg-white border border-slate-200 rounded-lg overflow-hidden">
-            <thead class="bg-amber-50 text-amber-900 font-bold">
+            <thead class="bg-emerald-50 text-emerald-900 font-bold">
               <tr><th class="p-2">可能傷到誰/什麼</th><th class="p-2">發生情況</th><th class="p-2">降低影響對策</th></tr>
             </thead>
             <tbody>${tradeoffHtml || '<tr><td colspan="3" class="p-3 text-center text-slate-400">無拉扯檢核</td></tr>'}</tbody>
           </table>
         </div>
 
-        <div class="bg-indigo-50/50 p-3 rounded-xl border border-indigo-100">
-          <h4 class="font-bold text-indigo-900 mb-1">五、因果型分析</h4>
+        <div class="bg-blue-50/50 p-3 rounded-xl border border-blue-100">
+          <h4 class="font-bold text-blue-900 mb-1">五、因果型分析</h4>
           <div class="space-y-5">${causalHtml}</div>
         </div>
 
@@ -2001,8 +2022,8 @@ window.viewWorksheetDetailModal = async function(id) {
         </div>
 
         ${ws.score ? `
-        <div class="bg-purple-50 p-3 rounded-xl border border-purple-200">
-          <div class="font-bold text-purple-900">審定成績：${ws.score} 分</div>
+        <div class="bg-emerald-50 p-3 rounded-xl border border-emerald-200">
+          <div class="font-bold text-emerald-900">審定成績：${ws.score} 分</div>
           <div class="text-slate-700 mt-1">講師講評：${ws.teacher_comment || '無'}</div>
         </div>` : '<div class="text-slate-400 italic">目前尚未評分</div>'}
       </div>
@@ -2077,25 +2098,25 @@ async function loadAdminStaff(search = "") {
       data.items.forEach(s => {
         const isPrimaryRootAdmin = (s.email === "admin");
         const roleBadge = s.role === "admin"
-          ? '<span class="px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 font-extrabold text-[11px]">🛡️ 系統管理員</span>'
-          : '<span class="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 font-bold text-[11px]">👩‍🏫 授課講師</span>';
+          ? '<span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-extrabold text-[11px]">🛡️ 系統管理員</span>'
+          : '<span class="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-bold text-[11px]">👩‍🏫 授課講師</span>';
 
         const tr = document.createElement("tr");
-        tr.className = "border-b border-slate-100 hover:bg-purple-50/30 text-xs";
+        tr.className = "border-b border-slate-100 hover:bg-emerald-50/30 text-xs";
         tr.innerHTML = `
           <td class="p-3 text-center">
-            ${!isPrimaryRootAdmin ? `<input type="checkbox" class="staff-cb rounded text-purple-600" value="${s.id}" onchange="handleStaffSelectChange(${s.id}, this.checked)">` : '<span title="預設最高管理員受系統保護" class="text-purple-600 font-bold">🔒</span>'}
+            ${!isPrimaryRootAdmin ? `<input type="checkbox" class="staff-cb rounded text-emerald-600" value="${s.id}" onchange="handleStaffSelectChange(${s.id}, this.checked)">` : '<span title="預設最高管理員受系統保護" class="text-emerald-600 font-bold">🔒</span>'}
           </td>
           <td class="p-3 font-mono text-slate-500">#${s.id}</td>
           <td class="p-3 font-bold text-slate-900">${s.name}</td>
-          <td class="p-3 text-purple-700 font-mono font-bold">${s.email}</td>
+          <td class="p-3 text-emerald-700 font-mono font-bold">${s.email}</td>
           <td class="p-3 text-slate-500 font-mono">${s.email_backup || '-'}</td>
           <td class="p-3 text-slate-600 font-mono">${s.phone}</td>
           <td class="p-3 font-mono text-slate-600 font-bold">${s.unit_code || 'FGU'}</td>
           <td class="p-3 text-slate-700 font-medium">${s.unit_name || '佛光永續學院'}</td>
           <td class="p-3">${roleBadge}</td>
           <td class="p-3 text-right space-x-1">
-            <button class="px-2.5 py-1 bg-amber-50 text-amber-800 hover:bg-amber-100 rounded font-semibold text-[11px]"
+            <button class="px-2.5 py-1 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 rounded font-semibold text-[11px]"
               onclick="openEditStudentModal(${s.id}, '${(s.name || '').replace(/'/g, "\\'")}', '${(s.email || '').replace(/'/g, "\\'")}', '${(s.email_backup || '').replace(/'/g, "\\'")}', '${(s.phone || '').replace(/'/g, "\\'")}', '${(s.unit_code || '').replace(/'/g, "\\'")}', '${(s.unit_name || '佛光永續學院').replace(/'/g, "\\'")}', '${s.role}', 'staff')">
               修改
             </button>
@@ -2362,11 +2383,11 @@ async function loadAdminStudents(search = state.studentSearch, page = state.stud
           <td class="p-3 font-mono text-slate-600 font-bold">${s.unit_code || '-'}</td>
           <td class="p-3 text-slate-700 font-medium">${s.unit_name || '佛光學員'}</td>
           <td class="p-3 text-right space-x-1">
-            <button class="px-2 py-1 bg-amber-50 text-amber-800 hover:bg-amber-100 rounded font-semibold text-[11px]" 
+            <button class="px-2 py-1 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 rounded font-semibold text-[11px]"
               onclick="openEditStudentModal(${s.id}, '${(s.name || '').replace(/'/g, "\\'")}', '${(s.email || '').replace(/'/g, "\\'")}', '${(s.email_backup || '').replace(/'/g, "\\'")}', '${(s.phone || '').replace(/'/g, "\\'")}', '${(s.unit_code || '').replace(/'/g, "\\'")}', '${(s.unit_name || '佛光學員').replace(/'/g, "\\'")}', '${s.role || 'student'}')">
               修改
             </button>
-            <button class="px-2 py-1 bg-red-50 text-red-700 hover:bg-red-100 rounded font-semibold text-[11px]" 
+            <button class="px-2 py-1 bg-red-50 text-red-700 hover:bg-red-100 rounded font-semibold text-[11px]"
               onclick="deleteSingleStudent(${s.id}, '${(s.name || '').replace(/'/g, "\\'")}')">
               刪除
             </button>
@@ -2692,7 +2713,7 @@ function showToast(message, type = "info") {
   if (!container) return;
 
   const toast = document.createElement("div");
-  const bgClass = type === "success" ? "bg-emerald-600 text-white" : (type === "error" ? "bg-red-600 text-white" : (type === "warning" ? "bg-amber-600 text-white" : "bg-slate-800 text-white"));
+  const bgClass = type === "success" ? "bg-emerald-600 text-white" : (type === "error" ? "bg-red-600 text-white" : (type === "warning" ? "bg-emerald-600 text-white" : "bg-slate-800 text-white"));
 
   toast.className = `${bgClass} px-4 py-3 rounded-xl shadow-xl flex items-center gap-3 text-sm font-semibold transition-all transform duration-300 opacity-0 translate-y-2 pointer-events-auto`;
   toast.innerHTML = `
@@ -2700,6 +2721,7 @@ function showToast(message, type = "info") {
     <span>${message}</span>
   `;
 
+  toast.setAttribute("role", ["error", "warning"].includes(type) ? "alert" : "status");
   container.appendChild(toast);
   setTimeout(() => toast.classList.remove("opacity-0", "translate-y-2"), 10);
   setTimeout(() => {
