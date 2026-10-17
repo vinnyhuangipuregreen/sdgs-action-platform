@@ -112,21 +112,24 @@ function updateDefenseRuleTexts() {
 document.addEventListener("DOMContentLoaded", async () => {
   initUIEvents();
   const initialTab = location.hash.slice(1);
+  const adminEntry = ["admin", "admin-matching", "admin-attendance"].includes(initialTab);
   const publicTabs = ["home", "worksheet", "carbon", "food", "sdgs", "earth_defense", "leaderboard"];
   switchTab(publicTabs.includes(initialTab) ? initialTab : "home");
   if (resumeCourseSignIn()) return;
-  await loadCenterActions();
-  await checkAuth();
+  if (!adminEntry) await loadCenterActions();
+  await checkAuth(!adminEntry);
   if (new URLSearchParams(location.search).get("sso_logout") === "1") {
     handleLogout();
     history.replaceState(null, "", "/");
   }
   if (resumeCourseSignIn()) return;
-  if (["admin", "admin-matching", "admin-attendance"].includes(initialTab)) {
+  if (adminEntry) {
     handleAdminAccess();
+    if (initialTab === "admin" && state.user && ["admin", "teacher"].includes(state.user.role)) switchAdminSubTab("dashboard");
     if (initialTab === "admin-matching" && state.user && ["admin", "teacher"].includes(state.user.role)) switchAdminSubTab("matching");
     if (initialTab === "admin-attendance" && state.user && ["admin", "teacher"].includes(state.user.role)) switchAdminSubTab("attendance");
   }
+  if (adminEntry) await loadCenterActions();
   await loadSDGsData();
   await loadGameSettings();
 });
@@ -185,6 +188,7 @@ function initUIEvents() {
 }
 
 function handleAdminAccess() {
+  showLoginModal(false);
   if (state.user && ['admin', 'teacher'].includes(state.user.role)) {
     switchTab("admin");
   } else {
@@ -236,7 +240,7 @@ function switchTab(tabId) {
 // ==============================================================================
 // 2. Auth Module
 // ==============================================================================
-async function checkAuth() {
+async function checkAuth(loadWorksheets = true) {
   if (!state.token) {
     if (state.activeTab !== "home") showLoginModal(true);
     return;
@@ -249,7 +253,7 @@ async function checkAuth() {
       state.user = await res.json();
       updateUserUI();
       showLoginModal(false);
-      await loadMyWorksheets(true);
+      if (loadWorksheets) await loadMyWorksheets(true);
     } else {
       handleLogout();
     }
