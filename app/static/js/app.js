@@ -2664,12 +2664,23 @@ window.exportStudentsCSV = function() {
   window.open(`${API_BASE}/admin/students/export-csv?token=${encodeURIComponent(state.token)}`, "_blank");
 };
 
-window.exportWorksheetsCSV = function() {
+window.exportWorksheetsCSV = async function() {
   if (!state.token) {
     showToast("請先登入管理員帳號", "warning");
     return;
   }
-  window.open(`${API_BASE}/admin/export/csv?token=${encodeURIComponent(state.token)}`, "_blank");
+  try {
+    const response = await fetch(`${API_BASE}/admin/export/csv`, {headers: {Authorization: `Bearer ${state.token}`}});
+    if (!response.ok) throw new Error();
+    const url = URL.createObjectURL(await response.blob());
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "SDGs_Worksheets_Export.csv";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch { showToast("練習單匯出失敗，請稍後再試", "error"); }
 };
 
 window.currentDetailWorksheetId = null;
