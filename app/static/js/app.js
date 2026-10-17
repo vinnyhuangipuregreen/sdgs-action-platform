@@ -116,6 +116,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   switchTab(publicTabs.includes(initialTab) ? initialTab : "home");
   await loadCenterActions();
   await checkAuth();
+  if (new URLSearchParams(location.search).get("sso_logout") === "1") {
+    handleLogout();
+    history.replaceState(null, "", "/");
+  }
+  if (resumeCourseSignIn()) return;
   if (["admin", "admin-matching"].includes(initialTab)) {
     handleAdminAccess();
     if (initialTab === "admin-matching" && state.user && ["admin", "teacher"].includes(state.user.role)) switchAdminSubTab("matching");
@@ -300,6 +305,7 @@ async function handleLogin(e, explicitStudentId = null) {
     showToast(`歡迎回來，${data.user.name}！`, "success");
     // 切換或登入新帳號時，自動載入該帳號之表單資料
     await loadMyWorksheets(true);
+    resumeCourseSignIn();
   } catch (err) {
     errorEl.textContent = "連線異常，請稍後再試";
     errorEl.classList.remove("hidden");
@@ -333,6 +339,7 @@ async function handleAdminLogin(e) {
     document.getElementById("adminPassword").value = "";
     updateUserUI();
     showToast(`管理員登入成功，歡迎 ${data.user.name}！`, "success");
+    if (resumeCourseSignIn()) return;
     switchTab("admin");
     if (location.hash === "#admin-matching") switchAdminSubTab("matching");
   } catch (err) {
@@ -343,6 +350,7 @@ async function handleAdminLogin(e) {
 }
 
 function handleLogout() {
+  if (state.token) fetch(`${API_BASE}/auth/logout`, {method: "POST", headers: {Authorization: `Bearer ${state.token}`}, keepalive: true}).catch(() => {});
   state.token = null;
   state.user = null;
   state.currentWorksheetId = null;
@@ -2729,4 +2737,14 @@ function showToast(message, type = "info") {
     toast.classList.add("opacity-0", "translate-y-2");
     setTimeout(() => toast.remove(), 300);
   }, 3500);
+}
+
+function resumeCourseSignIn() {
+  const destination = new URLSearchParams(location.search).get("sso_return");
+  if (!destination) return false;
+  const url = new URL(destination, location.origin);
+  if (url.origin !== location.origin || url.pathname !== "/sso/authorize") return false;
+  if (state.user && state.token) { location.replace(url.pathname + url.search); return true; }
+  showLoginModal(true);
+  return false;
 }

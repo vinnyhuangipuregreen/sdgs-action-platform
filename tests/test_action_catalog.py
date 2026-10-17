@@ -33,6 +33,8 @@ class ActionCatalogTests(unittest.TestCase):
         database.init_db()
         with database.get_db() as conn:
             conn.cursor().execute("INSERT INTO admin (id,name,email,phone,password_hash,role) VALUES (1,'Test','test','000','test','admin')")
+        with database.get_db() as conn:
+            conn.execute("INSERT INTO student (id,name,email,phone,password_hash,role) VALUES (1,'Student','test','000','test','student')")
         self.client = TestClient(app)
         self.admin = self.headers("admin")
 

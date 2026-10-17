@@ -187,8 +187,12 @@ class TursoCursor:
 
     def execute_transaction(self, statements):
         steps = [{"stmt": {"sql": "BEGIN IMMEDIATE"}}]
-        for sql in [*statements, "COMMIT"]:
-            steps.append({"condition": {"type": "ok", "step": len(steps) - 1}, "stmt": {"sql": sql}})
+        for item in [*statements, "COMMIT"]:
+            sql, params = (item, ()) if isinstance(item, str) else item
+            stmt = {"sql": sql}
+            if params:
+                stmt["args"] = self._encode_args(params)
+            steps.append({"condition": {"type": "ok", "step": len(steps) - 1}, "stmt": stmt})
         steps.append({"condition": {"type": "and", "conds": [
             {"type": "ok", "step": 0},
             {"type": "not", "cond": {"type": "ok", "step": len(steps) - 1}}
@@ -300,15 +304,17 @@ def init_db():
     global _DB_INITIALIZED
     if _DB_INITIALIZED:
         return
+    from app.accounts import accounts_separated
+    separated = accounts_separated()
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('staff_accounts', 'admin', 'users', 'student')")
         account_tables = {row["name"] for row in cursor.fetchall()}
         # Older deployments may recreate legacy tables after a successful rename.
         # Keep the renamed tables authoritative without deleting legacy data.
-        if "staff_accounts" in account_tables and "admin" not in account_tables:
+        if not separated and "staff_accounts" in account_tables and "admin" not in account_tables:
             cursor.execute("ALTER TABLE staff_accounts RENAME TO admin")
-        if "users" in account_tables and "student" not in account_tables:
+        if not separated and "users" in account_tables and "student" not in account_tables:
             cursor.execute("ALTER TABLE users RENAME TO student")
 
         ddl_statements = [
@@ -412,6 +418,8 @@ def init_db():
             "CREATE INDEX IF NOT EXISTS idx_game_scores_score ON game_scores(score DESC);",
             "CREATE INDEX IF NOT EXISTS idx_targets_goal ON sdgs_targets(goal_id);"
         ]
+        if separated:
+            ddl_statements = [sql for sql in ddl_statements if not any(marker in sql for marker in ("CREATE TABLE IF NOT EXISTS student", "CREATE TABLE IF NOT EXISTS admin", "idx_users_email", "idx_users_phone"))]
         for k, v in DEFAULT_GAME_SETTINGS.items():
             ddl_statements.append((
                 "INSERT OR IGNORE INTO system_settings (key, value) VALUES (?, ?)",
@@ -433,14 +441,15 @@ def init_db():
             cursor.execute(f"PRAGMA table_info({table})")
             if "account_type" not in {row["name"] for row in cursor.fetchall()}:
                 cursor.execute(f"ALTER TABLE {table} ADD COLUMN account_type TEXT NOT NULL DEFAULT 'student'")
-        migrate_staff_accounts(cursor)
-        retain_requested_admin_accounts(cursor)
-        renumber_admin_accounts(cursor)
-        cursor.execute("""CREATE VIEW IF NOT EXISTS account_profiles AS
-            SELECT id, name, email, email_backup, phone, unit_code, unit_name, role, created_at, 'student' AS account_type FROM student
-            UNION ALL
-            SELECT id, name, email, email_backup, phone, unit_code, unit_name, role, created_at, 'staff' AS account_type FROM admin
-        """)
+        if not separated:
+            migrate_staff_accounts(cursor)
+            retain_requested_admin_accounts(cursor)
+            renumber_admin_accounts(cursor)
+            cursor.execute("""CREATE VIEW IF NOT EXISTS account_profiles AS
+                SELECT id, name, email, email_backup, phone, unit_code, unit_name, role, created_at, 'student' AS account_type FROM student
+                UNION ALL
+                SELECT id, name, email, email_backup, phone, unit_code, unit_name, role, created_at, 'staff' AS account_type FROM admin
+            """)
         cursor.execute("SELECT value FROM system_settings WHERE key = 'action_catalog_initialized'")
         if not cursor.fetchone():
             catalog_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "action_catalog.json")

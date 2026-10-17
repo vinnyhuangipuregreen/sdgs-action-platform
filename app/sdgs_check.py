@@ -70,6 +70,9 @@ def ensure_users_seeded(conn):
     Uses single-pipeline batch execution so it completes in < 0.3s on Vercel.
     """
     global _USERS_VERIFIED
+    from app.accounts import accounts_separated
+    if accounts_separated():
+        return
     if _USERS_VERIFIED:
         return
     try:

@@ -23,6 +23,8 @@ class MatchingBridgeTests(unittest.TestCase):
         database.init_db()
         with database.get_db() as conn:
             conn.execute("INSERT INTO admin (id,name,email,phone,password_hash,role) VALUES (1,'Test','admin','1','test','admin')")
+        with database.get_db() as conn:
+            conn.execute("INSERT INTO student (id,name,email,phone,password_hash,role) VALUES (1,'Student','student','000','test','student')")
         self.client = TestClient(app)
         self.token = create_access_token({"id": 1, "name": "Test", "email": "admin", "role": "admin"})
         self.headers = {"Authorization": "Bearer " + self.token}

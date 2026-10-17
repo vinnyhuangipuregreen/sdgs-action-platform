@@ -3,6 +3,7 @@ import hmac
 import json
 import base64
 import time
+import secrets
 
 SECRET_KEY = "sdgs-fgu-climate-action-super-secret-key-2026"
 
@@ -19,6 +20,7 @@ def get_account_type(user_data: dict) -> str:
 def create_access_token(user_data: dict, expires_in: int = 86400 * 7) -> str:
     payload = {
         "user_id": user_data["id"],
+        "session_id": user_data.get("session_id") or secrets.token_urlsafe(24),
         "email": user_data["email"],
         "name": user_data["name"],
         "role": user_data["role"],
