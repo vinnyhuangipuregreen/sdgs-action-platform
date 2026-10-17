@@ -7,7 +7,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <link rel="stylesheet" href="/static/css/style.css?v=20261017_design">
-  <link rel="stylesheet" href="/static/css/design-system.css?v=20261017_course_focus">
+  <link rel="stylesheet" href="/static/css/design-system.css?v=20261018_toolbox_grid">
   <script>
     tailwind.config = {
       theme: {
@@ -78,12 +78,35 @@
         <article class="module-card ds-card" data-module="matching"><div class="module-art"><img src="/static/images/matching.png" alt="" width="1536" height="1024" loading="lazy"><span class="module-number">01</span></div><div class="module-copy"><h3>SDGs 配對挑戰賽</h3><p>透過遊戲與挑戰，認識 17 項目標與 169 項細項，培養永續行動力。</p><a class="ds-button module-enter" href="https://sdgs-matching-game.vercel.app/">進入模組 <span aria-hidden="true">→</span></a></div></article>
         <article class="module-card ds-card" data-module="analysis"><div class="module-art"><img src="/static/images/worksheet.png" alt="" width="1536" height="1024" loading="lazy"><span class="module-number">02</span></div><div class="module-copy"><h3>連動分析練習單</h3><p>從中心行動出發，練習放射、拉扯與因果分析，建立跨領域思維。</p><button class="ds-button module-enter" data-open-tab="worksheet">進入模組 <span aria-hidden="true">→</span></button></div></article>
         <article class="module-card ds-card" data-module="carbon"><div class="module-art"><img src="/static/images/carbon.png" alt="" width="1536" height="1024" loading="lazy"><span class="module-number">03</span></div><div class="module-copy"><h3>活動碳足跡盤查表</h3><p>記錄活動數據、理解碳足跡，將低碳生活落實於每一次行動。</p><button class="ds-button module-enter" disabled>尚未開放</button></div></article>
-        <article class="module-card ds-card" data-module="food"><div class="module-art"><img src="/static/images/toolbox.png" alt="智慧工具箱與數位學習工具插圖" width="1536" height="1024" loading="lazy"><span class="module-number">04</span></div><div class="module-copy"><h3>智慧工具箱</h3><p>探索智慧學習與數位工具，讓分析與實踐更有效率。</p><button class="ds-button module-enter" disabled>尚未開放</button></div></article>
+        <article class="module-card ds-card" data-module="food"><div class="module-art"><img src="/static/images/toolbox.png" alt="智慧工具箱與數位學習工具插圖" width="1536" height="1024" loading="lazy"><span class="module-number">04</span></div><div class="module-copy"><h3>智慧工具箱</h3><p>探索智慧學習與數位工具，讓分析與實踐更有效率。</p><button class="ds-button module-enter" data-open-tab="food">進入模組 <span aria-hidden="true">→</span></button></div></article>
       </div>
       <div class="practice-values"><div><span aria-hidden="true">◎</span><h3>以知識為起點</h3><p>理解 SDGs，連結生活與社會議題。</p></div><div><span aria-hidden="true">↗</span><h3>以分析看見關聯</h3><p>梳理影響、釐清因果，做出有依據的判斷。</p></div><div><span aria-hidden="true">❧</span><h3>以行動創造改變</h3><p>將學習轉化為具體可觀察的永續實踐。</p></div></div>
     </section>
     <section id="tabPane_carbon" class="tab-pane hidden ds-card coming-soon" data-module="carbon"><img src="/static/images/carbon.png" alt="碳足跡分析主題插圖"><div><span class="eyebrow">模組 03・尚未開放</span><h2>活動碳足跡盤查表</h2><p>此模組尚未連接功能程式，開放後可在此進行活動碳足跡盤查。</p><button class="ds-button" data-open-tab="home">返回首頁</button></div></section>
-    <section id="tabPane_food" class="tab-pane hidden ds-card coming-soon" data-module="food"><img src="/static/images/toolbox.png" alt="智慧工具箱與數位學習工具插圖"><div><span class="eyebrow">模組 04・尚未開放</span><h2>智慧工具箱</h2><p>此模組尚未連接功能程式，開放後可在此使用智慧學習與實踐工具。</p><button class="ds-button" data-open-tab="home">返回首頁</button></div></section>
+    <section id="tabPane_food" class="tab-pane hidden space-y-6" data-module="food">
+      <div class="ds-card toolbox-heading">
+        <div><span class="eyebrow">智慧工具・持續擴充</span><h2>智慧工具箱</h2><p>選擇實用工具，讓日常學習、分析與永續實踐更有效率。</p></div>
+        <button class="ds-button" data-open-tab="home">返回首頁</button>
+      </div>
+      <div class="module-grid" aria-label="智慧工具清單">
+        <article class="module-card ds-card">
+          <div class="module-art"><img src="/static/images/food.png" alt="臘八粥與穀物食材插圖" width="1536" height="1024"><span class="module-number">01</span></div>
+          <div class="module-copy"><h3>臘八粥食材試算表</h3><p>從食材份量到蔬食選擇，探索日常飲食與永續生活的連結。</p><a class="ds-button module-enter" href="/tools/laba">進入智慧工具 <span aria-hidden="true">→</span></a></div>
+        </article>
+        <article class="module-card ds-card">
+          <div class="module-art"><img src="/static/images/wishing.png" alt="許願瓶與點子卡片插圖" width="1536" height="1024" loading="lazy"><span class="module-number">02</span></div>
+          <div class="module-copy"><h3>歡迎許願</h3><p>寫下你的願望與期待，讓好點子在這裡發芽，更多精彩功能即將登場。</p><button class="ds-button module-enter" disabled>敬請期待</button></div>
+        </article>
+        <article class="module-card ds-card">
+          <div class="module-art"><img src="/static/images/wishing.png" alt="許願瓶與點子卡片插圖" width="1536" height="1024" loading="lazy"><span class="module-number">03</span></div>
+          <div class="module-copy"><h3>歡迎許願</h3><p>寫下你的願望與期待，讓好點子在這裡發芽，更多精彩功能即將登場。</p><button class="ds-button module-enter" disabled>敬請期待</button></div>
+        </article>
+        <article class="module-card ds-card">
+          <div class="module-art"><img src="/static/images/wishing.png" alt="許願瓶與點子卡片插圖" width="1536" height="1024" loading="lazy"><span class="module-number">04</span></div>
+          <div class="module-copy"><h3>歡迎許願</h3><p>寫下你的願望與期待，讓好點子在這裡發芽，更多精彩功能即將登場。</p><button class="ds-button module-enter" disabled>敬請期待</button></div>
+        </article>
+      </div>
+    </section>
     <!-- ======================================================================= -->
     <!-- TAB 1: 連動分析練習單 -->
     <!-- ======================================================================= -->
