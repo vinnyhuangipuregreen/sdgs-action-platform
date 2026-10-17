@@ -4,6 +4,7 @@ import shutil
 
 ROOT = Path(__file__).resolve().parent.parent
 GAME = ROOT.parent / "sdgs-matching-game"
+COURSE = ROOT.parent / "sdgs-attendance-record"
 
 
 def sync():
@@ -28,6 +29,7 @@ AdminApp.handleLogout = function() {
     (ROOT / "app/static/js/matching-admin.js").write_text(js, encoding="utf-8")
     shutil.copy2(GAME / "static/css/style.css", ROOT / "app/static/css/matching-base.css")
     shutil.copy2(ROOT / "app/static/css/design-system.css", GAME / "static/css/design-system.css")
+    shutil.copy2(ROOT / "app/static/css/design-system.css", COURSE / "static/css/design-system.css")
 
 
 if __name__ == "__main__":
