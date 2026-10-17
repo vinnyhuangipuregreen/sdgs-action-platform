@@ -87,7 +87,7 @@ def ensure_users_seeded(conn):
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, ("系統管理員 (戴慶華 博士)", "admin", "admin@fgu.edu.tw", "0912345678", "FGU", "佛光永續學院", admin_pass, "admin"))
 
-        cursor.execute("SELECT COUNT(*) FROM users WHERE role = 'student'")
+        cursor.execute("SELECT COUNT(*) FROM student WHERE role = 'student'")
         if cursor.fetchone()[0] >= 10:
             _USERS_VERIFIED = True
             return
@@ -114,11 +114,11 @@ def ensure_users_seeded(conn):
                 for s in students
             ]
             cursor.executemany("""
-            INSERT INTO users (name, email, email_backup, phone, unit_code, unit_name, password_hash, role)
+            INSERT INTO student (name, email, email_backup, phone, unit_code, unit_name, password_hash, role)
             VALUES (?, ?, ?, ?, ?, ?, ?, 'student')
             """, student_params)
 
         _USERS_VERIFIED = True
         print("[USERS_CHECK] Batch-seeded admin & 427 students into cloud database.")
     except Exception as e:
-        print(f"[USERS_CHECK_ERROR] Failed to auto-seed users: {e}")
+        print(f"[USERS_CHECK_ERROR] Failed to auto-seed student: {e}")

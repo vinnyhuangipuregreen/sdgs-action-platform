@@ -302,12 +302,16 @@ def init_db():
         return
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('staff_accounts', 'admin')")
+        cursor.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('staff_accounts', 'admin', 'users', 'student')")
         account_tables = {row["name"] for row in cursor.fetchall()}
         if "staff_accounts" in account_tables:
             if "admin" in account_tables:
                 raise RuntimeError("Both staff_accounts and admin exist; refusing to overwrite account data")
             cursor.execute("ALTER TABLE staff_accounts RENAME TO admin")
+        if "users" in account_tables:
+            if "student" in account_tables:
+                raise RuntimeError("Both users and student exist; refusing to overwrite account data")
+            cursor.execute("ALTER TABLE users RENAME TO student")
 
         ddl_statements = [
             """CREATE TABLE IF NOT EXISTS action_catalog (
@@ -316,7 +320,7 @@ def init_db():
                 name TEXT NOT NULL,
                 UNIQUE(category, name)
             );""",
-            """CREATE TABLE IF NOT EXISTS users (
+            """CREATE TABLE IF NOT EXISTS student (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
                 email TEXT NOT NULL,
@@ -404,8 +408,8 @@ def init_db():
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
             );""",
-            "CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);",
-            "CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);",
+            "CREATE INDEX IF NOT EXISTS idx_users_email ON student(email);",
+            "CREATE INDEX IF NOT EXISTS idx_users_phone ON student(phone);",
             "CREATE INDEX IF NOT EXISTS idx_worksheets_user ON worksheets(user_id);",
             "CREATE INDEX IF NOT EXISTS idx_game_scores_score ON game_scores(score DESC);",
             "CREATE INDEX IF NOT EXISTS idx_targets_goal ON sdgs_targets(goal_id);"
@@ -434,7 +438,7 @@ def init_db():
         migrate_staff_accounts(cursor)
         retain_requested_admin_accounts(cursor)
         cursor.execute("""CREATE VIEW IF NOT EXISTS account_profiles AS
-            SELECT id, name, email, email_backup, phone, unit_code, unit_name, role, created_at, 'student' AS account_type FROM users
+            SELECT id, name, email, email_backup, phone, unit_code, unit_name, role, created_at, 'student' AS account_type FROM student
             UNION ALL
             SELECT id, name, email, email_backup, phone, unit_code, unit_name, role, created_at, 'staff' AS account_type FROM admin
         """)
@@ -455,10 +459,10 @@ def migrate_staff_accounts(cursor):
     pending = "NOT EXISTS (SELECT 1 FROM system_settings WHERE key = 'staff_accounts_separated_v1')"
     columns = "id, name, email, email_backup, phone, unit_code, unit_name, password_hash, role, created_at"
     statements = [
-        f"INSERT INTO admin ({columns}) SELECT {columns} FROM users WHERE role IN ('admin', 'teacher') AND {pending}",
-        *[f"UPDATE {table} SET account_type = 'staff' WHERE user_id IN (SELECT id FROM users WHERE role IN ('admin', 'teacher')) AND {pending}"
+        f"INSERT INTO admin ({columns}) SELECT {columns} FROM student WHERE role IN ('admin', 'teacher') AND {pending}",
+        *[f"UPDATE {table} SET account_type = 'staff' WHERE user_id IN (SELECT id FROM student WHERE role IN ('admin', 'teacher')) AND {pending}"
           for table in ("worksheets", "game_scores")],
-        f"DELETE FROM users WHERE role IN ('admin', 'teacher') AND {pending}",
+        f"DELETE FROM student WHERE role IN ('admin', 'teacher') AND {pending}",
         "INSERT OR IGNORE INTO system_settings (key, value) VALUES ('staff_accounts_separated_v1', '1')",
     ]
     if hasattr(cursor, "execute_transaction"):

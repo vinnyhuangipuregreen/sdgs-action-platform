@@ -62,12 +62,12 @@ def seed():
                 students = json.load(f)
             
             # Reset student records to ensure latest official list is loaded
-            cursor.execute("DELETE FROM users WHERE role = 'student'")
+            cursor.execute("DELETE FROM student WHERE role = 'student'")
             print(f"Seeding {len(students)} students with latest schema (test001@gmail.com ~ test427@gmail.com)...")
             for s in students:
                 p_hash = hash_password(s["phone"])
                 cursor.execute("""
-                INSERT INTO users (name, email, email_backup, phone, unit_code, unit_name, password_hash, role)
+                INSERT INTO student (name, email, email_backup, phone, unit_code, unit_name, password_hash, role)
                 VALUES (?, ?, ?, ?, ?, ?, ?, 'student')
                 """, (s["name"], s["email"], s.get("email_backup", s["email"]), s["phone"], s.get("unit_code", ""), s.get("unit_name", "佛光學員"), p_hash))
             print(f"All {len(students)} students seeded successfully!")
@@ -75,7 +75,7 @@ def seed():
         # 4. Seed sample worksheet
         cursor.execute("SELECT COUNT(*) FROM worksheets")
         if cursor.fetchone()[0] == 0:
-            cursor.execute("SELECT id, name, unit_name, unit_code, email FROM users WHERE role = 'student' LIMIT 1")
+            cursor.execute("SELECT id, name, unit_name, unit_code, email FROM student WHERE role = 'student' LIMIT 1")
             s1 = cursor.fetchone()
             if s1:
                 radial1 = json.dumps([

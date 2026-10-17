@@ -22,7 +22,7 @@ class ActivityDescriptionTests(unittest.TestCase):
         database._DB_INITIALIZED = False
         database.init_db()
         with database.get_db() as conn:
-            conn.cursor().execute("INSERT INTO users (id,name,email,phone,password_hash,role) VALUES (1,'Test','test@example.invalid','000','test','student')")
+            conn.cursor().execute("INSERT INTO student (id,name,email,phone,password_hash,role) VALUES (1,'Test','test@example.invalid','000','test','student')")
             conn.cursor().execute("INSERT INTO admin (id,name,email,phone,password_hash,role) VALUES (1,'Test','test@example.invalid','000','test','admin')")
         self.client = TestClient(app)
         self.student = self.headers("student")

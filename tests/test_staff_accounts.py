@@ -25,7 +25,7 @@ class StaffAccountsTests(unittest.TestCase):
             cursor = conn.cursor()
             cursor.execute("DELETE FROM system_settings WHERE key = 'staff_accounts_separated_v1'")
             for account_id, name, role in ((1, "Student", "student"), (20, "Admin", "admin"), (21, "Teacher", "teacher")):
-                cursor.execute("INSERT INTO users (id,name,email,phone,password_hash,role) VALUES (?,?,?,?,?,?)",
+                cursor.execute("INSERT INTO student (id,name,email,phone,password_hash,role) VALUES (?,?,?,?,?,?)",
                     (account_id, name, "admin" if role == "admin" else name + "@example.invalid", "000", self.password_hash, role))
                 cursor.execute("""INSERT INTO worksheets
                     (user_id,user_name,unit_name,center_action,radial_data,tradeoff_data,chat_text,self_checks,commitment)
@@ -53,7 +53,7 @@ class StaffAccountsTests(unittest.TestCase):
             database._DB_INITIALIZED = False
             database.init_db()
         with database.get_db() as conn:
-            self.assertEqual(conn.execute("SELECT COUNT(*) FROM users").fetchone()[0], 1)
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM student").fetchone()[0], 1)
             self.assertEqual(conn.execute("SELECT COUNT(*) FROM admin").fetchone()[0], 2)
             staff = conn.execute("SELECT * FROM admin WHERE id = 20").fetchone()
             self.assertEqual(staff["password_hash"], self.password_hash)
@@ -82,13 +82,33 @@ class StaffAccountsTests(unittest.TestCase):
             self.assertTrue(all(row["password_hash"] == self.password_hash and row["created_at"] == "2026-01-01 00:00:00" for row in rows))
             self.assertIsNone(conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='staff_accounts'").fetchone())
             self.assertEqual(conn.execute("SELECT email FROM account_profiles WHERE id=429 AND account_type='staff'").fetchone()[0], "vinnyhuang.ipuregreen@gmail.com")
-            self.assertEqual(conn.execute("SELECT COUNT(*) FROM users").fetchone()[0], 1)
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM student").fetchone()[0], 1)
             for table in ("worksheets", "game_scores"):
                 self.assertEqual(conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0], 3)
         response = self.client.post("/api/auth/login", json={"account": "admin", "password": "test-password", "account_type": "staff"})
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(self.client.get("/api/admin/staff", headers=removed_token).status_code, 401)
         self.assertEqual(self.client.get("/api/auth/me", headers=removed_token).status_code, 401)
+
+    def test_student_table_rename_preserves_accounts_and_relationships(self):
+        with database.get_db() as conn:
+            before = dict(conn.execute("SELECT * FROM student WHERE id=1").fetchone())
+            staff_before = [dict(row) for row in conn.execute("SELECT * FROM admin ORDER BY id").fetchall()]
+            conn.execute("ALTER TABLE student RENAME TO users")
+        for _ in range(2):
+            database._DB_INITIALIZED = False
+            database.init_db()
+        with database.get_db() as conn:
+            self.assertEqual(dict(conn.execute("SELECT * FROM student WHERE id=1").fetchone()), before)
+            self.assertIsNone(conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'").fetchone())
+            self.assertEqual([dict(row) for row in conn.execute("SELECT * FROM admin ORDER BY id").fetchall()], staff_before)
+        response = self.client.post("/api/auth/login", json={"account": before["email"], "password": "test-password", "account_type": "student"})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["user"]["id"], 1)
+        self.assertEqual(self.client.get("/api/auth/me", headers=self.student).json()["email"], before["email"])
+        self.assertEqual(self.client.get("/api/worksheets/1", headers=self.student).json()["user_email"], before["email"])
+        self.assertEqual(self.client.get("/api/worksheets/1/export-docx", headers=self.student).status_code, 200)
+        self.assertEqual(self.client.get("/api/game/leaderboard", headers=self.student).json()["my_best"]["score"], 100)
 
     def test_login_uses_separate_tables_and_changed_staff_password_is_respected(self):
         for account, source, expected in (("admin", "staff", "admin"), ("Teacher@example.invalid", "staff", "teacher"), ("Student@example.invalid", "student", "student")):
@@ -105,9 +125,9 @@ class StaffAccountsTests(unittest.TestCase):
         conn = database.get_db_connection()
         conn.execute("DELETE FROM admin")
         conn.execute("DELETE FROM system_settings WHERE key = 'staff_accounts_separated_v1'")
-        conn.execute("INSERT INTO users (id,name,email,phone,password_hash,role) VALUES (30,'Legacy','legacy@example.invalid','1',?,'teacher')", (self.password_hash,))
+        conn.execute("INSERT INTO student (id,name,email,phone,password_hash,role) VALUES (30,'Legacy','legacy@example.invalid','1',?,'teacher')", (self.password_hash,))
         conn.execute("INSERT INTO game_scores (user_id,user_name,score,max_combo,earth_health,title_earned) VALUES (30,'Legacy',1,1,100,'Test')")
-        conn.execute("CREATE TRIGGER block_staff_move BEFORE DELETE ON users BEGIN SELECT RAISE(ABORT, 'migration test failure'); END")
+        conn.execute("CREATE TRIGGER block_staff_move BEFORE DELETE ON student BEGIN SELECT RAISE(ABORT, 'migration test failure'); END")
         conn.commit()
 
         def post(url, headers, json, timeout):
@@ -150,7 +170,7 @@ class StaffAccountsTests(unittest.TestCase):
 
     def test_equal_ids_do_not_share_worksheets_or_game_records(self):
         with database.get_db() as conn:
-            conn.execute("INSERT INTO users (id,name,email,phone,password_hash) VALUES (20,'Different student','different@example.invalid','001',?)", (self.password_hash,))
+            conn.execute("INSERT INTO student (id,name,email,phone,password_hash) VALUES (20,'Different student','different@example.invalid','001',?)", (self.password_hash,))
         other = self.headers(20, "Different student", "student")
         self.assertEqual(self.client.get("/api/auth/me", headers=other).json()["name"], "Different student")
         self.assertEqual(self.client.get("/api/worksheets?mine=true", headers=other).json(), [])

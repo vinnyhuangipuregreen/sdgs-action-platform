@@ -153,7 +153,7 @@ def login(req: LoginRequest):
         acc = req.account.strip()
         pwd = req.password.strip()
         account_type = req.account_type or ("staff" if acc in ("admin", "admin@fgu.edu.tw") else "student")
-        table = "admin" if account_type == "staff" else "users"
+        table = "admin" if account_type == "staff" else "student"
         if req.student_id:
             cursor.execute(f"SELECT * FROM {table} WHERE id = ? AND (email = ? OR phone = ?)", (req.student_id, acc, acc))
         else:
@@ -179,7 +179,7 @@ def login(req: LoginRequest):
 def get_me(user: dict = Depends(require_user)):
     with get_db() as conn:
         cursor = conn.cursor()
-        table = "admin" if get_account_type(user) == "staff" else "users"
+        table = "admin" if get_account_type(user) == "staff" else "student"
         cursor.execute(f"SELECT id, name, email, email_backup, phone, unit_code, unit_name, role FROM {table} WHERE id = ?", (user["user_id"],))
         row = cursor.fetchone()
         if not row:
@@ -687,7 +687,7 @@ def get_admin_stats(user: dict = Depends(require_admin)):
         ensure_users_seeded(conn)
         ensure_sdgs_seeded(conn)
         cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM users WHERE role = 'student'")
+        cursor.execute("SELECT COUNT(*) FROM student WHERE role = 'student'")
         total_students = cursor.fetchone()[0]
         
         cursor.execute("SELECT COUNT(*) FROM worksheets")
@@ -754,7 +754,7 @@ def get_admin_students(
     with get_db() as conn:
         ensure_users_seeded(conn)
         cursor = conn.cursor()
-        query = "SELECT id, name, email, email_backup, phone, unit_code, unit_name, role, created_at FROM users WHERE role = 'student'"
+        query = "SELECT id, name, email, email_backup, phone, unit_code, unit_name, role, created_at FROM student WHERE role = 'student'"
         params = []
         if search:
             s = f"%{search.strip()}%"
@@ -835,7 +835,7 @@ def save_account(req, table, account_id=None):
 
 @app.post("/api/admin/students")
 def create_student(req: StudentSaveSchema, user: dict = Depends(require_admin)):
-    return save_account(req, "users")
+    return save_account(req, "student")
 
 @app.post("/api/admin/staff")
 def create_staff(req: StaffSaveSchema, user: dict = Depends(require_admin)):
@@ -843,7 +843,7 @@ def create_staff(req: StaffSaveSchema, user: dict = Depends(require_admin)):
 
 @app.put("/api/admin/students/{student_id}")
 def update_student(student_id: int, req: StudentSaveSchema, user: dict = Depends(require_admin)):
-    return save_account(req, "users", student_id)
+    return save_account(req, "student", student_id)
 
 @app.put("/api/admin/staff/{staff_id}")
 def update_staff(staff_id: int, req: StaffSaveSchema, user: dict = Depends(require_admin)):
@@ -865,7 +865,7 @@ def delete_accounts(ids, table):
 
 @app.delete("/api/admin/students/{student_id}")
 def delete_single_student(student_id: int, user: dict = Depends(require_admin)):
-    return delete_accounts([student_id], "users")
+    return delete_accounts([student_id], "student")
 
 @app.delete("/api/admin/staff/{staff_id}")
 def delete_single_staff(staff_id: int, user: dict = Depends(require_admin)):
@@ -876,7 +876,7 @@ class BatchDeleteRequest(BaseModel):
 
 @app.post("/api/admin/students/batch-delete")
 def batch_delete_students(req: BatchDeleteRequest, user: dict = Depends(require_admin)):
-    return delete_accounts(req.ids, "users")
+    return delete_accounts(req.ids, "student")
 
 @app.post("/api/admin/staff/batch-delete")
 def batch_delete_staff(req: BatchDeleteRequest, user: dict = Depends(require_admin)):
@@ -910,7 +910,7 @@ def import_accounts(req, table):
 
 @app.post("/api/admin/students/batch-import")
 def batch_import_students(req: BatchImportRequest, user: dict = Depends(require_admin)):
-    return import_accounts(req, "users")
+    return import_accounts(req, "student")
 
 @app.post("/api/admin/staff/batch-import")
 def batch_import_staff(req: BatchImportRequest, user: dict = Depends(require_admin)):
@@ -922,7 +922,7 @@ def export_students_csv(user: dict = Depends(require_admin)):
         cursor = conn.cursor()
         cursor.execute("""
         SELECT name, email, email_backup, phone, unit_code, unit_name 
-        FROM users 
+        FROM student
         WHERE role = 'student'
         ORDER BY id ASC
         """)
