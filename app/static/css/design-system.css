@@ -47,6 +47,8 @@
 .sdgs-shell .ds-button-secondary { background: #f1f5f4; border-color: var(--ds-border); color: #34473f; }
 .sdgs-shell .ds-button:disabled { color: #526176; background: #edf2ef; border-color: #dbe5e6; opacity: 1; }
 .platform-header { position: sticky; top: 0; z-index: 40; display: block; background: rgba(255,255,255,.97); border-bottom: 1px solid var(--ds-border); box-shadow: 0 3px 12px #0f443608; padding: 0; color: var(--ds-text); }
+/* Keep iframe buttons and dialogs clear when the course tools receive focus. */
+body:has(#tabPane_admin:not(.hidden) #adminSubPane_attendance:not(.hidden)) > .platform-header { position: relative; }
 .platform-header-inner { max-width: 1488px; padding: 18px 32px; margin: auto; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
 .platform-brand { display: flex; align-items: center; gap: 15px; border: 0; background: transparent; padding: 0; text-align: left; color: var(--ds-text); text-decoration: none; }
 .brand-globe { width: 58px; height: 58px; display: grid; place-items: center; border-radius: 50%; background: #e3f7ed; font-size: 39px; box-shadow: inset 0 0 0 1px #c8edda; flex-shrink: 0; }
