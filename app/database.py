@@ -302,7 +302,13 @@ def init_db():
         return
     with get_db() as conn:
         cursor = conn.cursor()
-        
+        cursor.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('staff_accounts', 'admin')")
+        account_tables = {row["name"] for row in cursor.fetchall()}
+        if "staff_accounts" in account_tables:
+            if "admin" in account_tables:
+                raise RuntimeError("Both staff_accounts and admin exist; refusing to overwrite account data")
+            cursor.execute("ALTER TABLE staff_accounts RENAME TO admin")
+
         ddl_statements = [
             """CREATE TABLE IF NOT EXISTS action_catalog (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -322,7 +328,7 @@ def init_db():
                 role TEXT NOT NULL DEFAULT 'student',
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             );""",
-            """CREATE TABLE IF NOT EXISTS staff_accounts (
+            """CREATE TABLE IF NOT EXISTS admin (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
                 email TEXT NOT NULL,
@@ -426,10 +432,11 @@ def init_db():
             if "account_type" not in {row["name"] for row in cursor.fetchall()}:
                 cursor.execute(f"ALTER TABLE {table} ADD COLUMN account_type TEXT NOT NULL DEFAULT 'student'")
         migrate_staff_accounts(cursor)
+        retain_requested_admin_accounts(cursor)
         cursor.execute("""CREATE VIEW IF NOT EXISTS account_profiles AS
             SELECT id, name, email, email_backup, phone, unit_code, unit_name, role, created_at, 'student' AS account_type FROM users
             UNION ALL
-            SELECT id, name, email, email_backup, phone, unit_code, unit_name, role, created_at, 'staff' AS account_type FROM staff_accounts
+            SELECT id, name, email, email_backup, phone, unit_code, unit_name, role, created_at, 'staff' AS account_type FROM admin
         """)
         cursor.execute("SELECT value FROM system_settings WHERE key = 'action_catalog_initialized'")
         if not cursor.fetchone():
@@ -448,11 +455,25 @@ def migrate_staff_accounts(cursor):
     pending = "NOT EXISTS (SELECT 1 FROM system_settings WHERE key = 'staff_accounts_separated_v1')"
     columns = "id, name, email, email_backup, phone, unit_code, unit_name, password_hash, role, created_at"
     statements = [
-        f"INSERT INTO staff_accounts ({columns}) SELECT {columns} FROM users WHERE role IN ('admin', 'teacher') AND {pending}",
+        f"INSERT INTO admin ({columns}) SELECT {columns} FROM users WHERE role IN ('admin', 'teacher') AND {pending}",
         *[f"UPDATE {table} SET account_type = 'staff' WHERE user_id IN (SELECT id FROM users WHERE role IN ('admin', 'teacher')) AND {pending}"
           for table in ("worksheets", "game_scores")],
         f"DELETE FROM users WHERE role IN ('admin', 'teacher') AND {pending}",
         "INSERT OR IGNORE INTO system_settings (key, value) VALUES ('staff_accounts_separated_v1', '1')",
+    ]
+    if hasattr(cursor, "execute_transaction"):
+        cursor.execute_transaction(statements)
+    else:
+        for sql in statements:
+            cursor.execute(sql)
+
+def retain_requested_admin_accounts(cursor):
+    statements = [
+        """DELETE FROM admin
+           WHERE NOT ((id = 1 AND email = 'admin') OR
+                      (id = 429 AND email = 'vinnyhuang.ipuregreen@gmail.com'))
+           AND NOT EXISTS (SELECT 1 FROM system_settings WHERE key = 'admin_table_retained_accounts_v1')""",
+        "INSERT OR IGNORE INTO system_settings (key, value) VALUES ('admin_table_retained_accounts_v1', '1')",
     ]
     if hasattr(cursor, "execute_transaction"):
         cursor.execute_transaction(statements)

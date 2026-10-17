@@ -31,6 +31,8 @@ class ActionCatalogTests(unittest.TestCase):
         database.DB_PATH = os.path.join(self.temp.name, "catalog.db")
         database._DB_INITIALIZED = False
         database.init_db()
+        with database.get_db() as conn:
+            conn.cursor().execute("INSERT INTO admin (id,name,email,phone,password_hash,role) VALUES (1,'Test','test','000','test','admin')")
         self.client = TestClient(app)
         self.admin = self.headers("admin")
 

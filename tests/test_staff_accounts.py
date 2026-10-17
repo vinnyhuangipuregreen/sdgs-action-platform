@@ -54,8 +54,8 @@ class StaffAccountsTests(unittest.TestCase):
             database.init_db()
         with database.get_db() as conn:
             self.assertEqual(conn.execute("SELECT COUNT(*) FROM users").fetchone()[0], 1)
-            self.assertEqual(conn.execute("SELECT COUNT(*) FROM staff_accounts").fetchone()[0], 2)
-            staff = conn.execute("SELECT * FROM staff_accounts WHERE id = 20").fetchone()
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM admin").fetchone()[0], 2)
+            staff = conn.execute("SELECT * FROM admin WHERE id = 20").fetchone()
             self.assertEqual(staff["password_hash"], self.password_hash)
             for table in ("worksheets", "game_scores"):
                 self.assertEqual(conn.execute(f"SELECT COUNT(*) FROM {table} WHERE account_type = 'staff'").fetchone()[0], 2)
@@ -63,6 +63,32 @@ class StaffAccountsTests(unittest.TestCase):
         self.assertEqual(self.client.get("/api/worksheets/2", headers=self.admin).json()["user_email"], "admin")
         self.assertEqual(self.client.get("/api/worksheets/2/export-docx", headers=self.admin).status_code, 200)
         self.assertEqual(self.client.get("/api/auth/me", headers=self.admin).json()["name"], "Admin")
+
+    def test_rename_retains_only_requested_accounts_and_preserves_other_data(self):
+        removed_token = self.headers(500, "Other", "admin")
+        with database.get_db() as conn:
+            conn.execute("DELETE FROM admin")
+            for account_id, email in ((1, "admin"), (429, "vinnyhuang.ipuregreen@gmail.com"), (500, "other@example.invalid"), (501, "admin")):
+                conn.execute("""INSERT INTO admin (id,name,email,phone,password_hash,role,created_at)
+                    VALUES (?, ?, ?, '555', ?, 'admin', '2026-01-01 00:00:00')""", (account_id, email, email, self.password_hash))
+            conn.execute("DELETE FROM system_settings WHERE key = 'admin_table_retained_accounts_v1'")
+            conn.execute("ALTER TABLE admin RENAME TO staff_accounts")
+        for _ in range(2):
+            database._DB_INITIALIZED = False
+            database.init_db()
+        with database.get_db() as conn:
+            rows = conn.execute("SELECT id,email,password_hash,created_at FROM admin ORDER BY id").fetchall()
+            self.assertEqual([(row["id"], row["email"]) for row in rows], [(1, "admin"), (429, "vinnyhuang.ipuregreen@gmail.com")])
+            self.assertTrue(all(row["password_hash"] == self.password_hash and row["created_at"] == "2026-01-01 00:00:00" for row in rows))
+            self.assertIsNone(conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='staff_accounts'").fetchone())
+            self.assertEqual(conn.execute("SELECT email FROM account_profiles WHERE id=429 AND account_type='staff'").fetchone()[0], "vinnyhuang.ipuregreen@gmail.com")
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM users").fetchone()[0], 1)
+            for table in ("worksheets", "game_scores"):
+                self.assertEqual(conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0], 3)
+        response = self.client.post("/api/auth/login", json={"account": "admin", "password": "test-password", "account_type": "staff"})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(self.client.get("/api/admin/staff", headers=removed_token).status_code, 401)
+        self.assertEqual(self.client.get("/api/auth/me", headers=removed_token).status_code, 401)
 
     def test_login_uses_separate_tables_and_changed_staff_password_is_respected(self):
         for account, source, expected in (("admin", "staff", "admin"), ("Teacher@example.invalid", "staff", "teacher"), ("Student@example.invalid", "student", "student")):
@@ -77,7 +103,7 @@ class StaffAccountsTests(unittest.TestCase):
     def test_turso_migration_is_atomic_and_rolls_back_on_failure(self):
         # Execute the actual Hrana batch steps on SQLite, including their conditions.
         conn = database.get_db_connection()
-        conn.execute("DELETE FROM staff_accounts")
+        conn.execute("DELETE FROM admin")
         conn.execute("DELETE FROM system_settings WHERE key = 'staff_accounts_separated_v1'")
         conn.execute("INSERT INTO users (id,name,email,phone,password_hash,role) VALUES (30,'Legacy','legacy@example.invalid','1',?,'teacher')", (self.password_hash,))
         conn.execute("INSERT INTO game_scores (user_id,user_name,score,max_combo,earth_health,title_earned) VALUES (30,'Legacy',1,1,100,'Test')")
@@ -112,12 +138,12 @@ class StaffAccountsTests(unittest.TestCase):
             with patch("app.database.requests.post", side_effect=post):
                 with self.assertRaisesRegex(RuntimeError, "migration test failure"):
                     database.migrate_staff_accounts(cursor)
-                self.assertEqual(conn.execute("SELECT COUNT(*) FROM staff_accounts").fetchone()[0], 0)
+                self.assertEqual(conn.execute("SELECT COUNT(*) FROM admin").fetchone()[0], 0)
                 self.assertEqual(conn.execute("SELECT account_type FROM game_scores WHERE user_id = 30").fetchone()[0], "student")
                 self.assertIsNone(conn.execute("SELECT value FROM system_settings WHERE key = 'staff_accounts_separated_v1'").fetchone())
                 conn.execute("DROP TRIGGER block_staff_move")
                 database.migrate_staff_accounts(cursor)
-                self.assertEqual(conn.execute("SELECT COUNT(*) FROM staff_accounts WHERE id = 30").fetchone()[0], 1)
+                self.assertEqual(conn.execute("SELECT COUNT(*) FROM admin WHERE id = 30").fetchone()[0], 1)
                 self.assertEqual(conn.execute("SELECT account_type FROM game_scores WHERE user_id = 30").fetchone()[0], "staff")
         finally:
             conn.close()

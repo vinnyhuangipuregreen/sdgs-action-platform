@@ -68,7 +68,8 @@ API 自動化文件（Swagger UI）：`http://localhost:8000/docs`
 
 ## 🔑 預設登入帳號密碼
 
-管理員與講師帳號儲存在獨立的 `staff_accounts` 資料表，學員帳號儲存在 `users`。
+管理員與講師帳號儲存在獨立的 `admin` 資料表，學員帳號儲存在 `users`。
+舊的 `staff_accounts` 表會自動改名為 `admin`；此次更新只清理一次，保留 #1 `admin` 與 #429 `vinnyhuang.ipuregreen@gmail.com`，不刪除學員、練習單或遊戲紀錄。
 首次啟動新版時會自動搬移既有管理帳號，保留編號、密碼雜湊與建立時間，並標記其練習單與遊戲紀錄的帳號類別。搬移可重複執行，Turso 使用單一交易，失敗時回復整批搬移。
 後台管理帳號使用 `/api/admin/staff`，學員帳號使用 `/api/admin/students`；管理後台登入會指定 `account_type: "staff"`。
 

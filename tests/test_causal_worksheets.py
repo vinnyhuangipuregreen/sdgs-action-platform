@@ -23,7 +23,7 @@ class CausalWorksheetTests(unittest.TestCase):
         database._DB_INITIALIZED = False
         database.init_db()
         with database.get_db() as conn:
-            conn.cursor().execute("INSERT INTO staff_accounts (id,name,email,phone,password_hash,role) VALUES (1,'Test','test@example.invalid','000','test','admin')")
+            conn.cursor().execute("INSERT INTO admin (id,name,email,phone,password_hash,role) VALUES (1,'Test','test@example.invalid','000','test','admin')")
         self.client = TestClient(app)
         self.headers = {"Authorization": "Bearer " + create_access_token({"id": 1, "name": "Test", "email": "test@example.invalid", "role": "admin"})}
         self.chains = [{field: f"{field}-{i}" for field in ("start", "start_cond", "mid", "mid_cond", "result", "result_cond", "impact", "measurement")} for i in range(2)]

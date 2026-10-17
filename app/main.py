@@ -62,6 +62,14 @@ def get_current_user(
     if not raw_token:
         return None
     payload = decode_access_token(raw_token)
+    if payload and get_account_type(payload) == "staff":
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT role FROM admin WHERE id = ?", (payload["user_id"],))
+            account = cursor.fetchone()
+            if not account:
+                return None
+            payload["role"] = account["role"]
     return payload
 
 def require_user(current_user: Optional[dict] = Depends(get_current_user)) -> dict:
@@ -145,7 +153,7 @@ def login(req: LoginRequest):
         acc = req.account.strip()
         pwd = req.password.strip()
         account_type = req.account_type or ("staff" if acc in ("admin", "admin@fgu.edu.tw") else "student")
-        table = "staff_accounts" if account_type == "staff" else "users"
+        table = "admin" if account_type == "staff" else "users"
         if req.student_id:
             cursor.execute(f"SELECT * FROM {table} WHERE id = ? AND (email = ? OR phone = ?)", (req.student_id, acc, acc))
         else:
@@ -171,7 +179,7 @@ def login(req: LoginRequest):
 def get_me(user: dict = Depends(require_user)):
     with get_db() as conn:
         cursor = conn.cursor()
-        table = "staff_accounts" if get_account_type(user) == "staff" else "users"
+        table = "admin" if get_account_type(user) == "staff" else "users"
         cursor.execute(f"SELECT id, name, email, email_backup, phone, unit_code, unit_name, role FROM {table} WHERE id = ?", (user["user_id"],))
         row = cursor.fetchone()
         if not row:
@@ -772,7 +780,7 @@ def get_admin_staff(
     with get_db() as conn:
         ensure_users_seeded(conn)
         cursor = conn.cursor()
-        query = "SELECT id, name, email, email_backup, phone, unit_code, unit_name, role, created_at FROM staff_accounts WHERE role IN ('admin', 'teacher')"
+        query = "SELECT id, name, email, email_backup, phone, unit_code, unit_name, role, created_at FROM admin WHERE role IN ('admin', 'teacher')"
         params = []
         if search:
             s = f"%{search.strip()}%"
@@ -810,7 +818,7 @@ def save_account(req, table, account_id=None):
             existing = cursor.fetchone()
             if not existing:
                 raise HTTPException(status_code=404, detail="找不到該帳號")
-            if table == "staff_accounts" and existing["email"] == "admin" and (req.email.strip() != "admin" or req.role != "admin"):
+            if table == "admin" and existing["email"] == "admin" and (req.email.strip() != "admin" or req.role != "admin"):
                 raise HTTPException(status_code=400, detail="預設最高管理員不可變更登入帳號或角色")
         values = (req.name.strip(), req.email.strip(), req.email_backup or "", req.phone.strip(), req.unit_code or "", req.unit_name or "佛光學員", req.role)
         if account_id is None:
@@ -831,7 +839,7 @@ def create_student(req: StudentSaveSchema, user: dict = Depends(require_admin)):
 
 @app.post("/api/admin/staff")
 def create_staff(req: StaffSaveSchema, user: dict = Depends(require_admin)):
-    return save_account(req, "staff_accounts")
+    return save_account(req, "admin")
 
 @app.put("/api/admin/students/{student_id}")
 def update_student(student_id: int, req: StudentSaveSchema, user: dict = Depends(require_admin)):
@@ -839,7 +847,7 @@ def update_student(student_id: int, req: StudentSaveSchema, user: dict = Depends
 
 @app.put("/api/admin/staff/{staff_id}")
 def update_staff(staff_id: int, req: StaffSaveSchema, user: dict = Depends(require_admin)):
-    return save_account(req, "staff_accounts", staff_id)
+    return save_account(req, "admin", staff_id)
 
 
 def delete_accounts(ids, table):
@@ -848,8 +856,8 @@ def delete_accounts(ids, table):
     with get_db() as conn:
         cursor = conn.cursor()
         placeholders = ",".join("?" for _ in ids)
-        if table == "staff_accounts":
-            cursor.execute(f"SELECT id FROM staff_accounts WHERE id IN ({placeholders}) AND email = 'admin'", ids)
+        if table == "admin":
+            cursor.execute(f"SELECT id FROM admin WHERE id IN ({placeholders}) AND email = 'admin'", ids)
             if cursor.fetchone():
                 raise HTTPException(status_code=400, detail="預設最高系統管理員帳號不可刪除，但可修改資料與密碼")
         cursor.execute(f"DELETE FROM {table} WHERE id IN ({placeholders})", ids)
@@ -861,7 +869,7 @@ def delete_single_student(student_id: int, user: dict = Depends(require_admin)):
 
 @app.delete("/api/admin/staff/{staff_id}")
 def delete_single_staff(staff_id: int, user: dict = Depends(require_admin)):
-    return delete_accounts([staff_id], "staff_accounts")
+    return delete_accounts([staff_id], "admin")
 
 class BatchDeleteRequest(BaseModel):
     ids: List[int]
@@ -872,7 +880,7 @@ def batch_delete_students(req: BatchDeleteRequest, user: dict = Depends(require_
 
 @app.post("/api/admin/staff/batch-delete")
 def batch_delete_staff(req: BatchDeleteRequest, user: dict = Depends(require_admin)):
-    return delete_accounts(req.ids, "staff_accounts")
+    return delete_accounts(req.ids, "admin")
 
 class BatchImportRequest(BaseModel):
     students: List[Dict[str, str]]
@@ -882,7 +890,7 @@ class BatchImportRequest(BaseModel):
 def import_accounts(req, table):
     if not req.students:
         raise HTTPException(status_code=400, detail="匯入名單為空")
-    staff = table == "staff_accounts"
+    staff = table == "admin"
     allowed = ("admin", "teacher") if staff else ("student",)
     params = []
     for row in req.students:
@@ -906,7 +914,7 @@ def batch_import_students(req: BatchImportRequest, user: dict = Depends(require_
 
 @app.post("/api/admin/staff/batch-import")
 def batch_import_staff(req: BatchImportRequest, user: dict = Depends(require_admin)):
-    return import_accounts(req, "staff_accounts")
+    return import_accounts(req, "admin")
 
 @app.get("/api/admin/students/export-csv")
 def export_students_csv(user: dict = Depends(require_admin)):
@@ -941,7 +949,7 @@ def export_staff_csv(user: dict = Depends(require_admin)):
         cursor = conn.cursor()
         cursor.execute("""
         SELECT name, email, email_backup, phone, unit_code, unit_name, role 
-        FROM staff_accounts
+        FROM admin
         WHERE role IN ('admin', 'teacher')
         ORDER BY id ASC
         """)
