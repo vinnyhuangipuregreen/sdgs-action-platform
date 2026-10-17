@@ -25,3 +25,7 @@
 - `worksheet.png`：Landscape 3:2. An academic research report with blue bars, a magnifying glass, a small globe and a sprouting leaf. Blue module accents #3B82F6. No human characters or text.
 - `carbon.png`：Landscape 3:2. A turquoise carbon cloud marked only CO₂, trees, rising data bars and a calculator. Turquoise accents #0EA5A4. No other text or human characters.
 - `food.png`：Landscape 3:2. A bowl of steaming red-bean and mixed-grain porridge surrounded by beans, pumpkin, peanuts and leaves. Grass green accents #65A30D. No text or human characters.
+
+## 響應式排版
+
+桌機首頁為四欄；800px 以下為兩欄、三欄導覽；520px 以下改為單欄卡片、兩欄導覽與直式因果分析，每格仍顯示對應題目。手機頁首隨頁捲動，避免佔住內容。輸入欄位採 16px 字體，主要按鈕至少 44px 高；彈窗高度依可視區限制並可內部捲動。後台寬表格保留表格內橫向捲動。已檢查 320、390、768、1440px 的首頁及練習單；配對賽同步使用同一份樣式。

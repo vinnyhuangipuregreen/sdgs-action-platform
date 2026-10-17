@@ -895,6 +895,7 @@ function createCausalTable(chain, editable = false) {
   </table>`;
   wrapper.querySelectorAll("[data-field]").forEach(cell => {
     const field = cell.dataset.field;
+    cell.dataset.label = cell.cellIndex === 1 ? (field === "impact" ? "受到影響是那些人或環境？" : "發生了什麼？") : (field === "measurement" ? "如何衡量此影響？" : "這一步要成立，需要什麼條件？");
     if (editable) {
       const input = document.createElement("textarea");
       input.dataset.causalField = field;
