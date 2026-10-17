@@ -62,6 +62,13 @@ class IdentitySsoTests(unittest.TestCase):
         self.assertNotIn("正在驗證系統登入", response.text)
         self.assertIn("no-store", response.headers["cache-control"])
 
+    def test_course_student_entry_rejects_staff_sessions(self):
+        admin = self.client.post("/api/auth/login", json={"account":"admin@test.invalid", "password":"pw", "account_type":"staff"}).json()["token"]
+        request = {**self.request, "account_type":"student"}
+        self.assertEqual(self.client.post("/api/auth/sso/ticket", headers={"Authorization":"Bearer " + admin}, json=request).status_code,403)
+        self.assertEqual(self.client.post("/api/auth/sso/ticket", headers=self.headers, json=request).status_code,200)
+        self.assertEqual(self.client.post("/api/auth/login",json={"account":"admin@test.invalid","password":"pw","account_type":"student"}).status_code,400)
+
     def exchange(self,code,verifier=None):
         return self.client.post("/api/auth/sso/exchange",json={"client_id":"attendance","redirect_uri":CALLBACK,"code":code,"code_verifier":verifier or self.verifier})
 

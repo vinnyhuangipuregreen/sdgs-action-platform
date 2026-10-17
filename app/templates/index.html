@@ -894,12 +894,13 @@
 
   <!-- Student Login Modal -->
   <div id="loginModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-    <div class="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-slate-100">
+    <div role="dialog" aria-modal="true" aria-labelledby="studentLoginTitle" class="relative bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-slate-100">
+      <button type="button" onclick="closeStudentLogin()" aria-label="關閉學員登入視窗" class="absolute top-3 right-3 w-10 h-10 flex items-center justify-center text-xl text-slate-500 hover:text-slate-900 rounded-full hover:bg-slate-100">✕</button>
       <div class="text-center mb-6">
         <div class="w-12 h-12 rounded-2xl bg-emerald-600 text-white font-black text-2xl flex items-center justify-center mx-auto mb-3 shadow-md">
           🌏
         </div>
-        <h3 class="text-xl font-extrabold text-slate-900">學員登入平台</h3>
+        <h3 id="studentLoginTitle" class="text-xl font-extrabold text-slate-900">學員登入平台</h3>
         <p class="text-xs text-slate-500 mt-1">請輸入 Email（帳號）或電話（預設密碼為手機號碼）</p>
       </div>
 
@@ -1240,7 +1241,7 @@
     </div>
   </footer>
 
-  <script src="/static/js/app.js?v=20261018_direct_admin_login"></script>
+  <script src="/static/js/app.js?v=20261018_student_module_login"></script>
   <script src="/static/js/category-admin.js?v=20261016_category_admin"></script>
 </body>
 </html>

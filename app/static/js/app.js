@@ -205,6 +205,11 @@ function handleAdminAccess() {
 }
 
 function switchTab(tabId) {
+  if (tabId === "worksheet" && state.user?.account_type !== "student" && state.user?.role !== "student") {
+    state.studentDestination = "worksheet";
+    if (!state.token || state.user) showLoginModal(true);
+    return;
+  }
   state.activeTab = tabId;
   document.querySelectorAll(".tab-pane").forEach(el => el.classList.add("hidden"));
   document.querySelectorAll("[data-nav-tab]").forEach(el => {
@@ -253,7 +258,8 @@ async function checkAuth(loadWorksheets = true) {
       state.user = await res.json();
       updateUserUI();
       showLoginModal(false);
-      if (loadWorksheets) await loadMyWorksheets(true);
+      if (state.studentDestination === "worksheet") switchTab("worksheet");
+      if (loadWorksheets && state.user.role === "student") await loadMyWorksheets(true);
     } else {
       handleLogout();
     }
@@ -272,7 +278,7 @@ async function handleLogin(e, explicitStudentId = null) {
   pickerBox.classList.add("hidden");
 
   try {
-    const payload = { account, password };
+    const payload = { account, password, account_type: "student" };
     if (explicitStudentId) payload.student_id = explicitStudentId;
 
     const res = await fetch(`${API_BASE}/auth/login`, {
@@ -313,6 +319,10 @@ async function handleLogin(e, explicitStudentId = null) {
     updateUserUI();
     showToast(`歡迎回來，${data.user.name}！`, "success");
     if (resumeCourseSignIn()) return;
+    if (state.studentDestination === "worksheet") {
+      state.studentDestination = null;
+      switchTab("worksheet");
+    }
     // 切換或登入新帳號時，自動載入該帳號之表單資料
     await loadMyWorksheets(true);
   } catch (err) {
@@ -379,7 +389,18 @@ function handleLogout() {
 
   showLoginModal(true);
   updateUserUI();
-  switchTab("worksheet");
+  state.studentDestination = "worksheet";
+  switchTab("home");
+}
+
+function closeStudentLogin() {
+  showLoginModal(false);
+  state.studentDestination = null;
+  if (location.pathname === "/sso/authorize" || new URLSearchParams(location.search).has("sso_return")) {
+    location.replace("/");
+    return;
+  }
+  switchTab("home");
 }
 
 function showLoginModal(show) {
@@ -2816,9 +2837,10 @@ function resumeCourseSignIn() {
     try {
       const response = await fetch(`${API_BASE}/auth/sso/ticket`, {
         method: "POST", headers: {"Content-Type": "application/json", Authorization: `Bearer ${state.token}`},
-        body: JSON.stringify({client_id: "attendance", redirect_uri: callback, code_challenge: query.get("code_challenge")})
+        body: JSON.stringify({client_id: "attendance", redirect_uri: callback, code_challenge: query.get("code_challenge"), account_type: query.get("login_type") === "staff" ? "staff" : "student"})
       });
       if (response.status === 401) { handleLogout(); signIn(); return; }
+      if (response.status === 403) { signIn(); return; }
       if (!response.ok) throw new Error();
       const data = await response.json();
       const target = new URL(callback);

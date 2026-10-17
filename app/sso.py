@@ -4,6 +4,7 @@ import base64
 import secrets
 import time
 from pathlib import Path
+from typing import Literal, Optional
 from fastapi import Depends, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
@@ -17,6 +18,7 @@ class TicketRequest(BaseModel):
     client_id: str
     redirect_uri: str
     code_challenge: str = Field(pattern=r"^[A-Za-z0-9_-]{43}$")
+    account_type: Optional[Literal["student", "staff"]] = None
 
 
 class ExchangeRequest(BaseModel):
@@ -68,6 +70,8 @@ def install_sso(app, require_user):
     @app.post("/api/auth/sso/ticket")
     def issue_ticket(request: TicketRequest, user=Depends(require_user)):
         validate_client(request)
+        if request.account_type and request.account_type != get_account_type(user):
+            raise HTTPException(403, "請登入此功能所需的學員或管理帳號")
         code = secrets.token_urlsafe(32)
         now = int(time.time())
         with get_accounts_db() as connection:
