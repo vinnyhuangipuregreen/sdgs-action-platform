@@ -180,6 +180,7 @@
   #adminSubTabsNav button { justify-content: flex-start; text-align: left; }
   .matching-embedded .admin-sidebar { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
   .matching-embedded .sidebar-btn { white-space: normal; }
+  .matching-embedded #tab-dashboard > [style*="grid-template-columns"] { grid-template-columns: minmax(0,1fr) !important; }
   .platform-header-inner { padding: 14px 18px; }
   .platform-brand small { font-size: 10px; }
   .platform-account > div { display: none; }
@@ -231,6 +232,11 @@
   .matching-embedded #record-search { width: 100% !important; }
   .matching-embedded .data-table { min-width: 680px; }
   .matching-embedded .admin-mode-tabs > button { flex-shrink: 0; }
+  .matching-embedded #settings-form > div { flex-wrap: wrap; gap: 12px; }
+  .matching-embedded #settings-form input { max-width: 120px; }
+  #tabPane_admin h3 { overflow-wrap: anywhere; }
+  #adminSubPane_staff h3, #adminSubPane_students h3 { flex: 1; }
+  #adminSubPane_staff h3 + span, #adminSubPane_students h3 + span { display: none; }
   .game-platform main { width: 100%; padding: 16px 12px; }
   .game-platform .card-welcome { padding: 20px 16px; }
   .game-platform .card-welcome [style*="grid-template-columns: 80px"] { grid-template-columns: 1fr !important; }
