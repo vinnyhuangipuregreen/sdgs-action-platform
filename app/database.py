@@ -437,6 +437,7 @@ def init_db():
                 cursor.execute(f"ALTER TABLE {table} ADD COLUMN account_type TEXT NOT NULL DEFAULT 'student'")
         migrate_staff_accounts(cursor)
         retain_requested_admin_accounts(cursor)
+        renumber_admin_accounts(cursor)
         cursor.execute("""CREATE VIEW IF NOT EXISTS account_profiles AS
             SELECT id, name, email, email_backup, phone, unit_code, unit_name, role, created_at, 'student' AS account_type FROM student
             UNION ALL
@@ -478,6 +479,28 @@ def retain_requested_admin_accounts(cursor):
                       (id = 429 AND email = 'vinnyhuang.ipuregreen@gmail.com'))
            AND NOT EXISTS (SELECT 1 FROM system_settings WHERE key = 'admin_table_retained_accounts_v1')""",
         "INSERT OR IGNORE INTO system_settings (key, value) VALUES ('admin_table_retained_accounts_v1', '1')",
+    ]
+    if hasattr(cursor, "execute_transaction"):
+        cursor.execute_transaction(statements)
+    else:
+        for sql in statements:
+            cursor.execute(sql)
+
+def renumber_admin_accounts(cursor):
+    pending = "NOT EXISTS (SELECT 1 FROM system_settings WHERE key = 'admin_ids_compacted_v1')"
+    statements = [
+        f"""CREATE TEMP TABLE admin_id_map AS
+            SELECT id AS old_id, ROW_NUMBER() OVER (ORDER BY CASE WHEN email = 'admin' THEN 0 ELSE 1 END, id) AS new_id
+            FROM admin WHERE {pending}""",
+        "UPDATE admin SET id = -id WHERE id IN (SELECT old_id FROM admin_id_map)",
+        *[f"UPDATE {table} SET user_id = -user_id WHERE account_type = 'staff' AND user_id IN (SELECT old_id FROM admin_id_map)"
+          for table in ("worksheets", "game_scores")],
+        "UPDATE admin SET id = (SELECT new_id FROM admin_id_map WHERE old_id = -admin.id) WHERE -id IN (SELECT old_id FROM admin_id_map)",
+        *[f"UPDATE {table} SET user_id = (SELECT new_id FROM admin_id_map WHERE old_id = -{table}.user_id) WHERE account_type = 'staff' AND -user_id IN (SELECT old_id FROM admin_id_map)"
+          for table in ("worksheets", "game_scores")],
+        f"UPDATE sqlite_sequence SET seq = (SELECT COALESCE(MAX(id), 0) FROM admin) WHERE name = 'admin' AND {pending}",
+        "DROP TABLE admin_id_map",
+        "INSERT OR IGNORE INTO system_settings (key, value) VALUES ('admin_ids_compacted_v1', '1')",
     ]
     if hasattr(cursor, "execute_transaction"):
         cursor.execute_transaction(statements)

@@ -65,9 +65,9 @@ def get_current_user(
     if payload and get_account_type(payload) == "staff":
         with get_db() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT role FROM admin WHERE id = ?", (payload["user_id"],))
+            cursor.execute("SELECT role, email FROM admin WHERE id = ?", (payload["user_id"],))
             account = cursor.fetchone()
-            if not account:
+            if not account or account["email"] != payload.get("email"):
                 return None
             payload["role"] = account["role"]
     return payload

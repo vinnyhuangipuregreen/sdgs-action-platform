@@ -46,7 +46,10 @@ class StaffAccountsTests(unittest.TestCase):
         self.temp.cleanup()
 
     def headers(self, account_id, name, role):
-        return {"Authorization": "Bearer " + create_access_token({"id": account_id, "name": name, "email": name + "@example.invalid", "role": role})}
+        table = "admin" if role in ("admin", "teacher") else "student"
+        with database.get_db() as conn:
+            row = conn.execute(f"SELECT email FROM {table} WHERE id = ?", (account_id,)).fetchone()
+        return {"Authorization": "Bearer " + create_access_token({"id": account_id, "name": name, "email": row["email"] if row else name + "@example.invalid", "role": role})}
 
     def test_migration_preserves_passwords_records_and_is_repeatable(self):
         for _ in range(2):
@@ -109,6 +112,38 @@ class StaffAccountsTests(unittest.TestCase):
         self.assertEqual(self.client.get("/api/worksheets/1", headers=self.student).json()["user_email"], before["email"])
         self.assertEqual(self.client.get("/api/worksheets/1/export-docx", headers=self.student).status_code, 200)
         self.assertEqual(self.client.get("/api/game/leaderboard", headers=self.student).json()["my_best"]["score"], 100)
+
+    def test_admin_ids_are_compacted_with_records_and_next_id_preserved(self):
+        with database.get_db() as conn:
+            conn.execute("DELETE FROM admin")
+            for account_id, email in ((1, "admin"), (430, "vinnyhuang.ipuregreen@gmail.com")):
+                conn.execute("INSERT INTO admin (id,name,email,phone,password_hash,role) VALUES (?, ?, ?, '555', ?, 'admin')", (account_id, email, email, self.password_hash))
+            for account_type in ("staff", "student"):
+                conn.execute("""INSERT INTO worksheets (user_id,account_type,user_name,unit_name,center_action,radial_data,tradeoff_data,chat_text,self_checks,commitment)
+                    VALUES (430,?,'Test','Test','Test','[]','[]','','[]','{}')""", (account_type,))
+                conn.execute("""INSERT INTO game_scores (user_id,account_type,user_name,score,max_combo,earth_health,title_earned)
+                    VALUES (430,?,'Test',100,1,100,'Test')""", (account_type,))
+            before = dict(conn.execute("SELECT * FROM admin WHERE id=430").fetchone())
+            conn.execute("DELETE FROM system_settings WHERE key='admin_ids_compacted_v1'")
+        old_token = self.headers(430, "Vinny", "admin")
+        for _ in range(2):
+            database._DB_INITIALIZED = False
+            database.init_db()
+        with database.get_db() as conn:
+            self.assertEqual([row[0] for row in conn.execute("SELECT id FROM admin ORDER BY id").fetchall()], [1, 2])
+            self.assertEqual(dict(conn.execute("SELECT * FROM admin WHERE id=2").fetchone()), {**before, "id": 2})
+            for table in ("worksheets", "game_scores"):
+                self.assertEqual(conn.execute(f"SELECT COUNT(*) FROM {table} WHERE user_id=2 AND account_type='staff'").fetchone()[0], 1)
+                self.assertEqual(conn.execute(f"SELECT COUNT(*) FROM {table} WHERE user_id=430 AND account_type='student'").fetchone()[0], 1)
+        self.assertEqual(self.client.get("/api/admin/staff", headers=old_token).status_code, 401)
+        deleted_token = create_access_token({"id": 2, "name": "Deleted", "email": "deleted@example.invalid", "role": "admin"})
+        self.assertEqual(self.client.get("/api/admin/staff", headers={"Authorization": "Bearer " + deleted_token}).status_code, 401)
+        response = self.client.post("/api/auth/login", json={"account": before["email"], "password": "test-password", "account_type": "staff"})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["user"]["id"], 2)
+        headers = {"Authorization": "Bearer " + response.json()["token"]}
+        response = self.client.post("/api/admin/staff", headers=headers, json={"name": "Next", "email": "next@example.invalid", "phone": "123"})
+        self.assertEqual(response.json()["id"], 3)
 
     def test_login_uses_separate_tables_and_changed_staff_password_is_respected(self):
         for account, source, expected in (("admin", "staff", "admin"), ("Teacher@example.invalid", "staff", "teacher"), ("Student@example.invalid", "student", "student")):
