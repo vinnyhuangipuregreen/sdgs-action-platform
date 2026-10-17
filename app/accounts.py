@@ -6,7 +6,10 @@ from app.database import get_db, TursoConnection
 
 
 def accounts_separated():
-    return bool(os.getenv("ROLE_DATABASE_URL") or os.getenv("ROLE_AUTH_TOKEN") or os.getenv("ROLE_DATABASE_PATH"))
+    configured = bool(os.getenv("ROLE_DATABASE_URL") or os.getenv("ROLE_AUTH_TOKEN") or os.getenv("ROLE_DATABASE_PATH"))
+    if os.getenv("VERCEL") and not configured:
+        raise RuntimeError("雲端部署必須設定獨立帳號資料庫，禁止在活動庫重建帳號表")
+    return configured
 
 
 @contextmanager

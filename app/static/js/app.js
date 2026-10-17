@@ -297,6 +297,7 @@ async function handleLogin(e, explicitStudentId = null) {
       return;
     }
 
+    if (state.token) await fetch(`${API_BASE}/auth/logout`, {method: "POST", headers: {Authorization: `Bearer ${state.token}`}}).catch(() => {});
     state.token = data.token;
     state.user = data.user;
     localStorage.setItem("sdgs_token", data.token);
@@ -331,6 +332,7 @@ async function handleAdminLogin(e) {
       errEl.classList.remove("hidden");
       return;
     }
+    if (state.token) await fetch(`${API_BASE}/auth/logout`, {method: "POST", headers: {Authorization: `Bearer ${state.token}`}}).catch(() => {});
     state.token = data.token;
     state.user = data.user;
     localStorage.setItem("sdgs_token", data.token);
