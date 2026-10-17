@@ -752,7 +752,10 @@ def get_admin_stats(user: dict = Depends(require_admin)):
         
         cursor.execute("SELECT COUNT(*) FROM worksheets")
         total_worksheets = cursor.fetchone()[0]
-        
+
+        cursor.execute("SELECT COUNT(*) FROM worksheets WHERE status = 'draft'")
+        draft_worksheets = cursor.fetchone()[0]
+
         cursor.execute("SELECT COUNT(*) FROM worksheets WHERE status = 'submitted'")
         submitted_worksheets = cursor.fetchone()[0]
         
@@ -790,6 +793,7 @@ def get_admin_stats(user: dict = Depends(require_admin)):
         return {
             "total_students": total_students,
             "total_worksheets": total_worksheets,
+            "draft_worksheets": draft_worksheets,
             "submitted_worksheets": submitted_worksheets,
             "reviewed_worksheets": reviewed_worksheets,
             "total_games": total_games,

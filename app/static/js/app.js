@@ -1818,7 +1818,8 @@ async function loadAdminDashboard() {
 
 function renderAdminStats(s) {
   document.getElementById("adminStatStudents").textContent = s.total_students;
-  document.getElementById("adminStatWorksheets").textContent = s.total_worksheets;
+  document.getElementById("adminStatDraftWorksheets").textContent = s.draft_worksheets;
+  document.getElementById("adminStatSubmittedWorksheets").textContent = s.submitted_worksheets + s.reviewed_worksheets;
   document.getElementById("adminStatGames").textContent = s.total_games;
   document.getElementById("adminStatMaxScore").textContent = s.max_game_score.toLocaleString();
 }

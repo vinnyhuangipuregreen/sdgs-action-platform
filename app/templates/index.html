@@ -566,8 +566,10 @@
               <span class="text-xs font-bold text-slate-500 block">累計提交練習單</span>
               <span class="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-sm">📑</span>
             </div>
-            <span id="adminStatWorksheets" class="text-3xl font-black text-emerald-600 font-mono mt-2 block">0</span>
-            <span class="text-[11px] text-emerald-600 block mt-1">含草稿與正式送出</span>
+            <div class="mt-2 space-y-1 text-lg font-bold">
+              <div class="text-slate-600">草稿：<span id="adminStatDraftWorksheets" class="font-mono">0</span></div>
+              <div class="text-emerald-600">正式：<span id="adminStatSubmittedWorksheets" class="font-mono">0</span></div>
+            </div>
           </div>
           <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
             <div class="flex justify-between items-start">
@@ -1217,7 +1219,7 @@
     </div>
   </footer>
 
-  <script src="/static/js/app.js?v=20261017_submission_validation"></script>
+  <script src="/static/js/app.js?v=20261017_admin_worksheet_counts"></script>
   <script src="/static/js/category-admin.js?v=20261016_category_admin"></script>
 </body>
 </html>
