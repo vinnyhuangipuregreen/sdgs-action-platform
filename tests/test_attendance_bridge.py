@@ -27,8 +27,11 @@ class AttendanceBridgeTests(unittest.TestCase):
         self.temp.cleanup()
 
     def start(self):
-        result = self.client.post("/api/attendance-admin/session", headers=self.headers)
-        self.assertEqual(result.status_code, 204)
+        response = SimpleNamespace(status_code=200, content=b'<html><div id="panel-courses">Original course tools</div></html>', headers={"Content-Type": "text/html"})
+        with patch("app.attendance_bridge.requests.request", return_value=response):
+            result = self.client.get("/api/attendance-admin/view", headers=self.headers)
+        self.assertEqual(result.status_code, 200)
+        self.assertIn("Original course tools", result.text)
         self.assertIn("HttpOnly", result.headers["set-cookie"])
         self.assertIn("SameSite=strict", result.headers["set-cookie"])
         self.assertIn("Path=/attendance-admin", result.headers["set-cookie"])
@@ -36,11 +39,11 @@ class AttendanceBridgeTests(unittest.TestCase):
     def test_guests_and_students_cannot_open_course_management(self):
         self.assertEqual(self.client.get("/attendance-admin/admin").status_code, 401)
         student = create_access_token({"id": 1, "name": "Student", "email": "student", "role": "student"})
-        self.assertEqual(self.client.post("/api/attendance-admin/session", headers={"Authorization": "Bearer " + student}).status_code, 403)
+        self.assertEqual(self.client.get("/api/attendance-admin/view", headers={"Authorization": "Bearer " + student}).status_code, 403)
 
     def test_embedded_navigation_fetches_and_styles_stay_in_the_authenticated_gateway(self):
         self.start()
-        html = b'''<a href="/admin/courses/1/attendance">Attendance</a><link href="/static/css/attendance.css"><script>fetch(`/api/admin/courses/${id}`)</script>'''
+        html = b'''<a href="/admin/courses/1/attendance">Attendance</a><link href="/static/css/attendance.css"><script>fetch(`/api/admin/courses/${id}`); location.reload()</script>'''
         response = SimpleNamespace(status_code=200, content=html, headers={"Content-Type": "text/html; charset=utf-8"})
         with patch("app.attendance_bridge.requests.request", return_value=response) as upstream:
             result = self.client.get("/attendance-admin/admin")
@@ -48,6 +51,7 @@ class AttendanceBridgeTests(unittest.TestCase):
         self.assertIn('href="/attendance-admin/admin/courses/1/attendance"', result.text)
         self.assertIn('href="/attendance-admin/static/css/attendance.css"', result.text)
         self.assertIn('fetch(`/attendance-admin/api/admin/courses/${id}`)', result.text)
+        self.assertIn("location.replace('/attendance-admin/admin')", result.text)
         self.assertEqual(upstream.call_args.args[1], "https://sdgs-attendance-record.vercel.app/admin")
         self.assertEqual(upstream.call_args.kwargs["headers"]["Authorization"], "Bearer " + self.token)
         self.assertNotIn(self.token, result.text)

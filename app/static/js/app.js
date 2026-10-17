@@ -358,7 +358,7 @@ async function handleAdminLogin(e) {
 
 function handleLogout() {
   const attendanceFrame = document.getElementById("attendanceAdminFrame");
-  if (attendanceFrame) attendanceFrame.src = "about:blank";
+  if (attendanceFrame) { attendanceFrame.removeAttribute("srcdoc"); attendanceFrame.src = "about:blank"; attendanceFrame.classList.add("hidden"); }
   state.attendanceAdminSession = null;
   if (state.token) fetch(`${API_BASE}/auth/logout`, {method: "POST", headers: {Authorization: `Bearer ${state.token}`}, keepalive: true}).catch(() => {});
   state.token = null;
@@ -1842,19 +1842,28 @@ async function loadAttendanceAdmin() {
   if (!state.token || !["admin", "teacher"].includes(state.user?.role)) return;
   const token = state.token;
   const status = document.getElementById("attendanceAdminStatus");
-  status.textContent = "正在載入課程管理…";
+  const retry = document.getElementById("attendanceAdminRetry");
+  const frame = document.getElementById("attendanceAdminFrame");
+  frame.classList.add("hidden");
+  retry.classList.add("hidden");
+  status.textContent = "正在讀取原課程後台…";
   try {
-    const response = await fetch(`${API_BASE}/attendance-admin/session`, {
-      method: "POST", headers: {Authorization: `Bearer ${token}`}
+    const response = await fetch(`${API_BASE}/attendance-admin/view`, {
+      headers: {Authorization: `Bearer ${token}`}, signal: AbortSignal.timeout(45000)
     });
     if (state.token !== token) return;
     if (response.status === 401) { handleLogout(); return; }
     if (!response.ok) throw new Error();
-    document.getElementById("attendanceAdminFrame").src = "/attendance-admin/admin";
+    const html = await response.text();
+    if (state.token !== token) return;
+    frame.srcdoc = html;
+    frame.classList.remove("hidden");
     state.attendanceAdminSession = token;
     status.textContent = "";
   } catch {
-    status.textContent = "課程管理暫時無法載入，請按「重新載入課程管理」重試。";
+    if (state.token !== token) return;
+    status.textContent = "原課程後台暫時無法載入，請重新載入。";
+    retry.classList.remove("hidden");
   }
 }
 

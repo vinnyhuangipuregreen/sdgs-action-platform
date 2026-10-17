@@ -41,15 +41,19 @@ def proxy_course_request(request, path, body, token):
         # Both navigation links and the original inline fetch calls stay in this gateway.
         html = re.sub(r'''(["'`])(/(?:admin|api/admin|static/css)(?=[/"'`?]))''',
                       lambda match: match[1] + PREFIX + match[2], html)
+        if path == "admin":
+            html = html.replace("location.reload()", "location.replace('/attendance-admin/admin')")
         content = html.encode("utf-8")
     return Response(content, status_code=upstream.status_code, headers=headers)
 
 
 def install_attendance_admin(app, require_admin, get_current_user):
-    @app.post("/api/attendance-admin/session")
+    @app.get("/api/attendance-admin/view")
     def start_session(request: Request, user=Depends(require_admin)):
         token = request.headers.get("authorization", "").removeprefix("Bearer ")
-        response = Response(status_code=204)
+        response = proxy_course_request(request, "admin", b"", token)
+        if response.status_code != 200 or "text/html" not in response.headers.get("content-type", ""):
+            raise HTTPException(503, "原課程後台暫時無法載入，請稍後重試")
         response.set_cookie(COOKIE, token, path=PREFIX, httponly=True,
                             secure=request.url.scheme == "https", samesite="strict",
                             max_age=max(0, int(user["exp"] - time.time())))

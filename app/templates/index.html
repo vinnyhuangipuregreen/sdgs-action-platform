@@ -509,13 +509,9 @@
         <iframe id="matchingAdminFrame" class="matching-admin-frame" title="SDGs 配對挑戰賽管理工具" src="about:blank" loading="lazy"></iframe>
       </div>
       <div id="adminSubPane_attendance" class="admin-subpane hidden space-y-4">
-        <div class="ds-card matching-admin-intro">
-          <h3>課程簽到／請假／補課管理</h3>
-          <p>維護課程與匯入課程清單，查詢簽到、請假紀錄及管理補課名冊。</p>
-          <button type="button" onclick="loadAttendanceAdmin()" class="ds-button">重新載入課程管理</button>
-          <p id="attendanceAdminStatus" role="status"></p>
-        </div>
-        <iframe id="attendanceAdminFrame" class="matching-admin-frame" title="課程簽到、請假與補課管理工具" src="about:blank" loading="lazy"></iframe>
+        <p id="attendanceAdminStatus" role="status" class="text-sm text-slate-600"></p>
+        <button id="attendanceAdminRetry" type="button" onclick="loadAttendanceAdmin()" class="ds-button hidden">重新載入原課程後台</button>
+        <iframe id="attendanceAdminFrame" class="matching-admin-frame hidden" title="原課程後台：課程、簽到、請假與補課管理" src="about:blank"></iframe>
       </div>
       <div id="adminSubPane_categories" class="admin-subpane hidden space-y-5">
         <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
@@ -1244,7 +1240,7 @@
     </div>
   </footer>
 
-  <script src="/static/js/app.js?v=20261017_attendance_admin"></script>
+  <script src="/static/js/app.js?v=20261018_original_course_admin"></script>
   <script src="/static/js/category-admin.js?v=20261016_category_admin"></script>
 </body>
 </html>
