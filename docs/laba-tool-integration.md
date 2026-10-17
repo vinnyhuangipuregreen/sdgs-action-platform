@@ -13,3 +13,6 @@ node node_modules/vite/bin/vite.js build --base=/static/tools/laba/ --outDir=../
 
 來源專案新增 `postcss.config.js`，使 Tailwind 樣式一併編譯。
 正式檔案位於 `app/static/tools/laba/`，由主平台一同部署。
+
+LINE 採買清單會依食材 ID 讀取 BOM 備妥狀態，已勾選的項目加上 `(V)`；取消勾選則移除標記。複製時仍包含所有分類的食材。
+來源專案的回歸檢查：`node --test tests/line-checklist.cjs`，涵蓋兩種單位及取消勾選。
