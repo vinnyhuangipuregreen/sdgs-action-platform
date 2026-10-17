@@ -99,3 +99,16 @@ class IdentitySsoTests(unittest.TestCase):
 
     def test_student_cannot_read_the_central_roster(self):
         self.assertEqual(self.client.get("/api/auth/sso/roster",headers=self.headers).status_code,403)
+
+    def test_historical_records_survive_missing_accounts_without_breaking_exports(self):
+        admin=self.client.post("/api/auth/login",json={"account":"admin@test.invalid","password":"pw","account_type":"staff"}).json()["token"]
+        headers={"Authorization":"Bearer "+admin}
+        with database.get_db() as conn:
+            conn.execute("""INSERT INTO worksheets (id,user_id,user_name,unit_name,center_action,radial_data,tradeoff_data,chat_text,self_checks,commitment)
+                VALUES (12,999,'Historical student','Unit','Action','[]','[]','','[]','{}')""")
+        response=self.client.get("/api/admin/export/csv",headers=headers)
+        self.assertEqual(response.status_code,200,response.text)
+        self.assertIn("Historical student",response.text)
+        with patch("app.main.send_grade_notification") as mail:
+            self.assertEqual(self.client.put("/api/admin/worksheets/12/grade",headers=headers,json={"score":90,"comment":"Review"}).status_code,404)
+            mail.assert_not_called()

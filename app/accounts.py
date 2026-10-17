@@ -50,6 +50,5 @@ def enrich_worksheets(rows, email_alias="email"):
     profiles = account_profiles()
     for row in rows:
         profile = profiles.get((row["account_type"], row["user_id"]))
-        if profile:
-            row.update({email_alias: profile["email"], **{key: profile[key] for key in ("email_backup", "phone", "unit_code")}})
+        row.update({email_alias: profile["email"] if profile else "", **{key: profile[key] if profile else "" for key in ("email_backup", "phone", "unit_code")}})
     return rows

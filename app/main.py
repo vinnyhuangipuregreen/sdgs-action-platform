@@ -1011,6 +1011,8 @@ def grade_worksheet(worksheet_id: int, req: GradeSubmit, user: dict = Depends(re
             raise HTTPException(status_code=404, detail="找不到該練習單")
             
         ws = enrich_worksheets([dict(row)], "student_email")[0]
+        if not ws.get("student_email"):
+            raise HTTPException(404, "此歷史練習單的帳號已不存在，無法寄發批閱通知")
         cursor.execute("""
         UPDATE worksheets SET
             score = ?,
