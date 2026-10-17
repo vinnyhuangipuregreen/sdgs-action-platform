@@ -1,4 +1,4 @@
-# SDGs 社會科學實踐系統
+# BLIA SDGs 社會影響力系統
 
 共用樣式位於 `app/static/css/design-system.css`，配對賽使用相同檔案。`scripts/sync_matching_admin.py` 從相鄰的 `sdgs-matching-game` 專案同步管理畫面、管理 JavaScript、基礎樣式與共用設計系統；修改配對賽後台時請重新執行並檢查 diff。
 
