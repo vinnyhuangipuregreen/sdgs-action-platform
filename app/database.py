@@ -318,12 +318,22 @@ def init_db():
             cursor.execute("ALTER TABLE users RENAME TO student")
 
         ddl_statements = [
+            """CREATE TABLE IF NOT EXISTS action_topics (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE
+            );""",
             """CREATE TABLE IF NOT EXISTS action_catalog (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 category TEXT NOT NULL,
                 name TEXT NOT NULL,
                 UNIQUE(category, name)
             );""",
+            """CREATE TRIGGER IF NOT EXISTS action_topic_insert AFTER INSERT ON action_catalog
+                BEGIN INSERT OR IGNORE INTO action_topics (name) VALUES (NEW.category); END;""",
+            """CREATE TRIGGER IF NOT EXISTS action_topic_update AFTER UPDATE OF category ON action_catalog
+                BEGIN INSERT OR IGNORE INTO action_topics (name) VALUES (NEW.category); END;""",
+            """CREATE TRIGGER IF NOT EXISTS action_topic_rename AFTER UPDATE OF name ON action_topics
+                BEGIN UPDATE action_catalog SET category = NEW.name WHERE category = OLD.name; END;""",
             """CREATE TABLE IF NOT EXISTS student (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
@@ -478,6 +488,7 @@ def init_db():
                 WHERE template_data = '{}' AND EXISTS (SELECT 1 FROM json_each(?)
                 WHERE json_extract(value, '$.category') = action_catalog.category AND json_extract(value, '$.name') = action_catalog.name)""", (templates, templates))
             cursor.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('activity_templates_v1', '1')")
+        cursor.execute("INSERT OR IGNORE INTO action_topics (name) SELECT DISTINCT category FROM action_catalog ORDER BY id")
         _DB_INITIALIZED = True
 
 def migrate_staff_accounts(cursor):

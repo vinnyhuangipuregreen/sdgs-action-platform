@@ -8,7 +8,7 @@ import hashlib
 from typing import Optional, List, Dict, Any, Literal
 from fastapi import FastAPI, Depends, HTTPException, Header, Query, Response, status, UploadFile, File, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, model_validator
@@ -19,7 +19,7 @@ from app.auth import hash_password, verify_password, create_access_token, decode
 from app.docx_exporter import create_worksheet_docx
 from app.mailer import send_grade_notification
 from app.sdgs_check import ensure_sdgs_seeded, ensure_users_seeded
-from app.action_catalog import CategoryItem, list_actions, save_action, delete_action, read_import, import_actions, export_actions
+from app.action_catalog import CategoryWrite, TopicItem, list_topics, save_topic, delete_topic, list_actions, save_action, delete_action, read_import, import_actions, export_actions
 from app.matching_bridge import proxy_matching_request
 from app.accounts import get_accounts_db, enrich_worksheets
 from app.sso import install_sso
@@ -128,13 +128,40 @@ def get_categories(search: str = "", user: dict = Depends(require_admin)):
     return list_actions(search)
 
 
+@app.get("/api/admin/topics")
+def get_topics(user: dict = Depends(require_admin)):
+    return list_topics()
+
+
+@app.post("/api/admin/topics")
+def create_topic(item: TopicItem, user: dict = Depends(require_admin)):
+    return save_topic(item)
+
+
+@app.put("/api/admin/topics/{topic_id}")
+def update_topic(topic_id: int, item: TopicItem, user: dict = Depends(require_admin)):
+    return save_topic(item, topic_id)
+
+
+@app.delete("/api/admin/topics/{topic_id}")
+def remove_topic(topic_id: int, user: dict = Depends(require_admin)):
+    delete_topic(topic_id)
+    return {"success": True}
+
+
+@app.get("/api/admin/categories/sample.xlsx")
+def download_category_sample(user: dict = Depends(require_admin)):
+    return FileResponse(os.path.join(BASE_DIR, "..", "uploadfile", "category.xlsx"),
+                        filename="category.xlsx", media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+
 @app.post("/api/admin/categories")
-def create_category(item: CategoryItem, user: dict = Depends(require_admin)):
+def create_category(item: CategoryWrite, user: dict = Depends(require_admin)):
     return save_action(item)
 
 
 @app.put("/api/admin/categories/{item_id}")
-def update_category(item_id: int, item: CategoryItem, user: dict = Depends(require_admin)):
+def update_category(item_id: int, item: CategoryWrite, user: dict = Depends(require_admin)):
     return save_action(item, item_id)
 
 

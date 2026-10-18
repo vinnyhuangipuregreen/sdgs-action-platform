@@ -7,7 +7,7 @@ from zipfile import ZipFile
 from fastapi import HTTPException
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from app.database import get_db, init_db
 from app.activity_details import TEMPLATE_FIELDS
@@ -18,6 +18,62 @@ class CategoryItem(BaseModel):
     category: str = Field(min_length=1, max_length=80)
     name: str = Field(min_length=1, max_length=300)
     template: dict[str, str] = Field(default_factory=dict)
+
+
+class CategoryWrite(CategoryItem):
+    @model_validator(mode="after")
+    def require_templates(self):
+        for field, label in TEMPLATE_FIELDS.items():
+            if not self.template.get(field, "").strip():
+                raise ValueError(f"請填寫：{label}（必填）")
+        return self
+
+
+class TopicItem(BaseModel):
+    model_config = {"str_strip_whitespace": True}
+    name: str = Field(min_length=1, max_length=80)
+
+
+def list_topics():
+    init_db()
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""SELECT t.id, t.name, COUNT(a.id) AS activity_count FROM action_topics t
+            LEFT JOIN action_catalog a ON a.category = t.name GROUP BY t.id, t.name ORDER BY t.id""")
+        return [dict(row) for row in cursor.fetchall()]
+
+
+def save_topic(item, topic_id=None):
+    init_db()
+    with get_db() as conn:
+        cursor = conn.cursor()
+        if topic_id is None:
+            cursor.execute("INSERT OR IGNORE INTO action_topics (name) VALUES (?) RETURNING id", (item.name,))
+        else:
+            cursor.execute("SELECT id FROM action_topics WHERE id = ?", (topic_id,))
+            if not cursor.fetchone():
+                raise HTTPException(404, "找不到此主題類別，請重新整理")
+            cursor.execute("UPDATE OR IGNORE action_topics SET name = ? WHERE id = ? RETURNING id", (item.name, topic_id))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(409, "相同主題類別已存在")
+        return {"id": int(row[0]), "name": item.name}
+
+
+def delete_topic(topic_id):
+    init_db()
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""DELETE FROM action_topics WHERE id = ? AND NOT EXISTS
+            (SELECT 1 FROM action_catalog WHERE category = action_topics.name) RETURNING id""", (topic_id,))
+        if cursor.fetchone():
+            return
+        cursor.execute("""SELECT COUNT(a.id) AS activity_count FROM action_topics t
+            LEFT JOIN action_catalog a ON a.category = t.name WHERE t.id = ? GROUP BY t.id""", (topic_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(404, "找不到此主題類別，請重新整理")
+        raise HTTPException(409, f"該[主題分類]已經有{row['activity_count']}筆對應的[活動內容]，不可刪除！")
 
 
 def list_actions(search=""):

@@ -7,7 +7,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <link rel="stylesheet" href="/static/css/style.css?v=20261017_design">
-  <link rel="stylesheet" href="/static/css/design-system.css?v=20261018_remove_legacy_description">
+  <link rel="stylesheet" href="/static/css/design-system.css?v=20261018_category_topics">
   <script>
     tailwind.config = {
       theme: {
@@ -551,6 +551,27 @@
         <iframe id="attendanceAdminFrame" class="matching-admin-frame hidden" title="原課程後台：課程、簽到、請假與補課管理" src="about:blank"></iframe>
       </div>
       <div id="adminSubPane_categories" class="admin-subpane hidden space-y-5">
+        <section class="bg-white rounded-3xl border border-slate-200 shadow-sm p-5 sm:p-6 space-y-4" aria-labelledby="topicAdminTitle">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <h3 id="topicAdminTitle" class="font-black text-lg text-slate-900">主題類別維護</h3>
+            <button type="button" id="addTopicBtn" class="px-4 py-2.5 bg-emerald-700 text-white rounded-xl text-sm font-bold">＋ 新增主題類別</button>
+          </div>
+          <form id="topicEditor" class="hidden flex flex-wrap items-end gap-3">
+            <div class="flex-1 min-w-[180px]">
+              <label for="topicNameInput" class="block text-sm font-bold mb-2">主題類別（必填）</label>
+              <input id="topicNameInput" required maxlength="80" placeholder="輸入主題類別" class="w-full border border-slate-300 rounded-xl px-3 py-2.5">
+            </div>
+            <button type="submit" class="px-4 py-2.5 bg-emerald-700 text-white rounded-xl font-bold">儲存主題類別</button>
+            <button type="button" id="cancelTopicBtn" class="px-4 py-2.5 border border-slate-300 rounded-xl font-bold">取消</button>
+          </form>
+          <p id="topicAdminStatus" role="status" class="text-sm text-red-700"></p>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm text-left">
+              <thead class="bg-slate-50 text-slate-600"><tr><th class="p-3">主題類別</th><th class="p-3">活動內容筆數</th><th class="p-3">操作</th></tr></thead>
+              <tbody id="adminTopicsTableBody"></tbody>
+            </table>
+          </div>
+        </section>
         <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
           <div class="p-5 sm:p-6 border-b border-slate-100 bg-emerald-50/30 space-y-4">
             <div>
@@ -565,7 +586,8 @@
               <button type="button" id="addCategoryBtn" class="px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-sm font-bold">＋ 新增分類</button>
               <button type="button" id="importCategoriesBtn" class="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold">匯入名單</button>
               <input type="file" id="categoryImportFile" accept=".xlsx" class="hidden" aria-label="匯入分類 XLSX 名單">
-              <button type="button" id="exportCategoriesBtn" class="px-4 py-2.5 border border-slate-300 bg-white hover:bg-slate-50 rounded-xl text-sm font-bold">匯出名單 (XLSX)</button>
+              <button type="button" id="exportCategoriesBtn" class="px-4 py-2.5 border border-slate-300 bg-white hover:bg-slate-50 rounded-xl text-sm font-bold">匯出名單</button>
+              <button type="button" id="downloadCategorySampleBtn" class="px-4 py-2.5 border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-sm font-bold">📥 下載範例</button>
               <button type="button" id="refreshCategoriesBtn" class="px-3 py-2.5 text-sm text-emerald-700 font-bold">重新整理</button>
             </div>
             <p class="text-xs text-slate-500">匯入格式：第一張工作表 A1「主題類別」、B1「活動內容」；可附 template 工作表更新活動範本。限 XLSX、2 MB、2,000 列。匯出包含範本備份，亦可直接匯入。</p>
@@ -574,12 +596,11 @@
             <h4 id="categoryEditorTitle" class="font-bold text-emerald-900">新增分類</h4>
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
-                <label for="categoryNameInput" class="block text-xs font-bold text-slate-700 mb-2">主題類別</label>
-                <input id="categoryNameInput" list="categoryNameSuggestions" required maxlength="80" placeholder="選擇既有類別，或輸入新類別" class="w-full text-sm border border-slate-300 rounded-xl px-3 py-2.5">
-                <datalist id="categoryNameSuggestions"></datalist>
+                <label for="categoryNameInput" class="block text-xs font-bold text-slate-700 mb-2">主題類別（必填）</label>
+                <select id="categoryNameInput" required class="w-full text-sm border border-slate-300 rounded-xl px-3 py-2.5"></select>
               </div>
               <div class="sm:col-span-2">
-                <label for="categoryActionInput" class="block text-xs font-bold text-slate-700 mb-2">活動內容</label>
+                <label for="categoryActionInput" class="block text-xs font-bold text-slate-700 mb-2">活動內容（必填）</label>
                 <input id="categoryActionInput" required maxlength="300" placeholder="輸入活動內容" class="w-full text-sm border border-slate-300 rounded-xl px-3 py-2.5">
               </div>
             </div>
@@ -1278,8 +1299,8 @@
     </div>
   </footer>
 
-  <script src="/static/js/activity-details.js?v=20261018_remove_legacy_description"></script>
-  <script src="/static/js/app.js?v=20261018_remove_legacy_description"></script>
-  <script src="/static/js/category-admin.js?v=20261018_remove_legacy_description"></script>
+  <script src="/static/js/activity-details.js?v=20261018_category_topics"></script>
+  <script src="/static/js/app.js?v=20261018_category_topics"></script>
+  <script src="/static/js/category-admin.js?v=20261018_category_topics"></script>
 </body>
 </html>
