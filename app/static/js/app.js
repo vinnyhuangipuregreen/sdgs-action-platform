@@ -1187,13 +1187,13 @@ function openMyWorksheetsModal() {
 
   state.worksheetsList.forEach(ws => {
     const card = document.createElement("div");
-    card.className = "bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-3";
+    card.className = "worksheet-history-row bg-white p-4 rounded-xl border border-slate-200 shadow-sm";
     const statusLabel = ws.status === 'reviewed' ? '已批閱' : (ws.status === 'submitted' ? '已送出' : '草稿');
     const statusColor = ws.status === 'reviewed' ? 'bg-emerald-100 text-emerald-800' : (ws.status === 'submitted' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700');
 
     card.innerHTML = `
       <div>
-        <div class="flex items-center gap-2 mb-1">
+        <div class="worksheet-history-summary">
           <span class="text-xs px-2 py-0.5 rounded font-bold ${statusColor}">${statusLabel}</span>
           <h4 class="font-bold text-slate-800 text-sm">行動：${ws.center_action} (${ws.center_custom || '標準活動'})</h4>
           <span class="text-xs text-slate-400">${new Date(ws.updated_at).toLocaleString('zh-TW')}</span>
@@ -1201,7 +1201,7 @@ function openMyWorksheetsModal() {
         ${ws.score ? `<div class="mt-2 text-xs font-bold text-emerald-700">評分：${ws.score} 分 ｜ 講師講評：${ws.teacher_comment || '無'}</div>` : ''}
       </div>
       <div class="flex items-center gap-2">
-        <button type="button" onclick="downloadWorksheetDocx(${ws.id})" class="cursor-pointer px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-xs font-semibold flex items-center gap-1">
+        <button type="button" onclick="downloadWorksheetDocx(${ws.id}, 'doc')" class="cursor-pointer px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-xs font-semibold flex items-center gap-1">
           📄 下載Word
         </button>
         <button class="px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg text-xs font-semibold" onclick="loadWorksheetToForm(${ws.id})">
@@ -2758,15 +2758,15 @@ window.downloadCurrentDetailDocx = function() {
   }
 };
 
-window.downloadWorksheetDocx = async function(worksheetId) {
+window.downloadWorksheetDocx = async function(worksheetId, fileFormat = "docx") {
   if (!state.token) {
     showToast("請先登入系統", "warning");
     showLoginModal(true);
     return;
   }
-  showToast("📄 正在產生 Word (.docx) 文件，請稍候...", "info");
+  showToast("📄 正在產生 Word 文件，請稍候...", "info");
   try {
-    const res = await fetch(`${API_BASE}/worksheets/${worksheetId}/export-docx`, {
+    const res = await fetch(`${API_BASE}/worksheets/${worksheetId}/export-docx?format=${fileFormat}`, {
       headers: {
         "Authorization": `Bearer ${state.token}`
       }
@@ -2780,7 +2780,9 @@ window.downloadWorksheetDocx = async function(worksheetId) {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `SDGs_Worksheet_${worksheetId}.docx`;
+    const disposition = res.headers.get("Content-Disposition") || "";
+    const filename = disposition.match(/filename\*\s*=\s*UTF-8''([^;]+)/i);
+    a.download = filename ? decodeURIComponent(filename[1]) : `連動分析練習單.${fileFormat}`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -2788,7 +2790,7 @@ window.downloadWorksheetDocx = async function(worksheetId) {
     showToast("✓ Word 文件已成功下載！", "success");
   } catch (err) {
     console.warn("fetch 下載失敗，切換為直接下載", err);
-    window.open(`${API_BASE}/worksheets/${worksheetId}/export-docx?token=${encodeURIComponent(state.token)}`, "_blank");
+    window.open(`${API_BASE}/worksheets/${worksheetId}/export-docx?format=${fileFormat}&token=${encodeURIComponent(state.token)}`, "_blank");
   }
 };
 

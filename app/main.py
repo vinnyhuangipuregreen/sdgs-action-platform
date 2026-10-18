@@ -5,6 +5,8 @@ import csv
 import io
 import random
 import hashlib
+import re
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any, Literal
 from fastapi import FastAPI, Depends, HTTPException, Header, Query, Response, status, UploadFile, File, Request
 from fastapi.staticfiles import StaticFiles
@@ -16,7 +18,7 @@ from app.activity_details import ActivityDetails, activity_text
 
 from app.database import get_db, init_db, get_game_settings, set_game_settings, DEFAULT_GAME_SETTINGS
 from app.auth import hash_password, verify_password, create_access_token, decode_access_token, get_account_type
-from app.docx_exporter import create_worksheet_docx
+from app.docx_exporter import create_worksheet_docx, create_worksheet_doc
 from app.mailer import send_grade_notification
 from app.sdgs_check import ensure_sdgs_seeded, ensure_users_seeded
 from app.action_catalog import CategoryWrite, TopicItem, list_topics, save_topic, delete_topic, list_actions, save_action, delete_action, read_import, import_actions, export_actions
@@ -410,7 +412,7 @@ def get_worksheet(worksheet_id: int, user: dict = Depends(require_user)):
         return w
 
 @app.get("/api/worksheets/{worksheet_id}/export-docx")
-def export_worksheet_docx(worksheet_id: int, user: dict = Depends(require_user)):
+def export_worksheet_docx(worksheet_id: int, user: dict = Depends(require_user), file_format: Literal["docx", "doc"] = Query("docx", alias="format")):
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute("""
@@ -433,15 +435,17 @@ def export_worksheet_docx(worksheet_id: int, user: dict = Depends(require_user))
                 except:
                     pass
                     
-        docx_stream = create_worksheet_docx(w)
-        filename = f"SDGs_Worksheet_{w['user_name']}_{w['id']}.docx"
+        document_stream = create_worksheet_doc(w) if file_format == "doc" else create_worksheet_docx(w)
+        student_name = re.sub(r'[\\/:*?"<>|\x00-\x1f]', '_', w.get("user_name") or "學員").strip(" .")[:80] or "學員"
+        downloaded_at = datetime.now(timezone(timedelta(hours=8))).strftime("%Y%m%d%H%M%S")
+        filename = f"連動分析練習單_{student_name}_{downloaded_at}.{file_format}"
         
         import urllib.parse
         encoded_filename = urllib.parse.quote(filename)
         
         return StreamingResponse(
-            docx_stream,
-            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            document_stream,
+            media_type="application/msword" if file_format == "doc" else "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             headers={
                 "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
             }

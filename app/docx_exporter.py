@@ -357,3 +357,59 @@ def create_worksheet_docx(ws: dict) -> io.BytesIO:
     return target_stream
 
 print("Word Exporter module ready.")
+
+
+def create_worksheet_doc(ws: dict) -> io.BytesIO:
+    """Word-compatible RTF .doc, using the same content as the DOCX export."""
+    from docx.table import Table
+    from docx.text.paragraph import Paragraph
+
+    document = docx.Document(create_worksheet_docx(ws))
+
+    def escape(text):
+        escaped = []
+        for char in str(text):
+            if char in "\\{}":
+                escaped.append("\\" + char)
+            elif char == "\n":
+                escaped.append(r"\line ")
+            elif char == "\t":
+                escaped.append(r"\tab ")
+            elif ord(char) < 128:
+                if ord(char) >= 32:
+                    escaped.append(char)
+            else:
+                encoded = char.encode("utf-16-le")
+                for offset in range(0, len(encoded), 2):
+                    value = int.from_bytes(encoded[offset:offset + 2], "little", signed=True)
+                    escaped.append(f"\\u{value}?")
+        return "".join(escaped)
+
+    def paragraph(item, in_table=False):
+        alignment = {0: r"\ql", 1: r"\qc", 2: r"\qr", 3: r"\qj"}.get(item.alignment, r"\ql")
+        runs = []
+        for run in item.runs:
+            size = round(run.font.size.pt * 2) if run.font.size else 22
+            style = f"\\fs{size}" + (r"\b" if run.bold else "") + (r"\i" if run.italic else "") + (r"\ul" if run.underline else "")
+            runs.append("{" + style + " " + escape(run.text) + "}")
+        return r"\pard" + (r"\intbl" if in_table else "") + (r"\keepn" if item.paragraph_format.keep_with_next else "") + alignment + r"\sa100 " + "".join(runs)
+
+    parts = [r"{\rtf1\ansi\ansicpg1252\deff0{\fonttbl{\f0\fnil Microsoft JhengHei;}}\uc1\paperw12240\paperh15840\margl1440\margr1440\margt1440\margb1440\f0\fs22 "]
+    for element in document.element.body:
+        if element.tag.endswith("}p"):
+            parts.append(paragraph(Paragraph(element, document)) + r"\par ")
+        elif element.tag.endswith("}tbl"):
+            table = Table(element, document)
+            widths = [column.width.twips if column.width else 2400 for column in table.columns]
+            for row in table.rows:
+                definition, edge = [r"\trowd\trgaph100\trleft0"], 0
+                for index, cell in enumerate(row.cells):
+                    edge += round(9360 * widths[index] / sum(widths))
+                    definition.append(r"\clbrdrt\brdrs\brdrw8\clbrdrb\brdrs\brdrw8\clbrdrl\brdrs\brdrw8\clbrdrr\brdrs\brdrw8" + f"\\cellx{edge}")
+                parts.append("".join(definition))
+                for cell in row.cells:
+                    parts.append(r"\par ".join(paragraph(item, True) for item in cell.paragraphs) + r"\cell ")
+                parts.append(r"\row ")
+            parts.append(r"\pard\par ")
+    parts.append("}")
+    return io.BytesIO("".join(parts).encode("ascii"))
