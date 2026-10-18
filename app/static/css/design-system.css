@@ -65,8 +65,8 @@ body:has(#tabPane_admin:not(.hidden) #adminSubPane_attendance:not(.hidden)) > .p
 .platform-nav [aria-current="page"]:hover { background: var(--module-ink); color: white; }
 .platform-nav span { font-size: 21px; line-height: 1; }
 .platform-tools { max-width: 1440px; margin: auto; padding: 5px 26px 9px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 19px; background: white; color: var(--ds-muted); font-size: 11px; }
-.platform-tools button { border: 0; background: transparent; color: #40564c; font-weight: 500; padding: 5px 2px; cursor: pointer; }
-.platform-tools button[aria-current="page"] { color: var(--ds-green-ink); text-decoration: underline; text-underline-offset: 5px; }
+.platform-tools button { min-height: 44px; border: 1px solid var(--ds-green-ink); border-radius: 10px; background: var(--ds-soft); color: var(--ds-green-ink); font-size: 13px; font-weight: 700; padding: 9px 16px; cursor: pointer; box-shadow: 0 2px 4px #15803d12; }
+.platform-tools button:hover, .platform-tools button[aria-current="page"] { background: var(--ds-green-ink); color: white; }
 .platform-main { max-width: 1440px; padding: 28px 28px 50px; }
 .home-page { display: grid; gap: 26px; }
 .home-welcome-row { display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 20px; }
@@ -250,8 +250,8 @@ body:has(#tabPane_admin:not(.hidden) #adminSubPane_attendance:not(.hidden)) > .p
   .platform-brand { gap: 9px; }
   .brand-globe { width: 40px; height: 40px; font-size: 28px; }
   .platform-header-inner { padding: 12px; gap: 6px; }
-  .platform-tools { padding: 2px 16px 6px; font-size: 10px; gap: 4px 15px; }
-  .platform-tools > span { display: none; }
+  .platform-tools { padding: 4px 12px 10px; gap: 6px; }
+  .platform-tools button { padding: 8px 6px; }
   .platform-main { padding: 16px 12px 28px; }
   .hero-copy { width: 100%; padding: 22px; min-height: 0; background: #f2fcfa; }
   .hero-copy h2 { font-size: 24px; max-width: 300px; }
