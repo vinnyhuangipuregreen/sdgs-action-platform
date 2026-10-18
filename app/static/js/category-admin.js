@@ -94,6 +94,22 @@ function openCategoryEditor(item = null) {
   document.getElementById("categoryEditorTitle").textContent = item ? "修改分類" : "新增分類";
   document.getElementById("categoryNameInput").value = item?.category || "";
   document.getElementById("categoryActionInput").value = item?.name || "";
+  const fields = document.getElementById("categoryTemplateFields");
+  fields.replaceChildren();
+  Object.entries({...activityPlanFields, ...activityResultFields}).forEach(([field, label]) => {
+    const wrapper = document.createElement("div");
+    const title = document.createElement("label");
+    title.htmlFor = `categoryTemplate_${field}`;
+    title.className = "block text-xs font-bold text-slate-700 mb-2";
+    title.textContent = `${label}（${field in activityPlanFields ? '示範' : '填寫指引'}）`;
+    const input = document.createElement("textarea");
+    input.id = title.htmlFor;
+    input.rows = 3;
+    input.className = "w-full text-sm border border-slate-300 rounded-xl px-3 py-2.5";
+    input.value = item?.template?.[field] || "";
+    wrapper.append(title, input);
+    fields.appendChild(wrapper);
+  });
   document.getElementById("categoryEditor").classList.remove("hidden");
   document.getElementById("categoryNameInput").focus();
 }
@@ -135,7 +151,9 @@ function initCategoryAdminEvents() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           category: document.getElementById("categoryNameInput").value.trim(),
-          name: document.getElementById("categoryActionInput").value.trim()
+          name: document.getElementById("categoryActionInput").value.trim(),
+          template: Object.fromEntries(Object.keys({...activityPlanFields, ...activityResultFields}).map(field =>
+            [field, document.getElementById(`categoryTemplate_${field}`).value]))
         })
       });
       closeCategoryEditor();

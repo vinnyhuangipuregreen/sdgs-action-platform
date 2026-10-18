@@ -29,6 +29,7 @@ function setup(radialCount = 0) {
     addRadialLineRow: () => radial.children.push({}),
     addTradeoffRow: data => tradeoff.children.push(data || {}),
     restoreCenterAction() {}, renderCausalChains() {}, updateCenterActionSelection() {},
+    loadActivityDetails() {},
   });
   vm.runInContext(defaults + load, context);
   return { context, radial, tradeoff };

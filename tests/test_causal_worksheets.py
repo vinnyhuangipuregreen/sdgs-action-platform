@@ -50,7 +50,7 @@ class CausalWorksheetTests(unittest.TestCase):
         exported = self.client.get("/api/admin/export/csv", headers=self.headers)
         rows = list(csv.reader(io.StringIO(exported.content.decode("utf-8-sig").lstrip("\ufeff"))))
         self.assertNotIn("聊天室格式文字", rows[0])
-        self.assertEqual(json.loads(rows[1][-1]), payload["causal_data"])
+        self.assertEqual(json.loads(rows[1][rows[0].index("因果型分析資料")]), payload["causal_data"])
 
     def test_word_export_includes_both_complete_tables(self):
         worksheet_id, _ = self.save({"chains": self.chains})

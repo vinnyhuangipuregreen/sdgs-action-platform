@@ -437,6 +437,12 @@ def init_db():
         cursor.execute("PRAGMA table_info(worksheets)")
         if "activity_description" not in {row["name"] for row in cursor.fetchall()}:
             cursor.execute("ALTER TABLE worksheets ADD COLUMN activity_description TEXT NOT NULL DEFAULT ''")
+        cursor.execute("PRAGMA table_info(worksheets)")
+        if "activity_details" not in {row["name"] for row in cursor.fetchall()}:
+            cursor.execute("ALTER TABLE worksheets ADD COLUMN activity_details TEXT")
+        cursor.execute("PRAGMA table_info(action_catalog)")
+        if "template_data" not in {row["name"] for row in cursor.fetchall()}:
+            cursor.execute("ALTER TABLE action_catalog ADD COLUMN template_data TEXT NOT NULL DEFAULT '{}'")
         for table in ("worksheets", "game_scores"):
             cursor.execute(f"PRAGMA table_info({table})")
             if "account_type" not in {row["name"] for row in cursor.fetchall()}:
@@ -461,6 +467,16 @@ def init_db():
                 WHERE NOT EXISTS (SELECT 1 FROM system_settings WHERE key = 'action_catalog_initialized')
             """, (json.dumps(catalog, ensure_ascii=False),))
             cursor.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('action_catalog_initialized', '1')")
+        cursor.execute("SELECT value FROM system_settings WHERE key = 'activity_templates_v1'")
+        if not cursor.fetchone():
+            with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "activity_templates.json"), encoding="utf-8") as source:
+                templates = json.dumps(json.load(source), ensure_ascii=False)
+            cursor.execute("""UPDATE action_catalog SET template_data = (
+                SELECT json_extract(value, '$.template') FROM json_each(?)
+                WHERE json_extract(value, '$.category') = action_catalog.category AND json_extract(value, '$.name') = action_catalog.name)
+                WHERE template_data = '{}' AND EXISTS (SELECT 1 FROM json_each(?)
+                WHERE json_extract(value, '$.category') = action_catalog.category AND json_extract(value, '$.name') = action_catalog.name)""", (templates, templates))
+            cursor.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('activity_templates_v1', '1')")
         _DB_INITIALIZED = True
 
 def migrate_staff_accounts(cursor):

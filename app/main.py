@@ -11,7 +11,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.concurrency import run_in_threadpool
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, model_validator
+from app.activity_details import ActivityDetails
 
 from app.database import get_db, init_db, get_game_settings, set_game_settings, DEFAULT_GAME_SETTINGS
 from app.auth import hash_password, verify_password, create_access_token, decode_access_token, get_account_type
@@ -279,7 +280,8 @@ class WorksheetSchema(BaseModel):
     unit_name: str
     center_action: str
     center_custom: Optional[str] = ""
-    activity_description: str
+    activity_description: str = ""
+    activity_details: Optional[ActivityDetails] = None
     radial_data: List[Dict[str, Any]]
     tradeoff_data: List[Dict[str, Any]]
     chat_text: str = ""
@@ -288,12 +290,15 @@ class WorksheetSchema(BaseModel):
     commitment: Dict[str, Any]
     status: Optional[str] = "submitted"
 
-    @field_validator("activity_description")
-    @classmethod
-    def require_activity_description(cls, value: str) -> str:
-        if not value.strip():
+    @model_validator(mode="after")
+    def summarize_activity_details(self):
+        if self.activity_details:
+            if not self.center_action.strip():
+                raise ValueError("請先選擇：活動分類。")
+            self.activity_description = self.activity_details.description()
+        elif not self.activity_description.strip():
             raise ValueError("請填寫活動簡介及說明！")
-        return value
+        return self
 
 def validate_worksheet_submission(data: WorksheetSchema):
     if (data.status or "submitted") != "submitted":
@@ -350,7 +355,7 @@ def list_worksheets(
         rows = [dict(r) for r in cursor.fetchall()]
         
         for r in rows:
-            for field in ["radial_data", "tradeoff_data", "causal_data", "self_checks", "commitment"]:
+            for field in ["radial_data", "tradeoff_data", "causal_data", "self_checks", "commitment", "activity_details"]:
                 if r[field]:
                     try:
                         r[field] = json.loads(r[field])
@@ -375,7 +380,7 @@ def get_worksheet(worksheet_id: int, user: dict = Depends(require_user)):
         if user.get("role") not in ["admin", "teacher"] and (w["user_id"] != user["user_id"] or w["account_type"] != get_account_type(user)):
             raise HTTPException(status_code=403, detail="無權存取他人練習單")
             
-        for field in ["radial_data", "tradeoff_data", "causal_data", "self_checks", "commitment"]:
+        for field in ["radial_data", "tradeoff_data", "causal_data", "self_checks", "commitment", "activity_details"]:
             if w[field]:
                 try:
                     w[field] = json.loads(w[field])
@@ -400,7 +405,7 @@ def export_worksheet_docx(worksheet_id: int, user: dict = Depends(require_user))
         if user.get("role") not in ["admin", "teacher"] and (w["user_id"] != user["user_id"] or w["account_type"] != get_account_type(user)):
             raise HTTPException(status_code=403, detail="無權存取他人練習單")
             
-        for field in ["radial_data", "tradeoff_data", "causal_data", "self_checks", "commitment"]:
+        for field in ["radial_data", "tradeoff_data", "causal_data", "self_checks", "commitment", "activity_details"]:
             if w[field]:
                 try:
                     w[field] = json.loads(w[field])
@@ -428,10 +433,10 @@ def create_worksheet(data: WorksheetSchema, user: dict = Depends(require_user)):
         cursor = conn.cursor()
         cursor.execute("""
         INSERT INTO worksheets (
-            user_id, account_type, user_name, unit_name, center_action, center_custom, activity_description,
+            user_id, account_type, user_name, unit_name, center_action, center_custom, activity_description, activity_details,
             radial_data, tradeoff_data, chat_text, causal_data,
             self_checks, commitment, status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             user["user_id"],
             get_account_type(user),
@@ -440,6 +445,7 @@ def create_worksheet(data: WorksheetSchema, user: dict = Depends(require_user)):
             data.center_action,
             data.center_custom,
             data.activity_description,
+            data.activity_details.model_dump_json() if data.activity_details else None,
             json.dumps(data.radial_data, ensure_ascii=False),
             json.dumps(data.tradeoff_data, ensure_ascii=False),
             data.chat_text,
@@ -470,6 +476,7 @@ def update_worksheet(worksheet_id: int, data: WorksheetSchema, user: dict = Depe
             center_action = ?,
             center_custom = ?,
             activity_description = ?,
+            activity_details = ?,
             radial_data = ?,
             tradeoff_data = ?,
             chat_text = ?,
@@ -484,6 +491,7 @@ def update_worksheet(worksheet_id: int, data: WorksheetSchema, user: dict = Depe
             data.center_action,
             data.center_custom,
             data.activity_description,
+            data.activity_details.model_dump_json() if data.activity_details else None,
             json.dumps(data.radial_data, ensure_ascii=False),
             json.dumps(data.tradeoff_data, ensure_ascii=False),
             data.chat_text,
@@ -1057,7 +1065,7 @@ def export_all_worksheets_csv(user: dict = Depends(require_admin)):
         writer.writerow([
             "練習單ID", "學員姓名", "Email", "聯絡電話", "分會編號", "分會單位",
             "中心行動", "自選活動名稱", "活動簡介及說明", "狀態", "成績", "講師講評",
-            "提交時間", "放射連動資料", "拉扯分析資料", "因果型分析資料"
+            "提交時間", "放射連動資料", "拉扯分析資料", "因果型分析資料", "活動規劃與成果資料"
         ])
         
         for r in rows:
@@ -1065,7 +1073,7 @@ def export_all_worksheets_csv(user: dict = Depends(require_admin)):
                 r["id"], r["user_name"], r["email"], r["phone"], r.get("unit_code", ""), r["unit_name"],
                 r["center_action"], r["center_custom"] or "", r["activity_description"],
                 r["status"], r["score"] or "", r["teacher_comment"] or "",
-                r["created_at"], r["radial_data"], r["tradeoff_data"], r["causal_data"]
+                r["created_at"], r["radial_data"], r["tradeoff_data"], r["causal_data"], r["activity_details"] or ""
             ])
             
         output.seek(0)

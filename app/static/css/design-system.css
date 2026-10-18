@@ -45,6 +45,7 @@
 .sdgs-shell .ds-button { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 12px; padding: 11px 23px; border: 1px solid transparent; border-radius: 12px; background: var(--module-ink); color: white; font-size: 14px; font-weight: 700; text-decoration: none; cursor: pointer; transition: background .18s, transform .18s; }
 .sdgs-shell .ds-button:hover:not(:disabled) { filter: brightness(.94); transform: translateY(-1px); }
 .sdgs-shell .ds-button-secondary { background: #f1f5f4; border-color: var(--ds-border); color: #34473f; }
+.sdgs-shell [data-activity-phase][aria-pressed="true"] { background: var(--ds-blue-ink); color: white; border-color: var(--ds-blue-ink); }
 .sdgs-shell .ds-button:disabled { color: #526176; background: #edf2ef; border-color: #dbe5e6; opacity: 1; }
 .platform-header { position: sticky; top: 0; z-index: 40; display: block; background: rgba(255,255,255,.97); border-bottom: 1px solid var(--ds-border); box-shadow: 0 3px 12px #0f443608; padding: 0; color: var(--ds-text); }
 /* Keep iframe buttons and dialogs clear when the course tools receive focus. */

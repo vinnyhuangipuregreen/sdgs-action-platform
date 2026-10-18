@@ -682,6 +682,7 @@ async function loadCenterActions() {
     state.centerActions = await response.json();
     renderCenterActionPicker();
     restoreCenterAction(category, name);
+    applyActivityTemplate(false);
     return true;
   } catch (error) {
     document.getElementById("centerActionResultCount").textContent = "活動清單載入失敗，請重新整理頁面";
@@ -792,6 +793,7 @@ function restoreCenterAction(category, name) {
 }
 
 function initWorksheetEvents() {
+  initActivityDetails();
   initCenterActionPicker();
 
   const customInput = document.getElementById("ws_centerCustom");
@@ -1036,12 +1038,8 @@ async function saveWorksheet(status = "submitted") {
   const centerAction = actionRadio.value;
   const centerCustom = actionRadio.dataset.legacyCustom === "true" ? document.getElementById("ws_centerCustom")?.value.trim() : actionRadio.dataset.customValue || "";
 
-  const descriptionInput = document.getElementById("ws_activityDescription");
-  if (!descriptionInput.value.trim()) {
-    showToast("請填寫活動簡介及說明！", "error");
-    descriptionInput.focus();
-    return;
-  }
+  const activityDetails = collectActivityDetails();
+  if (!validateActivityDetails(activityDetails)) return;
 
   const radialData = [];
   document.querySelectorAll(".radial-line-row").forEach(row => {
@@ -1086,7 +1084,8 @@ async function saveWorksheet(status = "submitted") {
     unit_name: unitName,
     center_action: centerAction,
     center_custom: centerCustom,
-    activity_description: document.getElementById("ws_activityDescription").value,
+    activity_description: describeActivity(activityDetails),
+    activity_details: activityDetails,
     radial_data: radialData,
     tradeoff_data: tradeoffData,
     causal_data: causalData,
@@ -1228,7 +1227,7 @@ window.loadWorksheetToForm = function(wsId, silent = false) {
   if (unitEl) unitEl.value = ws.unit_name || state.user?.unit_name || "佛光學員";
 
   restoreCenterAction(ws.center_action, ws.center_custom || "");
-  document.getElementById("ws_activityDescription").value = ws.activity_description || "";
+  loadActivityDetails(ws.activity_details, ws.activity_description || "");
 
   const radialContainer = document.getElementById("radialLinesContainer");
   if (radialContainer) {
@@ -1303,7 +1302,7 @@ window.createNewWorksheet = function(showToastMsg = true) {
   if (unitEl) unitEl.value = state.user?.unit_name || "佛光學員";
 
   restoreCenterAction("", "");
-  document.getElementById("ws_activityDescription").value = "";
+  loadActivityDetails(null);
   
   const rc = document.getElementById("radialLinesContainer");
   if (rc) { rc.innerHTML = ""; for(let i=0; i<3; i++) addRadialLineRow(); }
