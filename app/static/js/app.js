@@ -247,7 +247,6 @@ function switchTab(tabId) {
 // ==============================================================================
 async function checkAuth(loadWorksheets = true) {
   if (!state.token) {
-    if (state.activeTab !== "home") showLoginModal(true);
     return;
   }
   try {

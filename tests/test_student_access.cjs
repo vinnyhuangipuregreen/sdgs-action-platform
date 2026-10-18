@@ -5,6 +5,7 @@ const { test } = require('node:test');
 const source = fs.readFileSync(require('node:path').join(__dirname, '../app/static/js/app.js'), 'utf8');
 const switching = source.slice(source.indexOf('function switchTab('), source.indexOf('async function checkAuth('));
 const closing = source.slice(source.indexOf('function closeStudentLogin()'), source.indexOf('function showLoginModal('));
+const auth = source.slice(source.indexOf('async function checkAuth('), source.indexOf('async function handleLogin('));
 
 function setup(user, token = null) {
   const events = [];
@@ -15,7 +16,7 @@ function setup(user, token = null) {
     document: { querySelectorAll: () => [], querySelector: () => null, getElementById: id => id === 'tabPane_worksheet' ? pane : null },
     showLoginModal: show => events.push(['login', show]),
   });
-  vm.runInContext(switching + closing, context);
+  vm.runInContext(switching + closing + auth, context);
   return { context, state, events };
 }
 
@@ -50,4 +51,20 @@ test('closing course SSO login leaves the pending authorization flow', () => {
   context.location.pathname = '/sso/authorize';
   context.closeStudentLogin();
   assert.deepEqual(events,[['login',false],['redirect','/']]);
+});
+
+test('returning to the toolbox as a guest does not prompt for login', async () => {
+  const {context,state,events} = setup(null);
+  context.switchTab('food');
+  await context.checkAuth();
+  assert.equal(state.activeTab, 'food');
+  assert.deepEqual(events, []);
+});
+
+test('guest worksheet access still prompts for login during initialization', async () => {
+  const {context,state,events} = setup(null);
+  context.switchTab('worksheet');
+  await context.checkAuth();
+  assert.equal(state.studentDestination, 'worksheet');
+  assert.deepEqual(events, [['login', true]]);
 });
