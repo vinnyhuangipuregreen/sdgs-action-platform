@@ -113,6 +113,17 @@ class IdentitySsoTests(unittest.TestCase):
 
     def test_student_cannot_read_the_central_roster(self):
         self.assertEqual(self.client.get("/api/auth/sso/roster",headers=self.headers).status_code,403)
+        self.assertEqual(self.client.get("/api/auth/sso/roster?include_profile=true",headers=self.headers).status_code,403)
+
+    def test_course_context_combines_verified_staff_profile_and_current_roster(self):
+        admin = self.client.post("/api/auth/login",json={"account":"admin@test.invalid","password":"pw","account_type":"staff"}).json()["token"]
+        headers = {"Authorization":"Bearer " + admin}
+        roster = self.client.get("/api/auth/sso/roster",headers=headers).json()
+        context = self.client.get("/api/auth/sso/roster?include_profile=true",headers=headers).json()
+        self.assertEqual(context["students"], roster)
+        self.assertEqual(context["user"]["account_type"], "staff")
+        self.assertEqual(context["user"]["id"], 3)
+        self.assertNotIn("password_hash", context["user"])
 
     def test_historical_records_survive_missing_accounts_without_breaking_exports(self):
         admin=self.client.post("/api/auth/login",json={"account":"admin@test.invalid","password":"pw","account_type":"staff"}).json()["token"]

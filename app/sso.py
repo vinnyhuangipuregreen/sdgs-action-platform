@@ -59,13 +59,16 @@ def install_sso(app, require_user):
         return {"success": True}
 
     @app.get("/api/auth/sso/roster")
-    def roster(user=Depends(require_user)):
+    def roster(include_profile: bool = False, user=Depends(require_user)):
         if user["role"] not in ("admin", "teacher"):
             raise HTTPException(403, "需要管理權限")
         with get_accounts_db() as connection:
             cursor = connection.cursor()
             cursor.execute("SELECT id,name,email,email_backup,phone,unit_code,unit_name,role,'student' AS account_type FROM student ORDER BY id")
-            return [dict(row) for row in cursor.fetchall()]
+            students = [dict(row) for row in cursor.fetchall()]
+        if include_profile:
+            return {"user": {**user["profile"], "account_type": get_account_type(user)}, "students": students}
+        return students
 
     @app.post("/api/auth/sso/ticket")
     def issue_ticket(request: TicketRequest, user=Depends(require_user)):
