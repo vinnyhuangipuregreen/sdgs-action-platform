@@ -402,7 +402,7 @@ def create_worksheet_doc(ws: dict) -> io.BytesIO:
             table = Table(element, document)
             widths = [column.width.twips if column.width else 2400 for column in table.columns]
             for row in table.rows:
-                definition, edge = [r"\trowd\trgaph100\trleft0"], 0
+                definition, edge = [r"\trowd\trgaph100\trleft0\trkeep"], 0
                 for index, cell in enumerate(row.cells):
                     edge += round(9360 * widths[index] / sum(widths))
                     definition.append(r"\clbrdrt\brdrs\brdrw8\clbrdrb\brdrs\brdrw8\clbrdrl\brdrs\brdrw8\clbrdrr\brdrs\brdrw8" + f"\\cellx{edge}")
@@ -410,6 +410,5 @@ def create_worksheet_doc(ws: dict) -> io.BytesIO:
                 for cell in row.cells:
                     parts.append(r"\par ".join(paragraph(item, True) for item in cell.paragraphs) + r"\cell ")
                 parts.append(r"\row ")
-            parts.append(r"\pard\par ")
     parts.append("}")
     return io.BytesIO("".join(parts).encode("ascii"))
