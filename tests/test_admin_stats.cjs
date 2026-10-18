@@ -22,6 +22,7 @@ const charts = source.slice(source.indexOf('function renderAdminCharts('), sourc
 function setupCharts() {
   const configs = [], elements = {};
   for (const id of ['adminRadarChart','adminPieChart']) elements[id] = {getContext:()=>({id}),classList:{toggle(){}}};
+  elements.adminRadarEmpty = {classList:{toggle(name,value){this[name]=value;}}};
   elements.adminPieEmpty = {classList:{toggle(name,value){this[name]=value;}}};
   const context = vm.createContext({state:{goals:[],centerActions:[{category:'文化教育'},{category:'慈善弘揚'},{category:'聯誼交流'}]},chartRadar:null,chartPie:null,
     document:{getElementById:id=>elements[id]},Chart:class {constructor(ctx,config){configs.push({ctx,config});}destroy(){}}});
@@ -38,4 +39,23 @@ test('doughnut draws all six formal submissions with numeric counts and omits un
 test('no formal submissions displays an empty-state message instead of a blank doughnut',()=>{
   const env=setupCharts();env.context.renderAdminCharts({sdg_frequency:{},center_action_distribution:{}});
   assert.equal(env.elements.adminPieEmpty.classList.hidden,false);
+});
+
+test('radar has all 17 axes before goal lookup finishes and percentages use formal selections',()=>{
+  const env=setupCharts();env.context.renderAdminCharts({sdg_frequency:{1:4,4:6,13:6,17:2},center_action_distribution:{}});
+  const radar=env.configs.find(x=>x.config.type==='radar').config;
+  assert.equal(radar.data.labels.length,17);
+  assert.equal(radar.data.labels[0],'SDG 1');assert.equal(radar.data.labels[16],'SDG 17');
+  const values=radar.data.datasets[0].data;
+  assert.ok(Math.abs(values.reduce((a,b)=>a+b,0)-100)<0.001);
+  assert.ok(Math.abs(values[3]-100/3)<0.001);assert.equal(values[1],0);
+  assert.equal(radar.options.maintainAspectRatio,false);
+  assert.equal(radar.options.plugins.tooltip.callbacks.label({dataIndex:3}),'6 次（33.3%）');
+});
+test('radar with no formal selections shows an empty state and never plots NaN',()=>{
+  const env=setupCharts();env.context.renderAdminCharts({sdg_frequency:{},center_action_distribution:{}});
+  const radar=env.configs.find(x=>x.config.type==='radar').config;
+  assert.equal(radar.data.datasets[0].data.length,17);
+  assert.ok(radar.data.datasets[0].data.every(n=>n===0));
+  assert.equal(env.elements.adminRadarEmpty.classList.hidden,false);
 });

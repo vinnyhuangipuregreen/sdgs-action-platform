@@ -770,7 +770,7 @@ def get_admin_stats(user: dict = Depends(require_admin)):
         cursor.execute("SELECT center_action, COUNT(*) AS worksheet_count FROM worksheets WHERE status IN ('submitted', 'reviewed') GROUP BY center_action")
         center_counts = {row["center_action"]: row["worksheet_count"] for row in cursor.fetchall()}
         
-        cursor.execute("SELECT radial_data FROM worksheets")
+        cursor.execute("SELECT radial_data FROM worksheets WHERE status IN ('submitted', 'reviewed')")
         all_radial = cursor.fetchall()
         sdg_counts = {i: 0 for i in range(1, 18)}
         import re

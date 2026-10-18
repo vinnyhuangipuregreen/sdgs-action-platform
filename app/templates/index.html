@@ -665,11 +665,12 @@
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
             <div class="flex items-center justify-between mb-2">
-              <h4 class="font-extrabold text-sm sm:text-base text-slate-800">📊 17 項 SDGs 被選取次數分佈 (雷達圖)</h4>
+              <h4 class="font-extrabold text-sm sm:text-base text-slate-800">📊 連動分析練習單—17項目標選擇比例</h4>
               <span class="text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold">連動熱區分析</span>
             </div>
-            <p class="text-xs text-slate-400 mb-4">掌握學員最常連動之核心目標熱區</p>
-            <div class="h-72 flex items-center justify-center">
+            <p class="text-xs text-slate-400 mb-4">統計正式提交與已批閱的目標選擇次數；比例＝各目標次數／總選擇次數</p>
+            <div class="h-72 relative">
+              <p id="adminRadarEmpty" class="hidden absolute inset-0 flex items-center justify-center text-sm text-slate-400">目前尚無正式練習單的目標選擇紀錄</p>
               <canvas id="adminRadarChart"></canvas>
             </div>
           </div>
@@ -1301,7 +1302,7 @@
   </footer>
 
   <script src="/static/js/activity-details.js?v=20261019_ui1280"></script>
-  <script src="/static/js/app.js?v=20261019_admin_doughnut"></script>
+  <script src="/static/js/app.js?v=20261019_admin_radar"></script>
   <script src="/static/js/category-admin.js?v=20261019_ui1280"></script>
 </body>
 </html>

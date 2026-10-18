@@ -1,4 +1,5 @@
 import os
+import json
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -66,6 +67,10 @@ class AdminStatsTests(unittest.TestCase):
                     ("慈善弘揚", "submitted"), ("慈善弘揚", "submitted"), ("慈善弘揚", "reviewed"),
                     ("聯誼交流", "draft"))])
 
+            conn.execute("UPDATE worksheets SET radial_data=? WHERE status='submitted'", (json.dumps([{"goal":"SDG 1 消除貧窮"},{"goal":"SDG 4 優質教育"},{"goal":"SDG 13 氣候行動"}]),))
+            conn.execute("UPDATE worksheets SET radial_data=? WHERE status='reviewed'", (json.dumps([{"goal":"SDG 4 優質教育"},{"goal":"SDG 13 氣候行動"},{"goal":"SDG 17 夥伴關係"}]),))
+            conn.execute("UPDATE worksheets SET radial_data=? WHERE status='draft'", (json.dumps([{"goal":"SDG 2 終結飢餓"}]),))
+
         class CloudCursor:
             def __init__(self, cursor):
                 self.cursor = cursor
@@ -96,3 +101,5 @@ class AdminStatsTests(unittest.TestCase):
                 self.assertEqual(stats["center_action_distribution"], {"文化教育": 3, "慈善弘揚": 3})
                 self.assertEqual(sum(stats["center_action_distribution"].values()), stats["submitted_worksheets"] + stats["reviewed_worksheets"])
                 self.assertEqual(stats["draft_worksheets"], 1)
+                self.assertEqual(stats["sdg_frequency"], {str(i): {1:4,4:6,13:6,17:2}.get(i,0) for i in range(1,18)})
+                self.assertEqual(sum(stats["sdg_frequency"].values()), 18)

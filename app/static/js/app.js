@@ -1929,16 +1929,20 @@ function renderAdminCharts(stats) {
   const ctxRadar = document.getElementById("adminRadarChart")?.getContext("2d");
   if (ctxRadar) {
     if (chartRadar) chartRadar.destroy();
-    const labels = state.goals.map(g => `${g.code}`);
-    const dataVals = state.goals.map(g => stats.sdg_frequency[g.id] || 0);
+    const labels = Array.from({length:17}, (_, index) => `SDG ${index + 1}`);
+    const dataVals = labels.map((_, index) => Number(stats.sdg_frequency?.[index + 1] || 0));
+    const selectionTotal = dataVals.reduce((sum, count) => sum + count, 0);
+    const percentages = dataVals.map(count => selectionTotal ? count * 100 / selectionTotal : 0);
+    document.getElementById("adminRadarEmpty")?.classList.toggle("hidden", selectionTotal > 0);
+    document.getElementById("adminRadarChart").classList.toggle("hidden", selectionTotal === 0);
 
     chartRadar = new Chart(ctxRadar, {
       type: "radar",
       data: {
         labels: labels,
         datasets: [{
-          label: "被連動選取頻次",
-          data: dataVals,
+          label: "目標選擇比例",
+          data: percentages,
           backgroundColor: "rgba(16, 185, 129, 0.2)",
           borderColor: "#10b981",
           pointBackgroundColor: "#10b981",
@@ -1947,8 +1951,12 @@ function renderAdminCharts(stats) {
       },
       options: {
         responsive: true,
-        plugins: { legend: { display: false } },
-        scales: { r: { beginAtZero: true, ticks: { precision: 0 } } }
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: context => `${dataVals[context.dataIndex]} 次（${percentages[context.dataIndex].toFixed(1)}%）` } }
+        },
+        scales: { r: { beginAtZero: true, ticks: { callback: value => `${value}%` } } }
       }
     });
   }
