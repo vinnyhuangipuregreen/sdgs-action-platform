@@ -678,8 +678,9 @@
               <h4 class="font-extrabold text-sm sm:text-base text-slate-800">🎯 中心行動選擇比例 (甜甜圈圖)</h4>
               <span class="text-[11px] px-2.5 py-0.5 rounded-full bg-sky-50 text-sky-700 font-bold">行動主題佔比</span>
             </div>
-            <p class="text-xs text-slate-400 mb-4">依主題類別統計，包含歷史活動紀錄</p>
-            <div class="h-72 flex items-center justify-center">
+            <p class="text-xs text-slate-400 mb-4">依主題類別統計正式提交與已批閱的練習單，不含草稿</p>
+            <div class="h-72 relative">
+              <p id="adminPieEmpty" class="hidden absolute inset-0 flex items-center justify-center text-sm text-slate-400">目前尚無正式提交的練習單</p>
               <canvas id="adminPieChart"></canvas>
             </div>
           </div>
@@ -1300,7 +1301,7 @@
   </footer>
 
   <script src="/static/js/activity-details.js?v=20261019_ui1280"></script>
-  <script src="/static/js/app.js?v=20261019_worksheet_history"></script>
+  <script src="/static/js/app.js?v=20261019_admin_doughnut"></script>
   <script src="/static/js/category-admin.js?v=20261019_ui1280"></script>
 </body>
 </html>

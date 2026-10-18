@@ -1958,18 +1958,21 @@ function renderAdminCharts(stats) {
     if (chartPie) chartPie.destroy();
     const counts = stats.center_action_distribution || {};
     const actionCategories = [...new Set(state.centerActions.map(a => a.category))];
-    const chartLabels = [...actionCategories, ...Object.keys(counts).filter(key => !actionCategories.includes(key))];
+    const chartLabels = [...actionCategories, ...Object.keys(counts).filter(key => !actionCategories.includes(key))]
+      .filter(key => Number(counts[key]) > 0);
+    document.getElementById("adminPieEmpty")?.classList.toggle("hidden", chartLabels.length > 0);
+    document.getElementById("adminPieChart").classList.toggle("hidden", chartLabels.length === 0);
     const legacyLabels = { A: "A. 淨灘", B: "B. 二手衣交換", C: "C. 太陽能", D: "D. 自選佛光活動" };
     chartPie = new Chart(ctxPie, {
       type: "doughnut",
       data: {
         labels: chartLabels.map(key => legacyLabels[key] || key),
         datasets: [{
-          data: chartLabels.map(key => counts[key] || 0),
+          data: chartLabels.map(key => Number(counts[key])),
           backgroundColor: ["#3b82f6", "#65a30d", "#16a34a", "#0ea5a4", "#526176", "#15803d", "#0f766e", "#4d7c0f"]
         }]
       },
-      options: { responsive: true, plugins: { legend: { position: "bottom" } } }
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" } } }
     });
   }
 }

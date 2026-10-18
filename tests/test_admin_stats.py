@@ -2,6 +2,7 @@ import os
 import tempfile
 import unittest
 from unittest.mock import patch
+from contextlib import contextmanager
 
 os.environ["DATABASE_PATH"] = ":memory:"
 os.environ.pop("TURSO_DATABASE_URL", None)
@@ -54,3 +55,44 @@ class AdminStatsTests(unittest.TestCase):
             stats = self.stats()
             self.assertEqual(stats["draft_worksheets"], 1)
             self.assertEqual(stats["submitted_worksheets"] + stats["reviewed_worksheets"], 3)
+
+    def test_formal_distribution_works_with_sqlite_and_turso_rows(self):
+        with database.get_db() as conn:
+            conn.executemany("""INSERT INTO worksheets
+                (user_id,user_name,unit_name,center_action,radial_data,tradeoff_data,chat_text,self_checks,commitment,status)
+                VALUES (1,'Test','Test',?,'[]','[]','','[]','{}',?)""",
+                [(category, status) for category, status in (
+                    ("文化教育", "submitted"), ("文化教育", "submitted"), ("文化教育", "reviewed"),
+                    ("慈善弘揚", "submitted"), ("慈善弘揚", "submitted"), ("慈善弘揚", "reviewed"),
+                    ("聯誼交流", "draft"))])
+
+        class CloudCursor:
+            def __init__(self, cursor):
+                self.cursor = cursor
+            def execute(self, sql, params=()):
+                self.cursor.execute(sql, params)
+                return self
+            def convert(self, row):
+                return database.TursoRow([col[0] for col in self.cursor.description], list(row)) if row is not None else None
+            def fetchone(self):
+                return self.convert(self.cursor.fetchone())
+            def fetchall(self):
+                return [self.convert(row) for row in self.cursor.fetchall()]
+
+        class CloudConnection:
+            def __init__(self, connection):
+                self.connection = connection
+            def cursor(self):
+                return CloudCursor(self.connection.cursor())
+
+        @contextmanager
+        def cloud_db():
+            with database.get_db() as conn:
+                yield CloudConnection(conn)
+
+        for backend in (database.get_db, cloud_db):
+            with self.subTest(backend=backend.__name__), patch("app.main.get_db", backend):
+                stats = self.stats()
+                self.assertEqual(stats["center_action_distribution"], {"文化教育": 3, "慈善弘揚": 3})
+                self.assertEqual(sum(stats["center_action_distribution"].values()), stats["submitted_worksheets"] + stats["reviewed_worksheets"])
+                self.assertEqual(stats["draft_worksheets"], 1)

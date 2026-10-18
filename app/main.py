@@ -767,8 +767,8 @@ def get_admin_stats(user: dict = Depends(require_admin)):
         avg_score = int(score_stats[0] or 0)
         max_score = int(score_stats[1] or 0)
         
-        cursor.execute("SELECT center_action, COUNT(*) FROM worksheets GROUP BY center_action")
-        center_counts = dict(cursor.fetchall())
+        cursor.execute("SELECT center_action, COUNT(*) AS worksheet_count FROM worksheets WHERE status IN ('submitted', 'reviewed') GROUP BY center_action")
+        center_counts = {row["center_action"]: row["worksheet_count"] for row in cursor.fetchall()}
         
         cursor.execute("SELECT radial_data FROM worksheets")
         all_radial = cursor.fetchall()
