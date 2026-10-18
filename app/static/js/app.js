@@ -211,6 +211,7 @@ function switchTab(tabId) {
     return;
   }
   state.activeTab = tabId;
+  document.getElementById("worksheetTools")?.classList.toggle("hidden", tabId !== "worksheet");
   document.querySelectorAll(".tab-pane").forEach(el => el.classList.add("hidden"));
   document.querySelectorAll("[data-nav-tab]").forEach(el => {
     el.removeAttribute("aria-current");

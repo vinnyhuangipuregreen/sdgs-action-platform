@@ -11,13 +11,15 @@ function setup(user, token = null) {
   const events = [];
   const state = { user, token, activeTab: 'home' };
   const pane = { classList: { remove: () => events.push('worksheetVisible') } };
+  const tools = { hidden: true, classList: { toggle: (_, hidden) => { tools.hidden = hidden; } } };
   const context = vm.createContext({
     state, URLSearchParams, location: { pathname: '/', search: '', replace: value => events.push(['redirect', value]) },
-    document: { querySelectorAll: () => [], querySelector: () => null, getElementById: id => id === 'tabPane_worksheet' ? pane : null },
+    document: { querySelectorAll: () => [], querySelector: () => null, getElementById: id => id === 'worksheetTools' ? tools : id === 'tabPane_worksheet' ? pane : null },
+    loadLeaderboard() {}, loadAdminDashboard() {},
     showLoginModal: show => events.push(['login', show]),
   });
   vm.runInContext(switching + closing + auth, context);
-  return { context, state, events };
+  return { context, state, events, tools };
 }
 
 test('guests and staff see student login instead of the worksheet', () => {
@@ -67,4 +69,21 @@ test('guest worksheet access still prompts for login during initialization', asy
   await context.checkAuth();
   assert.equal(state.studentDestination, 'worksheet');
   assert.deepEqual(events, [['login', true]]);
+});
+
+test('learning buttons appear only on the worksheet and hide on other tabs', () => {
+  const {context,state,tools} = setup({role:'student'}, 'student-token');
+  state.earthDefense = {active: true};
+  for (const tab of ['home', 'food', 'carbon', 'sdgs', 'earth_defense', 'leaderboard', 'admin']) {
+    context.switchTab('worksheet');
+    assert.equal(tools.hidden, false);
+    context.switchTab(tab);
+    assert.equal(tools.hidden, true, tab);
+  }
+});
+
+test('blocked worksheet access does not reveal learning buttons', () => {
+  const {context,tools} = setup(null);
+  context.switchTab('worksheet');
+  assert.equal(tools.hidden, true);
 });
