@@ -116,8 +116,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   const publicTabs = ["home", "worksheet", "carbon", "food", "sdgs", "earth_defense", "leaderboard"];
   switchTab(publicTabs.includes(initialTab) ? initialTab : "home");
   if (resumeCourseSignIn()) return;
-  if (!adminEntry) await loadCenterActions();
-  await checkAuth(!adminEntry);
+  await checkAuth(false);
+  if (!adminEntry) {
+    await loadCenterActions();
+    if (state.user?.role === "student") await loadMyWorksheets(true);
+  }
   if (new URLSearchParams(location.search).get("sso_logout") === "1") {
     handleLogout();
     history.replaceState(null, "", "/");

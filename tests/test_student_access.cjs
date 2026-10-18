@@ -87,3 +87,29 @@ test('blocked worksheet access does not reveal learning buttons', () => {
   context.switchTab('worksheet');
   assert.equal(tools.hidden, true);
 });
+
+test('returning students enter the worksheet before the activity catalog finishes loading', async () => {
+  const {context,state,tools,events} = setup(null, 'student-token');
+  let start, releaseCatalog;
+  const catalog = new Promise(resolve => { releaseCatalog = resolve; });
+  context.location.hash = '#worksheet';
+  context.document.addEventListener = (_, callback) => { start = callback; };
+  Object.assign(context, {
+    API_BASE: '/api', initUIEvents() {}, resumeCourseSignIn: () => false,
+    loadCenterActions: () => catalog,
+    fetch: async () => ({ok: true, json: async () => ({role:'student',account_type:'student'})}),
+    updateUserUI() {}, loadMyWorksheets() {}, loadSDGsData() {}, loadGameSettings() {},
+  });
+  const init = source.slice(source.indexOf('document.addEventListener("DOMContentLoaded"'), source.indexOf('function initUIEvents()'));
+  vm.runInContext(init, context);
+  const completed = start();
+  await new Promise(setImmediate);
+  try {
+    assert.equal(state.activeTab, 'worksheet');
+    assert.equal(tools.hidden, false);
+    assert.equal(events.some(event => Array.isArray(event) && event[0] === 'login' && event[1]), false);
+  } finally {
+    releaseCatalog();
+    await completed;
+  }
+});
