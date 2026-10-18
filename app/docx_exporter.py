@@ -1,6 +1,7 @@
 import io
 import json
 import docx
+from app.activity_details import activity_text
 from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_TABLE_ALIGNMENT, WD_ALIGN_VERTICAL
@@ -91,9 +92,10 @@ def create_worksheet_docx(ws: dict) -> io.BytesIO:
         p_act.add_run(f" — 自訂名稱：{ws.get('center_custom')}")
     p_act.runs[0].font.bold = True
     p_act.paragraph_format.space_after = Pt(8)
-    if ws.get("activity_description"):
-        doc.add_paragraph("活動簡介及說明：").runs[0].font.bold = True
-        doc.add_paragraph(ws["activity_description"])
+    summary = activity_text(ws.get("activity_details"))
+    if summary:
+        doc.add_paragraph("活動規劃與成果：").runs[0].font.bold = True
+        doc.add_paragraph(summary)
 
     # Section 2: Radial Analysis
     h2 = doc.add_paragraph()

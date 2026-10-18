@@ -14,7 +14,7 @@ from app.main import app
 
 def complete_payload():
     return {
-        "unit_name": "Test", "center_action": "環保", "activity_description": "活動說明",
+        "unit_name": "Test", "center_action": "環保", "activity_details": {field:"已填寫" for field in ("purpose","process","features","audience")},
         "radial_data": [{"goal": "SDG 13", "mechanism": "減少排放", "observable": "用電量下降"} for _ in range(3)],
         "tradeoff_data": [{"who": "植被", "situation": "踩踏", "how": "規劃步道"}],
         "causal_data": {"chains": [{field: "已填寫" for field in

@@ -3,30 +3,30 @@ import io
 import json
 from pathlib import Path
 from docx import Document
-from tests import test_activity_description as legacy
+from tests import test_activity_details as activity_tests
+from app.activity_details import activity_text
 from app import database
 
 
-class ActivityPlanningTests(legacy.ActivityDescriptionTests):
+class ActivityPlanningTests(activity_tests.ActivityDetailsTests):
     def plan(self, phase="before"):
         return {"phase":phase,"name":"社區活動","purpose":"目的","process":"流程","features":"特色","audience":"親子"}
 
     def test_plan_and_results_round_trip_to_admin_csv_and_word(self):
         details = {**self.plan("after"), "participants":0, "volunteers":3,
                    "results":"實際成果", "feedback":"參與者意見", "improvements":"下次改善"}
-        self.payload.pop("activity_description")
         self.payload["activity_details"] = details
         worksheet_id = self.save()
         url = f"/api/worksheets/{worksheet_id}"
         loaded = self.client.get(url,headers=self.admin).json()
         self.assertEqual(loaded["activity_details"]["participants"], 0)
         self.assertEqual(loaded["activity_details"]["results"], "實際成果")
-        self.assertIn("活動後｜成果",loaded["activity_description"])
-        self.assertIn("實際參與人數：0",loaded["activity_description"])
+        self.assertIn("活動後｜成果",activity_text(loaded["activity_details"]))
+        self.assertIn("實際參與人數：0",activity_text(loaded["activity_details"]))
         rows = list(csv.DictReader(io.StringIO(self.client.get("/api/admin/export/csv",headers=self.admin).content.decode("utf-8-sig").lstrip("\ufeff"))))
         self.assertEqual(json.loads(rows[0]["活動規劃與成果資料"])["feedback"], "參與者意見")
         document = Document(io.BytesIO(self.client.get(url+"/export-docx",headers=self.admin).content))
-        self.assertIn(loaded["activity_description"],[p.text for p in document.paragraphs])
+        self.assertIn(activity_text(loaded["activity_details"]),[p.text for p in document.paragraphs])
         self.payload["activity_details"] = self.plan()
         self.assertEqual(self.client.put(url,headers=self.student,json=self.payload).status_code,200)
         self.assertEqual(self.client.get(url,headers=self.student).json()["activity_details"]["phase"],"before")

@@ -372,7 +372,6 @@ def init_db():
                 unit_name TEXT NOT NULL,
                 center_action TEXT NOT NULL,
                 center_custom TEXT,
-                activity_description TEXT NOT NULL DEFAULT '',
                 radial_data TEXT NOT NULL,
                 tradeoff_data TEXT NOT NULL,
                 chat_text TEXT NOT NULL,
@@ -435,11 +434,13 @@ def init_db():
                 else:
                     cursor.execute(item[0], item[1])
         cursor.execute("PRAGMA table_info(worksheets)")
-        if "activity_description" not in {row["name"] for row in cursor.fetchall()}:
-            cursor.execute("ALTER TABLE worksheets ADD COLUMN activity_description TEXT NOT NULL DEFAULT ''")
+        if "activity_description" in {row["name"] for row in cursor.fetchall()}:
+            cursor.execute("ALTER TABLE worksheets DROP COLUMN activity_description")
         cursor.execute("PRAGMA table_info(worksheets)")
         if "activity_details" not in {row["name"] for row in cursor.fetchall()}:
             cursor.execute("ALTER TABLE worksheets ADD COLUMN activity_details TEXT")
+        cursor.execute("""UPDATE worksheets SET activity_details = json_remove(activity_details, '$.legacy_description')
+            WHERE json_valid(activity_details) AND json_type(activity_details, '$.legacy_description') IS NOT NULL""")
         cursor.execute("PRAGMA table_info(action_catalog)")
         if "template_data" not in {row["name"] for row in cursor.fetchall()}:
             cursor.execute("ALTER TABLE action_catalog ADD COLUMN template_data TEXT NOT NULL DEFAULT '{}'")

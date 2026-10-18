@@ -42,32 +42,26 @@ function initActivityDetails() {
   document.getElementById('centerActionOptions').addEventListener('change', () => applyActivityTemplate(true));
 }
 
-function loadActivityDetails(details, legacyDescription = '') {
+function loadActivityDetails(details) {
   setActivityPhase(details?.phase || 'before');
   ['name', ...Object.keys(activityPlanFields), ...Object.keys(activityResultFields)].forEach(field => {
     const input = document.getElementById(`ws_activity_${field}`);
     input.value = details?.[field] ?? '';
     input.dataset.templateValue = '';
   });
-  const legacy = details ? details.legacy_description || '' : legacyDescription;
-  document.getElementById('ws_activityDescription').value = legacy;
-  document.getElementById('legacyActivityDescription').classList.toggle('hidden', !legacy);
   applyActivityTemplate(false);
 }
 
 function collectActivityDetails() {
   const details = {phase: document.getElementById('ws_activityPhase').value};
-  details.legacy_description = document.getElementById('ws_activityDescription').value;
   ['name', ...Object.keys(activityPlanFields), ...Object.keys(activityResultFields)].forEach(field => {
     const value = document.getElementById(`ws_activity_${field}`).value.trim();
     details[field] = ['participants', 'volunteers'].includes(field) ? (value === '' ? null : Number(value)) : value;
   });
-  if (document.getElementById('ws_activityDescription').value.trim() && Object.keys(activityPlanFields).every(field => !details[field])) return null;
   return details;
 }
 
 function validateActivityDetails(details) {
-  if (!details) return true;
   for (const [field, label] of Object.entries(activityPlanFields)) {
     if (!details[field]) {
       showToast(`請填寫${label}！`, 'error');
@@ -86,9 +80,8 @@ function validateActivityDetails(details) {
 }
 
 function describeActivity(details) {
-  if (!details) return document.getElementById('ws_activityDescription').value;
+  if (!details) return '';
   const fields = {...activityPlanFields, ...(details.phase === 'after' ? activityResultFields : {})};
   return [details.phase === 'before' ? '活動前｜規劃' : '活動後｜成果', `活動名稱：${details.name}`,
-    ...Object.entries(fields).map(([field, label]) => `${label}：${details[field] ?? ''}`),
-    ...(details.legacy_description ? [`既有活動說明：${details.legacy_description}`] : [])].join('\n');
+    ...Object.entries(fields).map(([field, label]) => `${label}：${details[field] ?? ''}`)].join('\n');
 }

@@ -1,4 +1,5 @@
-"""Structured activity plans and outcomes, retaining the legacy text export."""
+"""Structured activity plans and outcomes and their readable exports."""
+import json
 from typing import Literal, Optional
 from pydantic import BaseModel, Field, model_validator
 
@@ -17,7 +18,6 @@ TEMPLATE_FIELDS = {**PLAN_FIELDS, **RESULT_FIELDS}
 class ActivityDetails(BaseModel):
     phase: Literal["before", "after"] = "before"
     name: str = ""
-    legacy_description: str = ""
     purpose: str = ""
     process: str = ""
     features: str = ""
@@ -35,11 +35,12 @@ class ActivityDetails(BaseModel):
                 raise ValueError(f"請填寫{label}！")
         return self
 
-    def description(self):
-        values = self.model_dump()
-        lines = ["活動前｜規劃" if self.phase == "before" else "活動後｜成果", f"活動名稱：{self.name}"]
-        fields = {**PLAN_FIELDS, **(RESULT_FIELDS if self.phase == "after" else {})}
-        lines.extend(f"{label}：{values[field] if values[field] is not None else ''}" for field, label in fields.items())
-        if self.legacy_description:
-            lines.append("既有活動說明：" + self.legacy_description)
-        return "\n".join(lines)
+def activity_text(details):
+    if isinstance(details, str):
+        details = json.loads(details)
+    if not details:
+        return ""
+    lines = ["活動前｜規劃" if details.get("phase") == "before" else "活動後｜成果", f"活動名稱：{details.get('name', '')}"]
+    fields = {**PLAN_FIELDS, **(RESULT_FIELDS if details.get("phase") == "after" else {})}
+    lines.extend(f"{label}：{details.get(field) if details.get(field) is not None else ''}" for field, label in fields.items())
+    return "\n".join(lines)

@@ -50,15 +50,14 @@ test('phase switching preserves actual results and reload retains zero counts', 
   assert.doesNotMatch(env.context.describeActivity(details),/回饋指引/);
 });
 
-test('all four plan fields are required and legacy descriptions survive conversion', () => {
+test('all four plan fields are required and retired text is never restored or collected', () => {
   const env=setup();env.select();
   env.element('ws_activity_audience').value='';
   assert.equal(env.context.validateActivityDetails(env.context.collectActivityDetails()),false);
-  env.context.loadActivityDetails(null,'歷史說明');
-  assert.equal(env.context.collectActivityDetails(),null);
-  env.select();const details=env.context.collectActivityDetails();
-  assert.equal(details.legacy_description,'歷史說明');
-  assert.match(env.context.describeActivity(details),/歷史說明/);
+  env.context.loadActivityDetails({phase:'before',purpose:'目的',process:'流程',features:'特色',audience:'對象',legacy_description:'歷史說明'});
+  const details=env.context.collectActivityDetails();
+  assert.equal('legacy_description' in details,false);
+  assert.doesNotMatch(env.context.describeActivity(details),/歷史說明/);
   env.context.loadActivityDetails(null);
   assert.equal(env.element('ws_activity_purpose').value,'');
 });

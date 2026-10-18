@@ -19,7 +19,7 @@ function completePayload() {
 function setup(payload) {
   const notices = [];
   const requests = [];
-  const fields = { ws_unitName: { value: 'Test' }, ws_activityDescription: { value: '活動說明' } };
+  const fields = { ws_unitName: { value: 'Test' } };
   payload.self_checks.forEach((checked, index) => { fields[`ws_check${index + 1}`] = { checked }; });
   ['Start', 'T1', 'T2', 'Risk', 'Metric'].forEach((suffix, index) => {
     fields[`ws_commit${suffix}`] = { value: payload.commitment[['start_action', 'target_1', 'target_2', 'risk_aware', 'metric'][index]] || '' };
@@ -37,8 +37,7 @@ function setup(payload) {
       })[selector],
     },
     showToast: message => notices.push(message),
-    collectActivityDetails: () => null, validateActivityDetails: () => true,
-    describeActivity: () => '既有活動說明',
+    collectActivityDetails: () => ({purpose:'目的',process:'流程',features:'特色',audience:'對象'}), validateActivityDetails: () => true,
     fetch: async (url, options) => {
       requests.push({ url, payload: JSON.parse(options.body) });
       // Stop after the request so this test does not reset the form or fetch history.

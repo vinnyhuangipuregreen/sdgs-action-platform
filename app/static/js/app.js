@@ -1084,7 +1084,6 @@ async function saveWorksheet(status = "submitted") {
     unit_name: unitName,
     center_action: centerAction,
     center_custom: centerCustom,
-    activity_description: describeActivity(activityDetails),
     activity_details: activityDetails,
     radial_data: radialData,
     tradeoff_data: tradeoffData,
@@ -1227,7 +1226,7 @@ window.loadWorksheetToForm = function(wsId, silent = false) {
   if (unitEl) unitEl.value = ws.unit_name || state.user?.unit_name || "佛光學員";
 
   restoreCenterAction(ws.center_action, ws.center_custom || "");
-  loadActivityDetails(ws.activity_details, ws.activity_description || "");
+  loadActivityDetails(ws.activity_details);
 
   const radialContainer = document.getElementById("radialLinesContainer");
   if (radialContainer) {
@@ -2058,7 +2057,7 @@ window.viewWorksheetDetailModal = async function(id) {
         <div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
           <span class="font-bold text-slate-500">中心行動：</span>
           <span class="font-black text-slate-900 text-sm ml-2">${ws.center_action} (${ws.center_custom || '標準行動'})</span>
-          <h4 class="font-bold text-slate-500 mt-3 mb-1">活動簡介及說明：</h4>
+          <h4 class="font-bold text-slate-500 mt-3 mb-1">活動規劃與成果：</h4>
           <p id="detailActivityDescription" class="whitespace-pre-wrap break-words text-sm text-slate-700"></p>
         </div>
 
@@ -2104,7 +2103,7 @@ window.viewWorksheetDetailModal = async function(id) {
         </div>` : '<div class="text-slate-400 italic">目前尚未評分</div>'}
       </div>
     `;
-    document.getElementById("detailActivityDescription").textContent = ws.activity_description || "未填寫";
+    document.getElementById("detailActivityDescription").textContent = describeActivity(ws.activity_details) || "未填寫";
   } catch (err) {
     showToast("無法載入練習單詳情", "error");
   }
