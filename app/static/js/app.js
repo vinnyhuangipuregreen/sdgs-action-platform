@@ -117,6 +117,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   switchTab(publicTabs.includes(initialTab) ? initialTab : "home");
   if (resumeCourseSignIn()) return;
   await checkAuth(false);
+  if (new URLSearchParams(location.search).get("ui") === "login") document.getElementById("logoutBtn").click();
   if (!adminEntry) {
     await loadCenterActions();
     if (state.user?.role === "student") await loadMyWorksheets(true);

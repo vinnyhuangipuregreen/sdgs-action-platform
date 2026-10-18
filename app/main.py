@@ -114,8 +114,7 @@ def matching_admin_page():
 def laba_calculator_page():
     with open(os.path.join(STATIC_DIR, "tools", "laba", "index.html"), encoding="utf-8") as source:
         html = source.read()
-    navigation = '<nav aria-label="工具導覽" style="padding:12px 24px;background:white;border-bottom:1px solid #e2e8f0"><a href="/#food" style="color:#166534;font-weight:600">← 返回智慧工具箱</a></nav>'
-    return html.replace('<div id="root">', navigation + '<div id="root">')
+    return html
 
 
 @app.get("/api/center-actions")

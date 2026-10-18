@@ -7,7 +7,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <link rel="stylesheet" href="/static/css/style.css?v=20261017_design">
-  <link rel="stylesheet" href="/static/css/design-system.css?v=20261018_category_topics">
+  <link rel="stylesheet" href="/static/css/design-system.css?v=20261019_ui1280">
   <script>
     tailwind.config = {
       theme: {
@@ -31,7 +31,7 @@
   <div id="toastContainer" class="fixed top-5 right-5 z-50 flex flex-col gap-2"></div>
 
   <a class="skip-link" href="#main-content">跳至主要內容</a>
-  <header class="platform-header">
+  <header class="platform-header" data-ui-version="20261019_ui1280">
     <div class="platform-header-inner">
       <button type="button" class="platform-brand" onclick="switchTab('home')" aria-label="回到系統首頁">
         <span class="brand-globe" aria-hidden="true">🌏</span>
@@ -110,7 +110,7 @@
     <!-- TAB 1: 連動分析練習單 -->
     <!-- ======================================================================= -->
     <section id="tabPane_worksheet" data-module="analysis" class="tab-pane hidden space-y-6">
-      <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div class="page-header bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <span class="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">佛光永續學院專用教材</span>
           <h2 class="text-xl font-black text-slate-900 mt-1">連動分析練習單</h2>
@@ -487,7 +487,7 @@
     <section id="tabPane_admin" class="tab-pane hidden space-y-6">
       
       <!-- 後台頂部專業橫幅與功能頁籤導覽列 -->
-      <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-5 sm:p-6">
+      <div class="page-header bg-white rounded-3xl border border-slate-200 shadow-sm p-5 sm:p-6">
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-5 border-b border-slate-100">
           <div class="flex items-center gap-3.5">
             <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-700 to-blue-800 text-white flex items-center justify-center text-2xl shadow-md">
@@ -1292,15 +1292,15 @@
   </dialog>
 
   <!-- Footer -->
-  <footer class="bg-white border-t border-slate-200 mt-12 py-6 text-center text-xs text-slate-400">
-    <div class="max-w-7xl mx-auto px-4">
+  <footer class="platform-footer bg-white border-t border-slate-200 mt-12 py-6 text-center text-xs text-slate-400">
+    <div class="platform-footer-inner">
       <p>佛光永續學院 × 佛光大學應用科技與設計學院 ｜ SDGs 與氣候行動連動分析教學專案</p>
       <p class="text-[11px] mt-1">延伸學習資源：全球目標中文網 (globalgoals.tw) ｜ 聯合國 SDGs 官網 (sdgs.un.org/goals)</p>
     </div>
   </footer>
 
-  <script src="/static/js/activity-details.js?v=20261018_category_topics"></script>
-  <script src="/static/js/app.js?v=20261018_category_topics"></script>
-  <script src="/static/js/category-admin.js?v=20261018_category_topics"></script>
+  <script src="/static/js/activity-details.js?v=20261019_ui1280"></script>
+  <script src="/static/js/app.js?v=20261019_ui1280"></script>
+  <script src="/static/js/category-admin.js?v=20261019_ui1280"></script>
 </body>
 </html>

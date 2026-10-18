@@ -10,11 +10,13 @@ class LabaToolHostingTests(unittest.TestCase):
             page = client.get("/tools/laba")
             self.assertEqual(page.status_code, 200)
             self.assertIn("臘八粥食材試算表", page.text)
-            self.assertIn('href="/#food"', page.text)
             assets = re.findall(r'(?:src|href)="(/static/tools/laba/assets/[^"]+)"', page.text)
             self.assertEqual(len(assets), 2)
             for asset in assets:
                 response = client.get(asset)
                 self.assertEqual(response.status_code, 200)
+                if asset.endswith(".js"):
+                    self.assertIn("返回智慧工具箱", response.text)
+                    self.assertIn("platform-header", response.text)
                 if asset.endswith(".css"):
                     self.assertNotIn("@tailwind", response.text)
