@@ -79,6 +79,25 @@ class AcademicYearTests(unittest.TestCase):
             self.assertEqual(conn.execute("SELECT category FROM ay2_action_catalog WHERE name='年度活動'").fetchone()[0],'新年度主題')
             self.assertEqual(conn.execute("SELECT COUNT(*) FROM action_topics WHERE name='新年度主題'").fetchone()[0],0)
 
+    def test_sso_ticket_preserves_year_and_annual_student_profile(self):
+        import base64
+        import hashlib
+        from app.academic_years import enroll
+        new_id=self.create_year()
+        enroll(new_id,1,{'name':'Test','phone':'000','unit_name':'次年度分會'})
+        switched=self.client.post(f'/api/auth/academic-year/{new_id}',headers=self.student)
+        self.assertEqual(switched.status_code,200,switched.text)
+        verifier='a'*43
+        client={'client_id':'attendance','redirect_uri':'https://sdgs-attendance-record.vercel.app/auth/sso/callback'}
+        challenge=base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip('=')
+        issued=self.client.post('/api/auth/sso/ticket',headers={'Authorization':'Bearer '+switched.json()['token']},json={**client,'code_challenge':challenge})
+        self.assertEqual(issued.status_code,200,issued.text)
+        exchanged=self.client.post('/api/auth/sso/exchange',json={**client,'code_verifier':verifier,'code':issued.json()['code']})
+        self.assertEqual(exchanged.status_code,200,exchanged.text)
+        self.assertEqual(exchanged.json()['user']['academic_year']['id'],new_id)
+        self.assertEqual(exchanged.json()['user']['unit_name'],'次年度分會')
+        self.assertEqual(decode_access_token(exchanged.json()['access_token'])['academic_year_id'],new_id)
+
     def test_year_deletion_reports_related_records_and_fails_closed_on_module_error(self):
         self.client.get('/api/sdgs/goals')
         with patch('app.academic_years.module_call',return_value={'[課程登錄]課程資料':18}):
