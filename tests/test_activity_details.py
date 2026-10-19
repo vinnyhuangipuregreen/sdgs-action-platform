@@ -35,6 +35,38 @@ class ActivityDetailsTests(unittest.TestCase):
         self.assertEqual(response.status_code,200,response.text)
         return response.json()["id"]
 
+    def test_activity_dates_survive_create_update_list_admin_and_exports(self):
+        self.payload["activity_details"].update(start_date="2026-10-19", end_date="2026-10-20")
+        worksheet_id = self.save()
+        url = f"/api/worksheets/{worksheet_id}"
+        self.payload["activity_details"]["end_date"] = "2026-10-21"
+        self.assertEqual(self.client.put(url, headers=self.student, json=self.payload).status_code, 200)
+        for headers in (self.student, self.admin):
+            details = self.client.get(url, headers=headers).json()["activity_details"]
+            self.assertEqual(details["start_date"], "2026-10-19")
+            self.assertEqual(details["end_date"], "2026-10-21")
+            listed = self.client.get("/api/worksheets", headers=headers).json()[0]
+            self.assertEqual(listed["activity_details"], details)
+        exported = self.client.get("/api/admin/export/csv", headers=self.admin).content.decode("utf-8-sig")
+        self.assertIn("活動開始日期", exported)
+        self.assertIn("2026-10-19", exported)
+        self.assertIn("2026-10-21", exported)
+        document = Document(io.BytesIO(self.client.get(url + "/export-docx", headers=self.admin).content))
+        self.assertIn("活動日期區間：2026-10-19 ～ 2026-10-21", "\n".join(p.text for p in document.paragraphs))
+        word = self.client.get(url + "/export-docx?format=doc", headers=self.admin)
+        self.assertIn(b"2026-10-19", word.content)
+        self.assertIn(b"2026-10-21", word.content)
+
+    def test_dates_allow_empty_and_same_day_but_reject_incomplete_invalid_or_reversed_ranges(self):
+        self.save()
+        self.payload["activity_details"].update(start_date="2026-10-19", end_date="2026-10-19")
+        self.save()
+        for start, end in (("2026-10-20", "2026-10-19"), ("2026-02-30", "2026-03-01"),
+                           ("20261019", "2026-10-20"), ("2026-10-19", ""), ("", "2026-10-20")):
+            with self.subTest(start=start, end=end):
+                self.payload["activity_details"].update(start_date=start, end_date=end)
+                self.assertEqual(self.client.post("/api/worksheets", headers=self.student, json=self.payload).status_code, 422)
+
     def test_retired_fields_are_not_stored_returned_or_exported(self):
         self.payload["activity_description"] = "已刪除的舊說明"
         self.payload["activity_details"]["legacy_description"] = "已刪除的舊說明"

@@ -1087,15 +1087,17 @@ def export_all_worksheets_csv(user: dict = Depends(require_admin)):
         writer.writerow([
             "練習單ID", "學員姓名", "Email", "聯絡電話", "分會編號", "分會單位",
             "中心行動", "自選活動名稱", "活動規劃與成果", "狀態", "成績", "講師講評",
-            "提交時間", "放射連動資料", "拉扯分析資料", "因果型分析資料", "活動規劃與成果資料"
+            "提交時間", "放射連動資料", "拉扯分析資料", "因果型分析資料", "活動規劃與成果資料", "活動開始日期", "活動結束日期"
         ])
         
         for r in rows:
+            details = json.loads(r["activity_details"]) if r["activity_details"] else {}
             writer.writerow([
                 r["id"], r["user_name"], r["email"], r["phone"], r.get("unit_code", ""), r["unit_name"],
                 r["center_action"], r["center_custom"] or "", activity_text(r["activity_details"]),
                 r["status"], r["score"] or "", r["teacher_comment"] or "",
-                r["created_at"], r["radial_data"], r["tradeoff_data"], r["causal_data"], r["activity_details"] or ""
+                r["created_at"], r["radial_data"], r["tradeoff_data"], r["causal_data"], r["activity_details"] or "",
+                details.get("start_date", ""), details.get("end_date", "")
             ])
             
         output.seek(0)

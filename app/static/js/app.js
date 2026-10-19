@@ -1988,7 +1988,7 @@ function renderAdminCharts(stats) {
 async function loadAdminWorksheets() {
   const container = document.getElementById("adminWorksheetsTableBody");
   if (!container) return;
-  container.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-slate-400">載入練習單清單...</td></tr>';
+  container.innerHTML = '<tr><td colspan="8" class="p-6 text-center text-slate-400">載入練習單清單...</td></tr>';
 
   try {
     const res = await fetch(`${API_BASE}/worksheets?limit=100`, {
@@ -1998,7 +1998,7 @@ async function loadAdminWorksheets() {
       const list = await res.json();
       container.innerHTML = "";
       if (list.length === 0) {
-        container.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-slate-400">目前尚無學員提交練習單</td></tr>';
+        container.innerHTML = '<tr><td colspan="8" class="p-6 text-center text-slate-400">目前尚無學員提交練習單</td></tr>';
         return;
       }
       list.forEach(w => {
@@ -2009,6 +2009,7 @@ async function loadAdminWorksheets() {
           <td class="p-3 font-semibold text-slate-800">${w.user_name}</td>
           <td class="p-3 text-slate-500">${w.unit_name}</td>
           <td class="p-3 font-medium text-slate-700">${w.center_action} (${w.center_custom || '標準'})</td>
+          <td class="worksheet-date-range p-3 whitespace-nowrap text-slate-500"></td>
           <td class="p-3"><span class="px-2 py-0.5 rounded font-bold ${w.status === 'reviewed' ? 'bg-emerald-100 text-emerald-800' : 'bg-emerald-100 text-emerald-800'}">${w.status}</span></td>
           <td class="p-3 font-bold text-emerald-700">${w.score ? w.score + '分' : '未評分'}</td>
           <td class="p-3 text-right space-x-1">
@@ -2017,11 +2018,12 @@ async function loadAdminWorksheets() {
             <button class="px-2.5 py-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded font-semibold text-xs" onclick="openGradeModal(${w.id}, '${w.user_name}', ${w.score || 0}, '${(w.teacher_comment || '').replace(/'/g, "\\'")}')">批閱評分</button>
           </td>
         `;
+        tr.querySelector('.worksheet-date-range').textContent = `${w.activity_details?.start_date || '未填寫'} ～ ${w.activity_details?.end_date || '未填寫'}`;
         container.appendChild(tr);
       });
     }
   } catch (err) {
-    container.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-red-400">載入失敗</td></tr>';
+    container.innerHTML = '<tr><td colspan="8" class="p-6 text-center text-red-400">載入失敗</td></tr>';
   }
 }
 

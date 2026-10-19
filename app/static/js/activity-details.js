@@ -44,7 +44,7 @@ function initActivityDetails() {
 
 function loadActivityDetails(details) {
   setActivityPhase(details?.phase || 'before');
-  ['name', ...Object.keys(activityPlanFields), ...Object.keys(activityResultFields)].forEach(field => {
+  ['start_date', 'end_date', 'name', ...Object.keys(activityPlanFields), ...Object.keys(activityResultFields)].forEach(field => {
     const input = document.getElementById(`ws_activity_${field}`);
     input.value = details?.[field] ?? '';
     input.dataset.templateValue = '';
@@ -54,7 +54,7 @@ function loadActivityDetails(details) {
 
 function collectActivityDetails() {
   const details = {phase: document.getElementById('ws_activityPhase').value};
-  ['name', ...Object.keys(activityPlanFields), ...Object.keys(activityResultFields)].forEach(field => {
+  ['start_date', 'end_date', 'name', ...Object.keys(activityPlanFields), ...Object.keys(activityResultFields)].forEach(field => {
     const value = document.getElementById(`ws_activity_${field}`).value.trim();
     details[field] = ['participants', 'volunteers'].includes(field) ? (value === '' ? null : Number(value)) : value;
   });
@@ -62,6 +62,16 @@ function collectActivityDetails() {
 }
 
 function validateActivityDetails(details) {
+  if (!!details.start_date !== !!details.end_date) {
+    showToast('請完整填寫活動開始與結束日期。', 'error');
+    document.getElementById(`ws_activity_${details.start_date ? 'end_date' : 'start_date'}`).focus();
+    return false;
+  }
+  if (details.start_date && details.end_date && details.start_date > details.end_date) {
+    showToast('活動結束日期不可早於開始日期。', 'error');
+    document.getElementById('ws_activity_end_date').focus();
+    return false;
+  }
   for (const [field, label] of Object.entries(activityPlanFields)) {
     if (!details[field]) {
       showToast(`請填寫${label}！`, 'error');
@@ -82,6 +92,7 @@ function validateActivityDetails(details) {
 function describeActivity(details) {
   if (!details) return '';
   const fields = {...activityPlanFields, ...(details.phase === 'after' ? activityResultFields : {})};
-  return [details.phase === 'before' ? '活動前｜規劃' : '活動後｜成果', `活動名稱：${details.name}`,
+  return [`活動日期區間：${details.start_date || '未填寫'} ～ ${details.end_date || '未填寫'}`,
+    details.phase === 'before' ? '活動前｜規劃' : '活動後｜成果', `活動名稱：${details.name}`,
     ...Object.entries(fields).map(([field, label]) => `${label}：${details[field] ?? ''}`)].join('\n');
 }
