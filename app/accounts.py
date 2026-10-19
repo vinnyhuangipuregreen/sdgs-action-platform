@@ -15,7 +15,7 @@ def accounts_separated():
 @contextmanager
 def get_accounts_db():
     if not accounts_separated():
-        with get_db() as connection:
+        with get_db(unscoped=True) as connection:
             yield connection
         return
     url, token = os.getenv("ROLE_DATABASE_URL", "").strip(), os.getenv("ROLE_AUTH_TOKEN", "").strip()
@@ -43,7 +43,11 @@ def account_profiles():
         cursor = connection.cursor()
         cursor.execute("""SELECT id, email, email_backup, phone, unit_code, 'student' AS account_type FROM student
             UNION ALL SELECT id, email, email_backup, phone, unit_code, 'staff' AS account_type FROM admin""")
-        return {(row["account_type"], row["id"]): dict(row) for row in cursor.fetchall()}
+        rows=[dict(row) for row in cursor.fetchall()]
+    from app.academic_years import annual_profiles
+    from app.year_scope import current_year_id
+    students=annual_profiles([row for row in rows if row["account_type"]=="student"],current_year_id.get())
+    return {(row["account_type"],row["id"]):row for row in students+[row for row in rows if row["account_type"]=="staff"]}
 
 
 def enrich_worksheets(rows, email_alias="email"):

@@ -282,7 +282,7 @@ async function handleLogin(e, explicitStudentId = null) {
   pickerBox.classList.add("hidden");
 
   try {
-    const payload = { account, password, account_type: "student" };
+    const payload = { account, password, account_type: "student", academic_year_id: Number(document.getElementById('loginAcademicYear').value) };
     if (explicitStudentId) payload.student_id = explicitStudentId;
 
     const res = await fetch(`${API_BASE}/auth/login`, {
@@ -323,6 +323,7 @@ async function handleLogin(e, explicitStudentId = null) {
     updateUserUI();
     showToast(`歡迎回來，${data.user.name}！`, "success");
     if (resumeCourseSignIn()) return;
+    await Promise.all([loadCenterActions(), loadSDGsData(), loadGameSettings()]);
     if (state.studentDestination === "worksheet") {
       state.studentDestination = null;
       switchTab("worksheet");
@@ -364,6 +365,7 @@ async function handleAdminLogin(e) {
     updateUserUI();
     showToast(`管理員登入成功，歡迎 ${data.user.name}！`, "success");
     if (resumeCourseSignIn()) return;
+    await Promise.all([loadCenterActions(), loadSDGsData(), loadGameSettings()]);
     switchTab("admin");
     if (location.hash === "#admin-matching") switchAdminSubTab("matching");
     if (location.hash === "#admin-attendance") switchAdminSubTab("attendance");
@@ -416,6 +418,7 @@ function showLoginModal(show) {
 }
 
 function updateUserUI() {
+  if (typeof updateAcademicYearUI === 'function') updateAcademicYearUI(state.user);
   const userNameEl = document.getElementById("currentUserName");
   const userRoleEl = document.getElementById("currentUserRole");
 
@@ -2852,6 +2855,14 @@ function resumeCourseSignIn() {
   if (!state.token) { signIn(); return true; }
   (async () => {
     try {
+      const requestedYear = Number(query.get('academic_year_id'));
+      if (requestedYear && requestedYear !== Number(localStorage.getItem('sdgs_academic_year_id') || 1)) {
+        const changed = await fetch(`${API_BASE}/auth/academic-year/${requestedYear}`, {method:'POST',headers:{Authorization:`Bearer ${state.token}`}});
+        if (!changed.ok) { signIn(); return; }
+        state.token = (await changed.json()).token;
+        localStorage.setItem('sdgs_token',state.token);
+        localStorage.setItem('sdgs_academic_year_id',String(requestedYear));
+      }
       const response = await fetch(`${API_BASE}/auth/sso/ticket`, {
         method: "POST", headers: {"Content-Type": "application/json", Authorization: `Bearer ${state.token}`},
         body: JSON.stringify({client_id: "attendance", redirect_uri: callback, code_challenge: query.get("code_challenge"), account_type: query.get("login_type") === "staff" ? "staff" : "student"})

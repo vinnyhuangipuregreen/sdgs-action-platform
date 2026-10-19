@@ -26,6 +26,8 @@ from app.matching_bridge import proxy_matching_request
 from app.accounts import get_accounts_db, enrich_worksheets
 from app.sso import install_sso
 from app.attendance_bridge import install_attendance_admin
+from app.academic_years import install_years, get_year, enrolled, enroll, student_ids, enrollment_filter, annual_profile, annual_profiles
+from app.year_scope import current_year_id
 
 app = FastAPI(
     title="SDGs 與氣候行動連動分析與智慧學習平台",
@@ -90,6 +92,14 @@ def get_current_user(
 def require_user(current_user: Optional[dict] = Depends(get_current_user)) -> dict:
     if not current_user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="請先登入系統")
+    year_id = int(current_user.get("academic_year_id", 1))
+    get_year(year_id)
+    if current_user["role"] == "student" and not enrolled(year_id, current_user["user_id"]):
+        raise HTTPException(403, "您尚未報名此學年度，請聯絡管理員")
+    if current_user["role"] == "student":
+        current_user["profile"] = annual_profile(current_user["profile"],year_id)
+        current_user["name"] = current_user["profile"]["name"]
+        current_user["unit_name"] = current_user["profile"]["unit_name"]
     return current_user
 
 def require_admin(current_user: dict = Depends(require_user)) -> dict:
@@ -99,6 +109,7 @@ def require_admin(current_user: dict = Depends(require_user)) -> dict:
 
 
 install_attendance_admin(app, require_admin, get_current_user)
+install_years(app, require_admin, require_user)
 
 
 @app.api_route("/api/matching-admin/{path:path}", methods=["GET", "PUT", "DELETE"])
@@ -207,6 +218,7 @@ class LoginRequest(BaseModel):
     password: str
     student_id: Optional[int] = None # For disambiguation when multiple students share email
     account_type: Optional[Literal["student", "staff"]] = None
+    academic_year_id: int = 1
 
 @app.post("/api/auth/login")
 def login(req: LoginRequest):
@@ -224,23 +236,32 @@ def login(req: LoginRequest):
                 acc = "admin"
             cursor.execute(f"SELECT * FROM {table} WHERE email = ? OR phone = ?", (acc, acc))
         matches = [dict(row) for row in cursor.fetchall()]
+        conn.commit()
+        year = get_year(req.academic_year_id)
+        if account_type == "student":
+            matches = [annual_profile(row,year["id"]) for row in matches]
         valid = [row for row in matches if verify_password(pwd, row["password_hash"]) or
                  (account_type == "student" and pwd == row["phone"])]
         if not valid:
             raise HTTPException(status_code=400, detail="帳號或密碼錯誤，請重新輸入")
+        if account_type == "student":
+            valid = [row for row in valid if enrolled(year["id"], row["id"])]
+            if not valid:
+                raise HTTPException(403, "您尚未報名此學年度，請聯絡管理員")
         if len(valid) > 1:
             return {"success": True, "multiple_matches": True, "students": [
                 {key: row[key] for key in ("id", "name", "unit_code", "unit_name")} for row in valid
             ]}
-        row = valid[0]
+        row = {**valid[0], "academic_year_id": year["id"]}
         return {"success": True, "token": create_access_token(row), "user": {
             **{key: row[key] for key in ("id", "name", "email", "role", "unit_code", "unit_name", "phone")},
             "account_type": account_type,
+            "academic_year": year,
         }}
 
 @app.get("/api/auth/me")
 def get_me(user: dict = Depends(require_user)):
-    return {**user["profile"], "account_type": get_account_type(user)}
+    return {**user["profile"], "account_type": get_account_type(user), "academic_year": get_year(user.get("academic_year_id", 1))}
 
 # ==============================================================================
 # 3. SDGs Reference APIs
@@ -435,6 +456,7 @@ def export_worksheet_docx(worksheet_id: int, user: dict = Depends(require_user),
                 except:
                     pass
                     
+        w["academic_year"] = get_year(user.get("academic_year_id",1))
         document_stream = create_worksheet_doc(w) if file_format == "doc" else create_worksheet_docx(w)
         student_name = re.sub(r'[\\/:*?"<>|\x00-\x1f]', '_', w.get("user_name") or "學員").strip(" .")[:80] or "學員"
         downloaded_at = datetime.now(timezone(timedelta(hours=8))).strftime("%Y%m%d%H%M%S")
@@ -744,7 +766,7 @@ def get_admin_stats(user: dict = Depends(require_admin)):
         cursor = conn.cursor()
         with get_accounts_db() as accounts:
             account_cursor = accounts.cursor()
-            account_cursor.execute("SELECT COUNT(*) FROM student WHERE role = 'student'")
+            account_cursor.execute("SELECT COUNT(*) FROM student WHERE role = 'student' AND " + enrollment_filter())
             total_students = account_cursor.fetchone()[0]
         
         cursor.execute("SELECT COUNT(*) FROM worksheets")
@@ -809,23 +831,13 @@ def get_admin_students(
     user: dict = Depends(require_admin)
 ):
     with get_accounts_db() as conn:
-        ensure_users_seeded(conn)
         cursor = conn.cursor()
-        query = "SELECT id, name, email, email_backup, phone, unit_code, unit_name, role, created_at FROM student WHERE role = 'student'"
-        params = []
-        if search:
-            s = f"%{search.strip()}%"
-            query += " AND (name LIKE ? OR email LIKE ? OR phone LIKE ? OR unit_code LIKE ? OR unit_name LIKE ?)"
-            params.extend([s, s, s, s, s])
-            
-        cursor.execute(f"SELECT COUNT(*) FROM ({query})", params)
-        total = cursor.fetchone()[0]
-        
-        query += " ORDER BY id ASC LIMIT ? OFFSET ?"
-        params.extend([limit, offset])
-        cursor.execute(query, params)
-        students = [dict(r) for r in cursor.fetchall()]
-        return {"total": total, "items": students}
+        cursor.execute("SELECT id,name,email,email_backup,phone,unit_code,unit_name,role,created_at FROM student WHERE role='student' AND " + enrollment_filter() + " ORDER BY id")
+        students = annual_profiles([dict(row) for row in cursor.fetchall()],current_year_id.get())
+    if search:
+        term=search.strip().casefold()
+        students=[row for row in students if any(term in str(row[field] or '').casefold() for field in ('name','email','phone','unit_code','unit_name'))]
+    return {"total":len(students),"items":students[max(0,offset):max(0,offset)+min(max(1,limit),2000)]}
 
 @app.get("/api/admin/staff")
 def get_admin_staff(
@@ -868,8 +880,15 @@ class StaffSaveSchema(StudentSaveSchema):
 
 
 def save_account(req, table, account_id=None):
+    if table == "student" and account_id is not None and not enrolled(current_year_id.get(), account_id):
+        raise HTTPException(404, "此學年度找不到該學員")
     with get_accounts_db() as conn:
         cursor = conn.cursor()
+        if table == "student" and account_id is None:
+            cursor.execute("SELECT id FROM student WHERE email=? AND name=?", (req.email.strip(), req.name.strip()))
+            match = cursor.fetchone()
+            if match:
+                account_id = match["id"]
         if account_id is not None:
             cursor.execute(f"SELECT email FROM {table} WHERE id = ?", (account_id,))
             existing = cursor.fetchone()
@@ -884,10 +903,19 @@ def save_account(req, table, account_id=None):
             account_id = cursor.lastrowid
         else:
             password_sql = ", password_hash = ?" if req.password and req.password.strip() else ""
-            if password_sql:
-                values += (hash_password(req.password.strip()),)
-            cursor.execute(f"""UPDATE {table} SET name = ?, email = ?, email_backup = ?, phone = ?, unit_code = ?, unit_name = ?, role = ?{password_sql}
-                WHERE id = ?""", (*values, account_id))
+            if table == "student":
+                values = (req.email.strip(),)
+                if password_sql:
+                    values += (hash_password(req.password.strip()),)
+                cursor.execute(f"UPDATE student SET email=?{password_sql} WHERE id=?", (*values,account_id))
+            else:
+                if password_sql:
+                    values += (hash_password(req.password.strip()),)
+                cursor.execute(f"""UPDATE {table} SET name = ?, email = ?, email_backup = ?, phone = ?, unit_code = ?, unit_name = ?, role = ?{password_sql}
+                    WHERE id = ?""", (*values, account_id))
+        conn.commit()
+        if table == "student":
+            enroll(current_year_id.get(), account_id, req.model_dump())
         return {"success": True, "id": account_id, "message": f"帳號 {req.name} 已成功儲存！"}
 
 @app.post("/api/admin/students")
@@ -910,6 +938,13 @@ def update_staff(staff_id: int, req: StaffSaveSchema, user: dict = Depends(requi
 def delete_accounts(ids, table):
     if not ids:
         raise HTTPException(status_code=400, detail="未選取任何名單")
+    if table == "student":
+        with get_db(unscoped=True) as conn:
+            count = 0
+            for student_id in ids:
+                cursor = conn.cursor().execute("DELETE FROM academic_enrollments WHERE year_id=? AND student_id=?", (current_year_id.get(), student_id))
+                count += cursor.rowcount
+        return {"success": True, "deleted_count": count, "message": "已移除此學年度的報名，帳號與其他年度資料保留。"}
     with get_accounts_db() as conn:
         cursor = conn.cursor()
         placeholders = ",".join("?" for _ in ids)
@@ -961,8 +996,26 @@ def import_accounts(req, table):
         phone = row.get("phone", "").strip()
         params.append((name, email, row.get("email_backup", ""), phone, row.get("unit_code", ""), row.get("unit_name", "") or ("佛光永續學院" if staff else "佛光學員"), hash_password(phone or "0920111111"), role))
     with get_accounts_db() as conn:
-        conn.cursor().executemany(f"""INSERT INTO {table} (name, email, email_backup, phone, unit_code, unit_name, password_hash, role)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)""", params)
+        cursor = conn.cursor()
+        if not staff:
+            cursor.execute("SELECT id,name,email FROM student")
+            existing = {(row["name"], row["email"]): row["id"] for row in cursor.fetchall()}
+            additions = [row for row in params if (row[0], row[1]) not in existing]
+        else:
+            additions = params
+        if additions:
+            cursor.executemany(f"""INSERT INTO {table} (name, email, email_backup, phone, unit_code, unit_name, password_hash, role)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""", additions)
+        if not staff:
+            cursor.execute("SELECT id,name,email FROM student")
+            identities = {(row["name"], row["email"]): row["id"] for row in cursor.fetchall()}
+    if not staff:
+        with get_db(unscoped=True) as conn:
+            snapshots=[]
+            for row in params:
+                snapshot=dict(zip(("name","email","email_backup","phone","unit_code","unit_name"),row[:6]))
+                snapshots.append((current_year_id.get(),identities[(row[0],row[1])],json.dumps({key:snapshot[key] for key in ("name","email_backup","phone","unit_code","unit_name")},ensure_ascii=False)))
+            conn.cursor().executemany("INSERT INTO academic_enrollments (year_id,student_id,profile_json) VALUES (?,?,?) ON CONFLICT(year_id,student_id) DO UPDATE SET profile_json=excluded.profile_json",snapshots)
     return {"success": True, "imported_count": len(params), "skipped_count": len(req.students) - len(params), "message": f"匯入完成！成功新增 {len(params)} 筆帳號。"}
 
 @app.post("/api/admin/students/batch-import")
@@ -977,14 +1030,10 @@ def batch_import_staff(req: BatchImportRequest, user: dict = Depends(require_adm
 def export_students_csv(user: dict = Depends(require_admin)):
     with get_accounts_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("""
-        SELECT name, email, email_backup, phone, unit_code, unit_name 
-        FROM student
-        WHERE role = 'student'
-        ORDER BY id ASC
-        """)
-        rows = cursor.fetchall()
-        
+        cursor.execute("SELECT id,name,email,email_backup,phone,unit_code,unit_name FROM student WHERE role='student' AND " + enrollment_filter() + " ORDER BY id ASC")
+        profiles = annual_profiles([dict(row) for row in cursor.fetchall()],current_year_id.get())
+        rows=[[row[field] for field in ('name','email','email_backup','phone','unit_code','unit_name')] for row in profiles]
+
         output = io.StringIO()
         output.write('﻿') # UTF-8 BOM
         writer = csv.writer(output)
@@ -1072,6 +1121,7 @@ def grade_worksheet(worksheet_id: int, req: GradeSubmit, user: dict = Depends(re
 
 @app.get("/api/admin/export/csv")
 def export_all_worksheets_csv(user: dict = Depends(require_admin)):
+    year=get_year(user.get("academic_year_id",1))
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute("""
@@ -1087,7 +1137,7 @@ def export_all_worksheets_csv(user: dict = Depends(require_admin)):
         writer.writerow([
             "練習單ID", "學員姓名", "Email", "聯絡電話", "分會編號", "分會單位",
             "中心行動", "自選活動名稱", "活動規劃與成果", "狀態", "成績", "講師講評",
-            "提交時間", "放射連動資料", "拉扯分析資料", "因果型分析資料", "活動規劃與成果資料", "活動開始日期", "活動結束日期"
+            "提交時間", "放射連動資料", "拉扯分析資料", "因果型分析資料", "活動規劃與成果資料", "活動開始日期", "活動結束日期", "學年度", "期間"
         ])
         
         for r in rows:
@@ -1097,7 +1147,7 @@ def export_all_worksheets_csv(user: dict = Depends(require_admin)):
                 r["center_action"], r["center_custom"] or "", activity_text(r["activity_details"]),
                 r["status"], r["score"] or "", r["teacher_comment"] or "",
                 r["created_at"], r["radial_data"], r["tradeoff_data"], r["causal_data"], r["activity_details"] or "",
-                details.get("start_date", ""), details.get("end_date", "")
+                details.get("start_date", ""), details.get("end_date", ""), year["year"], year["start_month"]+'-'+year["end_month"]
             ])
             
         output.seek(0)

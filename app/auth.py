@@ -25,6 +25,7 @@ def create_access_token(user_data: dict, expires_in: int = 86400 * 7) -> str:
         "name": user_data["name"],
         "role": user_data["role"],
         "account_type": get_account_type(user_data),
+        "academic_year_id": user_data.get("academic_year_id", 1),
         "unit_name": user_data.get("unit_name", "佛光學員"),
         "exp": int(time.time()) + expires_in
     }

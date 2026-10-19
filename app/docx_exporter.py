@@ -73,6 +73,9 @@ def create_worksheet_docx(ws: dict) -> io.BytesIO:
         c_val.text = str(val)
         c_val.paragraphs[0].runs[0].font.size = Pt(10.5)
 
+    if ws.get("academic_year"):
+        year=ws["academic_year"]
+        doc.add_paragraph(f"學年度：{year['year']}　期間：{year['start_month']}–{year['end_month']}")
     doc.add_paragraph().paragraph_format.space_after = Pt(6)
 
     # Section 1: Center Action

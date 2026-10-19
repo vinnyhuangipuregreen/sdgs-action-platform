@@ -287,10 +287,12 @@ def get_db_connection():
     return conn
 
 @contextmanager
-def get_db():
+def get_db(unscoped=False):
     conn = get_db_connection()
     try:
-        yield conn
+        from app.year_scope import current_year_id, YearConnection
+        year_id = current_year_id.get()
+        yield YearConnection(conn, year_id) if year_id != 1 and not unscoped else conn
         conn.commit()
     except Exception:
         conn.rollback()
@@ -306,7 +308,7 @@ def init_db():
         return
     from app.accounts import accounts_separated
     separated = accounts_separated()
-    with get_db() as conn:
+    with get_db(unscoped=True) as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('staff_accounts', 'admin', 'users', 'student')")
         account_tables = {row["name"] for row in cursor.fetchall()}

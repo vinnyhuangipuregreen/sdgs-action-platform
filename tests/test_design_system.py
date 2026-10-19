@@ -31,4 +31,4 @@ class DesignSystemTests(unittest.TestCase):
         html = (ROOT / "app/templates/index.html").read_text(encoding="utf-8")
         nav = html.split('aria-label="主要功能"', 1)[1].split("</nav>", 1)[0]
         self.assertEqual(nav.count("課程登錄"), 1)
-        self.assertRegex(nav, r'href="https://sdgs-attendance-record.vercel.app/"[^>]*>.*?課程登錄</a>\s*<button data-nav-tab="admin"')
+        self.assertRegex(nav, r'href="https://sdgs-attendance-record.vercel.app/dashboard"[^>]*>.*?課程登錄</a>\s*<button data-nav-tab="admin"')

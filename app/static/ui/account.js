@@ -6,6 +6,7 @@ async function displayAccount() {
     const response = await fetch('/api/auth/me', {headers:{Authorization:'Bearer ' + token},cache:'no-store'});
     if (!response.ok) return;
     const user = await response.json();
+    if (user.academic_year && window.parent !== window) window.parent.postMessage({type:'platform-academic-year',academic_year:user.academic_year}, '*');
     document.getElementById('currentUserName').textContent = user.name;
     document.getElementById('currentUserRole').textContent = {admin:'系統管理員',teacher:'講師',student:'學員'}[user.role] || '訪客模式';
   } catch (error) {

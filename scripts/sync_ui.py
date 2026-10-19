@@ -25,10 +25,12 @@ def outputs():
     account = '''{% set profile = request.state.sso_student or request.state.sso_admin %}<span class="account-avatar" aria-hidden="true">🌱</span><div><div id="currentUserName">{{ profile.name if profile else '未登入' }}</div><div id="currentUserRole">{{ '學員' if request.state.sso_student else ('系統管理員' if profile else '訪客模式') }}</div></div><a class="ds-button ds-button-secondary" href="https://sdgs-action-platform.vercel.app/?ui=login">登入／切換帳號</a>'''
     return {
         ROOT.parent / 'sdgs-matching-game/static/css/design-system.css': css,
+        ROOT.parent / 'sdgs-matching-game/app/year_scope.py': (ROOT / 'app/year_scope.py').read_bytes(),
+        ROOT.parent / 'sdgs-matching-game/static/js/academic-year.js': (ROOT / 'app/static/ui/module-year.js').read_bytes(),
         ROOT.parent / 'sdgs-attendance-record/static/css/design-system.css': css,
         ROOT.parent / 'sdgs-laba-calculator/src/design-system.css': css,
         ROOT.parent / 'sdgs-laba-calculator/src/ui/platform-header.html': header('food', iframe).encode(),
-        ROOT.parent / 'sdgs-attendance-record/templates/platform-nav.html': ('{% if request.headers.get("x-platform-embedded") != "1" %}\n' + header('attendance', account) + '\n{% endif %}\n').encode(),
+        ROOT.parent / 'sdgs-attendance-record/templates/platform-nav.html': ('{% if request.headers.get("x-platform-embedded") != "1" %}\n' + header('attendance', account).replace('</a><div class="platform-account">', '</a>{% if request.state.academic_year %}<span class="academic-year-badge">學年度：{{ request.state.academic_year.year }}<br>{{ request.state.academic_year.start_month }}–{{ request.state.academic_year.end_month }}</span>{% endif %}<div class="platform-account">',1) + '\n{% endif %}\n').encode(),
     }
 
 

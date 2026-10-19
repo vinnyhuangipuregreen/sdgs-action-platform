@@ -70,10 +70,11 @@ def install_sso(app, require_user):
             raise HTTPException(403, "需要管理權限")
         with get_accounts_db() as connection:
             cursor = connection.cursor()
-            cursor.execute("SELECT id,name,email,email_backup,phone,unit_code,unit_name,role,'student' AS account_type FROM student ORDER BY id")
-            students = [dict(row) for row in cursor.fetchall()]
+            from app.academic_years import enrollment_filter, get_year, annual_profiles
+            cursor.execute("SELECT id,name,email,email_backup,phone,unit_code,unit_name,role,'student' AS account_type FROM student WHERE " + enrollment_filter() + " ORDER BY id")
+            students = annual_profiles([dict(row) for row in cursor.fetchall()],user.get("academic_year_id",1))
         if include_profile:
-            return {"user": {**user["profile"], "account_type": get_account_type(user)}, "students": students}
+            return {"user": {**user["profile"], "account_type": get_account_type(user), "academic_year": get_year(user.get("academic_year_id", 1))}, "students": students}
         return students
 
     @app.post("/api/auth/sso/ticket")
@@ -87,9 +88,9 @@ def install_sso(app, require_user):
             cursor = connection.cursor()
             ensure_ticket_table(cursor)
             cursor.execute("DELETE FROM sso_tickets WHERE expires_at <= ?", (now,))
-            cursor.execute("INSERT INTO sso_tickets VALUES (?,?,?,?,?,?,?,?)", (
+            cursor.execute("INSERT INTO sso_tickets (code_hash,challenge,user_id,account_type,email,expires_at,session_id,session_expires,academic_year_id) VALUES (?,?,?,?,?,?,?,?,?)", (
                 hashlib.sha256(code.encode()).hexdigest(), request.code_challenge, user["user_id"],
-                get_account_type(user), user["email"], now + 60, user["session_id"], user["exp"]))
+                get_account_type(user), user["email"], now + 60, user["session_id"], user["exp"], user.get("academic_year_id", 1)))
         return {"code": code}
 
     @app.post("/api/auth/sso/exchange")
@@ -100,7 +101,7 @@ def install_sso(app, require_user):
             cursor = connection.cursor()
             ensure_ticket_table(cursor)
             cursor.execute("""DELETE FROM sso_tickets WHERE code_hash=? AND challenge=? AND expires_at>?
-                RETURNING user_id, account_type, email, session_id, session_expires""", (
+                RETURNING user_id, account_type, email, session_id, session_expires, academic_year_id""", (
                 hashlib.sha256(request.code.encode()).hexdigest(), challenge, int(time.time())))
             ticket = cursor.fetchone()
         if not ticket:
@@ -110,7 +111,13 @@ def install_sso(app, require_user):
             raise HTTPException(401, "帳號已變更，請重新登入")
         if ticket["session_expires"] <= int(time.time()) or session_revoked(ticket["session_id"]):
             raise HTTPException(401, "系統已登出，請重新登入")
-        return {"access_token": create_access_token({**account, "session_id": ticket["session_id"]}, expires_in=ticket["session_expires"] - int(time.time())), "user": {**account, "account_type": ticket["account_type"]}}
+        from app.academic_years import get_year, enrolled, annual_profile
+        year = get_year(ticket["academic_year_id"])
+        if ticket["account_type"] == "student" and not enrolled(year["id"], account["id"]):
+            raise HTTPException(403, "您尚未報名此學年度")
+        if ticket['account_type']=='student':
+            account=annual_profile(account,year['id'])
+        return {"access_token": create_access_token({**account, "session_id": ticket["session_id"], "academic_year_id": year["id"]}, expires_in=ticket["session_expires"] - int(time.time())), "user": {**account, "account_type": ticket["account_type"], "academic_year": year}}
 
 
 def session_revoked(session_id):
@@ -125,3 +132,6 @@ def ensure_ticket_table(cursor):
     cursor.execute("""CREATE TABLE IF NOT EXISTS sso_tickets (
         code_hash TEXT PRIMARY KEY, challenge TEXT NOT NULL, user_id INTEGER NOT NULL,
         account_type TEXT NOT NULL, email TEXT NOT NULL, expires_at INTEGER NOT NULL, session_id TEXT NOT NULL, session_expires INTEGER NOT NULL)""")
+    cursor.execute("PRAGMA table_info(sso_tickets)")
+    if "academic_year_id" not in {row["name"] for row in cursor.fetchall()}:
+        cursor.execute("ALTER TABLE sso_tickets ADD COLUMN academic_year_id INTEGER NOT NULL DEFAULT 1")
