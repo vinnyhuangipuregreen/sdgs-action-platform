@@ -47,7 +47,13 @@ def profile(user_id, account_type):
 def install_sso(app, require_user):
     @app.get("/sso/authorize", response_class=HTMLResponse)
     def authorize_page():
-        return HTMLResponse((Path(__file__).parent / "templates/index.html").read_text(encoding="utf-8"),
+        page = (Path(__file__).parent / "templates/index.html").read_text(encoding="utf-8")
+        page = page.replace('<html lang="zh-TW">', '<html lang="zh-TW" class="course-authorizing">')
+        page = page.replace('</head>', '''<style>
+          .course-authorizing .platform-header,.course-authorizing #main-content,
+          .course-authorizing .platform-footer,.course-authorizing .skip-link {display:none!important}
+        </style></head>''')
+        return HTMLResponse(page,
                             headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"})
 
     @app.post("/api/auth/logout")

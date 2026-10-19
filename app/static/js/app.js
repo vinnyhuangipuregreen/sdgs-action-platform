@@ -111,11 +111,11 @@ function updateDefenseRuleTexts() {
 // ==============================================================================
 document.addEventListener("DOMContentLoaded", async () => {
   initUIEvents();
+  if (resumeCourseSignIn()) return;
   const initialTab = location.hash.slice(1);
   const adminEntry = ["admin", "admin-matching", "admin-attendance"].includes(initialTab);
   const publicTabs = ["home", "worksheet", "carbon", "food", "sdgs", "earth_defense", "leaderboard"];
   switchTab(publicTabs.includes(initialTab) ? initialTab : "home");
-  if (resumeCourseSignIn()) return;
   await checkAuth(false);
   if (new URLSearchParams(location.search).get("ui") === "login") document.getElementById("logoutBtn").click();
   if (!adminEntry) {

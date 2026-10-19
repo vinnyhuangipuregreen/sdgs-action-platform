@@ -55,10 +55,13 @@ class IdentitySsoTests(unittest.TestCase):
         self.assertEqual(response.status_code,200,response.text)
         return response.json()["code"]
 
-    def test_authorization_uses_the_normal_platform_interface(self):
+    def test_authorization_keeps_login_forms_but_hides_home_before_first_paint(self):
         response = self.client.get("/sso/authorize")
         self.assertEqual(response.status_code, 200)
         self.assertIn('id="loginModal"', response.text)
+        self.assertIn('<html lang="zh-TW" class="course-authorizing">', response.text)
+        self.assertIn('.course-authorizing #main-content', response.text)
+        self.assertIn('display:none!important', response.text)
         self.assertNotIn("正在驗證系統登入", response.text)
         self.assertIn("no-store", response.headers["cache-control"])
 
