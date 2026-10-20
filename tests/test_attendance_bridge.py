@@ -109,3 +109,14 @@ class AttendanceBridgeTests(unittest.TestCase):
         self.assertEqual(result.content, b"leave-xlsx-data")
         self.assertEqual(result.headers["content-disposition"], disposition)
         self.assertEqual(upstream.call_args.kwargs["params"], [("name", "Test"), ("email", "makeup"), ("phone", "0912")])
+
+    def test_makeup_export_passes_authenticated_filters_and_keeps_the_download(self):
+        self.start()
+        disposition = "attachment; filename*=UTF-8''1_course_makeup_20261020123456.xlsx"
+        response = SimpleNamespace(status_code=200, content=b"makeup-xlsx-data", headers={"Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Content-Disposition": disposition})
+        with patch("app.attendance_bridge.requests.request", return_value=response) as upstream:
+            result = self.client.get("/attendance-admin/api/admin/courses/1/pathdemy/export?name=Test&email=makeup&phone=0912&start_date=2026-09-01&end_date=2026-09-30")
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.content, b"makeup-xlsx-data")
+        self.assertEqual(result.headers["content-disposition"], disposition)
+        self.assertEqual(upstream.call_args.kwargs["params"], [("name", "Test"), ("email", "makeup"), ("phone", "0912"), ("start_date", "2026-09-01"), ("end_date", "2026-09-30")])
