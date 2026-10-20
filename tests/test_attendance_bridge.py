@@ -87,3 +87,14 @@ class AttendanceBridgeTests(unittest.TestCase):
         with patch("app.attendance_bridge.requests.request") as upstream:
             self.assertEqual(self.client.get("/attendance-admin/admin").status_code, 401)
             upstream.assert_not_called()
+
+    def test_attendance_export_preserves_filters_filename_and_spreadsheet_bytes(self):
+        self.start()
+        disposition = "attachment; filename*=UTF-8''1_course_20261020123456.xlsx"
+        response = SimpleNamespace(status_code=200, content=b"xlsx-data", headers={"Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Content-Disposition": disposition})
+        with patch("app.attendance_bridge.requests.request", return_value=response) as upstream:
+            result = self.client.get("/attendance-admin/api/admin/courses/1/attendance/export?name=Test&status=SIGNED_IN")
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.content, b"xlsx-data")
+        self.assertEqual(result.headers["content-disposition"], disposition)
+        self.assertEqual(upstream.call_args.kwargs["params"], [("name", "Test"), ("status", "SIGNED_IN")])

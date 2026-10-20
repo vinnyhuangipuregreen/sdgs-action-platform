@@ -10,7 +10,7 @@ ORIGIN = "https://sdgs-attendance-record.vercel.app"
 PREFIX = "/attendance-admin"
 COOKIE = "attendance_admin_session"
 ROUTES = {
-    "GET": r"(?:admin(?:/courses/\d+/(?:attendance|leaves|pathdemy))?|api/admin/(?:courses|pathdemy)/sample-excel|api/admin/courses/\d+/pathdemy/sample-excel|static/css/(?:design-system|attendance)\.css)",
+    "GET": r"(?:admin(?:/courses/\d+/(?:attendance|leaves|pathdemy))?|api/admin/(?:courses|pathdemy)/sample-excel|api/admin/courses/\d+/pathdemy/sample-excel|api/admin/courses/\d+/attendance/export|static/css/(?:design-system|attendance)\.css)",
     "POST": r"api/admin/courses(?:/import|/\d+/pathdemy/import)?",
     "PUT": r"api/admin/courses/\d+",
     "DELETE": r"api/admin/courses/\d+(?:/(?:leaves|pathdemy)/\d+)?",
