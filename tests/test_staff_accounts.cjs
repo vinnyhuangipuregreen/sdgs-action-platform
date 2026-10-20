@@ -19,7 +19,7 @@ test('editing uses the original account type and only offers roles from that tab
       return { ok: false, json: async () => ({}) };
     },
   });
-  vm.runInContext(edit, context);
+  vm.runInContext(source.slice(source.indexOf('function maskStaffPhone('), source.indexOf('async function loadAdminStaff(')) + edit, context);
   for (const type of ['staff', 'student']) {
     context.window.openEditStudentModal(1, 'Test', 'test@example.invalid', '', '555', '', '', type === 'staff' ? 'teacher' : 'student', type);
     assert.equal(elements.editStudentRole.innerHTML.includes('value="student"'), type === 'student');

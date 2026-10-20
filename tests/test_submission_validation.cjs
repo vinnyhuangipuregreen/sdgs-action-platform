@@ -37,7 +37,7 @@ function setup(payload) {
       })[selector],
     },
     showToast: message => notices.push(message),
-    collectActivityDetails: () => ({purpose:'目的',process:'流程',features:'特色',audience:'對象'}), validateActivityDetails: () => true,
+    collectActivityDetails: () => ({purpose:'目的',process:'流程',features:'特色',audience:'對象'}), validateActivityDetails: () => true, validateActivityDates: () => true,
     fetch: async (url, options) => {
       requests.push({ url, payload: JSON.parse(options.body) });
       // Stop after the request so this test does not reset the form or fetch history.

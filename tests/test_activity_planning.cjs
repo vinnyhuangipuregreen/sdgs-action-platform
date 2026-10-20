@@ -39,6 +39,7 @@ test('examples fill the plan while outcome guidance stays in placeholders', () =
 
 test('phase switching preserves actual results and reload retains zero counts', () => {
   const env=setup();env.select();env.context.setActivityPhase('after');
+  env.element('ws_activity_start_date').value='2026-10-19';env.element('ws_activity_end_date').value='2026-10-19';
   env.element('ws_activity_participants').value='0';env.element('ws_activity_results').value='實際成果';
   const details=env.context.collectActivityDetails();
   assert.equal(details.participants,0);assert.equal(env.context.validateActivityDetails(details),true);
@@ -52,6 +53,7 @@ test('phase switching preserves actual results and reload retains zero counts', 
 
 test('all four plan fields are required and retired text is never restored or collected', () => {
   const env=setup();env.select();
+  env.element('ws_activity_start_date').value='2026-10-19';env.element('ws_activity_end_date').value='2026-10-19';
   env.element('ws_activity_audience').value='';
   assert.equal(env.context.validateActivityDetails(env.context.collectActivityDetails()),false);
   env.context.loadActivityDetails({phase:'before',purpose:'目的',process:'流程',features:'特色',audience:'對象',legacy_description:'歷史說明'});

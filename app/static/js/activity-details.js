@@ -61,9 +61,10 @@ function collectActivityDetails() {
   return details;
 }
 
-function validateActivityDetails(details) {
-  if (!!details.start_date !== !!details.end_date) {
-    showToast('請完整填寫活動開始與結束日期。', 'error');
+function validateActivityDates(details) {
+  if (!details.start_date || !details.end_date) {
+    const missing = !details.start_date && !details.end_date ? '開始日期與結束日期' : details.start_date ? '結束日期' : '開始日期';
+    showToast(`請填寫${missing}。`, 'error');
     document.getElementById(`ws_activity_${details.start_date ? 'end_date' : 'start_date'}`).focus();
     return false;
   }
@@ -72,6 +73,11 @@ function validateActivityDetails(details) {
     document.getElementById('ws_activity_end_date').focus();
     return false;
   }
+  return true;
+}
+
+function validateActivityDetails(details) {
+  if (!validateActivityDates(details)) return false;
   for (const [field, label] of Object.entries(activityPlanFields)) {
     if (!details[field]) {
       showToast(`請填寫${label}！`, 'error');

@@ -150,11 +150,11 @@
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div class="min-w-0">
               <label for="ws_activity_start_date" class="block text-sm font-semibold text-slate-700 mb-1">開始日期<span class="required-marker" aria-hidden="true"> *</span></label>
-              <input type="date" id="ws_activity_start_date" class="w-full min-w-0 text-sm border border-slate-300 rounded-xl px-3 py-2 focus:ring-emerald-500 focus:border-emerald-500">
+              <input type="date" id="ws_activity_start_date" required class="w-full min-w-0 text-sm border border-slate-300 rounded-xl px-3 py-2 focus:ring-emerald-500 focus:border-emerald-500">
             </div>
             <div class="min-w-0">
               <label for="ws_activity_end_date" class="block text-sm font-semibold text-slate-700 mb-1">結束日期<span class="required-marker" aria-hidden="true"> *</span></label>
-              <input type="date" id="ws_activity_end_date" class="w-full min-w-0 text-sm border border-slate-300 rounded-xl px-3 py-2 focus:ring-emerald-500 focus:border-emerald-500">
+              <input type="date" id="ws_activity_end_date" required class="w-full min-w-0 text-sm border border-slate-300 rounded-xl px-3 py-2 focus:ring-emerald-500 focus:border-emerald-500">
             </div>
           </div>
         </fieldset>
@@ -1321,9 +1321,9 @@
     </div>
   </footer>
 
-  <script src="/static/js/activity-details.js?v=20261020_required_markers"></script>
+  <script src="/static/js/activity-details.js?v=20261020_required_dates"></script>
   <script src="/static/js/academic-years.js?v=20261020_required_markers"></script>
-  <script src="/static/js/app.js?v=20261020_staff_display_id"></script>
+  <script src="/static/js/app.js?v=20261020_required_dates"></script>
   <script src="/static/js/category-admin.js?v=20261020_required_markers"></script>
 </body>
 </html>

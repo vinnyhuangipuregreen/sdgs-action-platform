@@ -1044,6 +1044,8 @@ async function saveWorksheet(status = "submitted") {
   }
 
   const unitName = document.getElementById("ws_unitName")?.value.trim() || "佛光學員";
+  const activityDetails = collectActivityDetails();
+  if (!validateActivityDates(activityDetails)) return;
   const actionRadio = document.querySelector("input[name='center_action']:checked");
   if (!actionRadio) {
     showToast("請選擇一個中心行動！", "error");
@@ -1052,7 +1054,6 @@ async function saveWorksheet(status = "submitted") {
   const centerAction = actionRadio.value;
   const centerCustom = actionRadio.dataset.legacyCustom === "true" ? document.getElementById("ws_centerCustom")?.value.trim() : actionRadio.dataset.customValue || "";
 
-  const activityDetails = collectActivityDetails();
   if (!validateActivityDetails(activityDetails)) return;
 
   const radialData = [];
