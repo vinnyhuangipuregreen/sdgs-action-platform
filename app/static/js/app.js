@@ -952,6 +952,16 @@ function createCausalTable(chain, editable = false) {
       const input = document.createElement("textarea");
       input.dataset.causalField = field;
       input.rows = 2;
+      input.placeholder = {
+        start: "連日豪雨持續發生。",
+        start_cond: "上游已有崩塌形成的堰塞湖，且持續蓄水。",
+        mid: "堰塞湖水位上升並發生溢流。",
+        mid_cond: "降雨與上游來水量超過堰塞湖可容納的水量。",
+        result: "大量水流夾帶土石形成泥流，進入下游市區。",
+        result_cond: "溢流量超過下游河道與堤防的承載能力，且泥流路徑通往聚落。",
+        impact: "下游居民、商家、道路與公共設施，以及河川與周邊生態環境。",
+        measurement: "記錄淹水深度與範圍、受影響戶數、撤離人數、道路中斷處數及災損情形。"
+      }[field];
       input.value = chain[field] || "";
       input.setAttribute("aria-label", `${cell.parentElement.cells[0].textContent} ${cell.cellIndex === 1 ? (field === 'impact' ? '受到影響是那些人或環境？' : '發生了什麼？') : (field === 'measurement' ? '如何衡量此影響？' : '這一步要成立，需要什麼條件？')}`);
       cell.appendChild(input);
