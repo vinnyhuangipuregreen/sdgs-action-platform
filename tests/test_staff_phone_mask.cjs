@@ -4,7 +4,7 @@ const vm = require('node:vm');
 const { test } = require('node:test');
 const source = fs.readFileSync(require('node:path').join(__dirname, '../app/static/js/app.js'), 'utf8');
 
-function setup() {
+function setup(staffId = 4) {
   const fields = {}, requests = [], notices = [];
   const element = () => ({value: '', children: [], classList: {add() {}, remove() {}}, appendChild(child) {this.children.push(child);}});
   const context = vm.createContext({
@@ -14,7 +14,7 @@ function setup() {
     showToast: message => notices.push(message),
     fetch: async (url, options) => {
       requests.push({url, options});
-      return {ok: true, json: async () => ({items: [{id: 4, name: 'Test', email: 'staff@example.invalid', phone: '0966027621', role: 'admin'}]})};
+      return {ok: true, json: async () => ({items: [{id: staffId, name: 'Test', email: 'staff@example.invalid', phone: '0966027621', role: 'admin'}]})};
     },
   });
   vm.runInContext(source.slice(source.indexOf('function maskStaffPhone('), source.indexOf('window.loadAdminStaff =')), context);
@@ -25,6 +25,18 @@ function setup() {
 function open(env, type = 'staff', phone = '0966027621') {
   env.context.window.openEditStudentModal(4, 'Test', 'staff@example.invalid', '', phone, 'TEST', 'Unit', 'admin', type);
 }
+
+test('staff account five displays three while retaining its real ID for account actions', async () => {
+  for (const [id, displayed] of [[1, 1], [2, 2], [4, 4], [5, 3]]) {
+    const env = setup(id);
+    await env.context.loadAdminStaff();
+    const row = env.fields.adminStaffTableBody.children[0].innerHTML;
+    assert.match(row, new RegExp(`>#${displayed}</td>`));
+    assert.match(row, new RegExp(`openEditStudentModal\\(${id},`));
+    assert.match(row, new RegExp(`handleStaffSelectChange\\(${id},`));
+    assert.match(row, new RegExp(`deleteSingleStaff\\(${id},`));
+  }
+});
 
 test('staff list and edit show only the first three characters', async () => {
   const env = setup();

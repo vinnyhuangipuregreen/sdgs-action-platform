@@ -2241,7 +2241,7 @@ async function loadAdminStaff(search = "") {
           <td class="p-3 text-center">
             ${!isPrimaryRootAdmin ? `<input type="checkbox" class="staff-cb rounded text-emerald-600" value="${s.id}" onchange="handleStaffSelectChange(${s.id}, this.checked)">` : '<span title="預設最高管理員受系統保護" class="text-emerald-600 font-bold">🔒</span>'}
           </td>
-          <td class="p-3 font-mono text-slate-500">#${s.id}</td>
+          <td class="p-3 font-mono text-slate-500">#${s.id === 5 ? 3 : s.id}</td>
           <td class="p-3 font-bold text-slate-900">${s.name}</td>
           <td class="p-3 text-emerald-700 font-mono font-bold">${s.email}</td>
           <td class="p-3 text-slate-500 font-mono">${s.email_backup || '-'}</td>
