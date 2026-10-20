@@ -2497,14 +2497,14 @@ async function loadAdminStudents(search = state.studentSearch, page = state.stud
         container.innerHTML = '<tr><td colspan="9" class="p-6 text-center text-slate-400">無符合條件之學員資料</td></tr>';
         return;
       }
-      data.items.forEach(s => {
+      data.items.forEach((s, index) => {
         const tr = document.createElement("tr");
         tr.className = "border-b border-slate-100 hover:bg-slate-50 text-xs";
         tr.innerHTML = `
           <td class="p-3 text-center">
             <input type="checkbox" class="student-cb rounded text-emerald-600" value="${s.id}" onchange="handleStudentSelectChange(${s.id}, this.checked)">
           </td>
-          <td class="p-3 font-mono text-slate-500">#${s.id}</td>
+          <td class="p-3 font-mono text-slate-500">#${(state.studentPage - 1) * 100 + index + 1}</td>
           <td class="p-3 font-bold text-slate-800">${s.name}</td>
           <td class="p-3 text-slate-600 font-mono">${s.email}</td>
           <td class="p-3 text-slate-500 font-mono">${s.email_backup || '-'}</td>

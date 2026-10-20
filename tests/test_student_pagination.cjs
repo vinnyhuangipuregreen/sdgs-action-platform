@@ -57,6 +57,23 @@ test('search resets to page one and empty results disable both buttons', async (
   assert.match(elements.adminStudentsTableBody.html, /無符合條件/);
 });
 
+test('visible IDs start at one across pages while actions retain account IDs', async () => {
+  const { context, elements } = setup(params => {
+    const data = page(436, Number(params.get('offset')));
+    data.items.forEach(student => { student.id += 432; });
+    return data;
+  });
+  for (const [pageNumber, first, last] of [[1, 1, 100], [2, 101, 200], [5, 401, 436]]) {
+    await context.loadAdminStudents('', pageNumber);
+    const rows = elements.adminStudentsTableBody.children;
+    assert.match(rows[0].html, new RegExp(`>#${first}</td>`));
+    assert.match(rows.at(-1).html, new RegExp(`>#${last}</td>`));
+    assert.match(rows[0].html, new RegExp(`value="${first + 432}"`));
+    assert.match(rows[0].html, new RegExp(`openEditStudentModal\\(${first + 432},`));
+    assert.match(rows[0].html, new RegExp(`deleteSingleStudent\\(${first + 432},`));
+  }
+});
+
 test('deleting the last page returns to the last available page', async () => {
   const { context, state, requests } = setup(params => page(400, Number(params.get('offset'))));
   await context.loadAdminStudents('', 5);
