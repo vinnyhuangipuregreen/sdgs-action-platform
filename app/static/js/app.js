@@ -2203,6 +2203,11 @@ async function submitGrade(id) {
 // ==============================================================================
 // 7B. Staff / Admin Account Management ([管理帳號與權限名單維護])
 // ==============================================================================
+function maskStaffPhone(value) {
+  const phone = String(value || "");
+  return phone.slice(0, 3) + "*".repeat(Math.max(0, phone.length - 3));
+}
+
 async function loadAdminStaff(search = "") {
   const container = document.getElementById("adminStaffTableBody");
   if (!container) return;
@@ -2240,7 +2245,7 @@ async function loadAdminStaff(search = "") {
           <td class="p-3 font-bold text-slate-900">${s.name}</td>
           <td class="p-3 text-emerald-700 font-mono font-bold">${s.email}</td>
           <td class="p-3 text-slate-500 font-mono">${s.email_backup || '-'}</td>
-          <td class="p-3 text-slate-600 font-mono">${s.phone}</td>
+          <td class="p-3 text-slate-600 font-mono">${maskStaffPhone(s.phone)}</td>
           <td class="p-3 font-mono text-slate-600 font-bold">${s.unit_code || 'FGU'}</td>
           <td class="p-3 text-slate-700 font-medium">${s.unit_name || '佛光永續學院'}</td>
           <td class="p-3">${roleBadge}</td>
@@ -2610,7 +2615,15 @@ window.openEditStudentModal = function(id, name, email, email_backup, phone, uni
   document.getElementById("editStudentName").value = name;
   document.getElementById("editStudentEmail").value = email;
   document.getElementById("editStudentEmailBackup").value = email_backup || "";
-  document.getElementById("editStudentPhone").value = phone;
+  const phoneInput = document.getElementById("editStudentPhone");
+  state.editingPhone = String(phone || "");
+  phoneInput.value = accountType === "staff" ? maskStaffPhone(state.editingPhone) : state.editingPhone;
+  phoneInput.onblur = accountType === "staff" ? () => {
+    if (!phoneInput.value.includes("*")) {
+      state.editingPhone = phoneInput.value.trim();
+      phoneInput.value = maskStaffPhone(state.editingPhone);
+    }
+  } : null;
   document.getElementById("editStudentUnitCode").value = unit_code || "";
   document.getElementById("editStudentUnitName").value = unit_name || "";
   document.getElementById("editStudentPassword").value = "";
@@ -2629,7 +2642,9 @@ window.saveStudentEdit = async function() {
   const name = document.getElementById("editStudentName").value.trim();
   const email = document.getElementById("editStudentEmail").value.trim();
   const email_backup = document.getElementById("editStudentEmailBackup").value.trim();
-  const phone = document.getElementById("editStudentPhone").value.trim();
+  const displayedPhone = document.getElementById("editStudentPhone").value.trim();
+  const phone = state.editingAccountType === "staff" && displayedPhone === maskStaffPhone(state.editingPhone)
+    ? state.editingPhone : displayedPhone;
   const unit_code = document.getElementById("editStudentUnitCode").value.trim();
   const unit_name = document.getElementById("editStudentUnitName").value.trim();
   const password = document.getElementById("editStudentPassword").value.trim();
@@ -2637,6 +2652,11 @@ window.saveStudentEdit = async function() {
 
   if (!name || !email || !phone) {
     showToast("姓名、Email與電話為必填欄位", "error");
+    return;
+  }
+
+  if (state.editingAccountType === "staff" && phone.includes("*")) {
+    showToast("如需修改電話，請輸入完整內容；未修改則保留原值。", "error");
     return;
   }
 
