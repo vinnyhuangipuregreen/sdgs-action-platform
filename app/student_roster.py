@@ -25,7 +25,7 @@ def read_roster(content):
     try:
         rows = workbook.worksheets[0].iter_rows(max_col=6)
         header = next(rows, ())
-        if tuple(str(cell.value or "").strip() for cell in header) != HEADERS:
+        if tuple(str(cell.value or "").replace("\ufeff", "").strip() for cell in header) != HEADERS:
             raise HTTPException(400, "第一張工作表的 A1～F1 須依序為：" + "、".join(HEADERS))
         students = []
         for number, cells in enumerate(rows, 2):

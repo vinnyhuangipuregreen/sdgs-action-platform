@@ -62,6 +62,16 @@ class StudentRosterTests(unittest.TestCase):
         self.assertIn("spreadsheetml.sheet", response.headers["content-type"])
         self.assertTrue(response.content.startswith(b"PK"))
 
+    def test_csv_converted_xlsx_header_can_start_with_an_invisible_bom(self):
+        headers = ("\ufeff" + HEADERS[0], *HEADERS[1:])
+        values = ["王小明", "student@example.invalid", "backup@example.invalid", "0920111111", "0012", "北投第一分會"]
+        response = self.upload(workbook_bytes([values], headers=headers))
+        self.assertEqual(response.status_code, 200, response.text)
+        students = self.client.get("/api/admin/students", headers=self.admin).json()["items"]
+        student = next(row for row in students if row["email"] == values[1])
+        self.assertEqual(student["name"], values[0])
+        self.assertEqual(student["phone"], values[3])
+
     def test_invalid_uploads_are_rejected_before_any_accounts_are_written(self):
         valid = ["王小明", "student@example.invalid", "", "0920111111", "0012", "北投第一分會"]
         invalid = ["未填電話", "bad@example.invalid", "", "", "", ""]
