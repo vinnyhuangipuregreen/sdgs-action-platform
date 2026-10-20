@@ -859,18 +859,18 @@ function addRadialLineRow(data = null) {
     </div>
     <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
       <div>
-        <label class="block text-xs font-semibold text-slate-700 mb-1">連動目標 (SDG)</label>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">連動目標 (SDG)<span class="required-marker" aria-hidden="true"> *</span></label>
         <select class="radial-goal-select w-full text-xs rounded-lg border-slate-300 focus:ring-emerald-500 focus:border-emerald-500 p-2 bg-white">
           <option value="">-- 請選擇連動的 SDGs 目標 --</option>
           ${state.goals.map(g => `<option value="${g.code} ${g.name}">${g.code} ${g.name} (${g.tier})</option>`).join("")}
         </select>
       </div>
       <div>
-        <label class="block text-xs font-semibold text-slate-700 mb-1">怎麼影響？(作用機制機制說明)</label>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">怎麼影響？(作用機制機制說明)<span class="required-marker" aria-hidden="true"> *</span></label>
         <textarea class="radial-mech-input w-full text-xs rounded-lg border-slate-300 focus:ring-emerald-500 focus:border-emerald-500 p-2" rows="2" placeholder="例：種植台灣原生種，恢復潮間帶生態棲地..."></textarea>
       </div>
       <div>
-        <label class="block text-xs font-semibold text-slate-700 mb-1">我怎麼看得出來？(可觀察的變化)</label>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">我怎麼看得出來？(可觀察的變化)<span class="required-marker" aria-hidden="true"> *</span></label>
         <textarea class="radial-obs-input w-full text-xs rounded-lg border-slate-300 focus:ring-emerald-500 focus:border-emerald-500 p-2" rows="2" placeholder="例：水鳥數量明顯回流覓食、塑膠碎屑減少..."></textarea>
       </div>
     </div>
@@ -901,15 +901,15 @@ function addTradeoffRow(data = null) {
     </div>
     <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
       <div>
-        <label class="block text-xs font-semibold text-slate-700 mb-1">可能傷到誰／什麼？</label>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">可能傷到誰／什麼？<span class="required-marker" aria-hidden="true"> *</span></label>
         <input type="text" class="tradeoff-who w-full text-xs rounded-lg border-slate-300 p-2" placeholder="例：周邊沙丘植被、被清出的垃圾..."/>
       </div>
       <div>
-        <label class="block text-xs font-semibold text-slate-700 mb-1">在什麼情況下會發生？</label>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">在什麼情況下會發生？<span class="required-marker" aria-hidden="true"> *</span></label>
         <input type="text" class="tradeoff-sit w-full text-xs rounded-lg border-slate-300 p-2" placeholder="例：志工未注意隨意踩踏、清運不及..."/>
       </div>
       <div>
-        <label class="block text-xs font-semibold text-slate-700 mb-1">我會怎麼降低影響？</label>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">我會怎麼降低影響？<span class="required-marker" aria-hidden="true"> *</span></label>
         <input type="text" class="tradeoff-how w-full text-xs rounded-lg border-slate-300 p-2" placeholder="例：規劃指定步道動線，協調垃圾車即時載運..."/>
       </div>
     </div>
@@ -936,12 +936,12 @@ function createCausalTable(chain, editable = false) {
   const wrapper = document.createElement("div");
   wrapper.className = "overflow-x-auto";
   wrapper.innerHTML = `<table class="causal-table">
-    <thead><tr><th scope="col">階段</th><th scope="col">發生了什麼？</th><th scope="col">這一步要成立，需要什麼條件？</th></tr></thead>
+    <thead><tr><th scope="col">階段</th><th scope="col">發生了什麼？<span class="required-marker" aria-hidden="true"> *</span></th><th scope="col">這一步要成立，需要什麼條件？<span class="required-marker" aria-hidden="true"> *</span></th></tr></thead>
     <tbody>
       <tr><th scope="row">A 起點</th><td data-field="start"></td><td data-field="start_cond"></td></tr>
       <tr><th scope="row">B 中介</th><td data-field="mid"></td><td data-field="mid_cond"></td></tr>
       <tr><th scope="row">C 結果</th><td data-field="result"></td><td data-field="result_cond"></td></tr>
-      <tr class="causal-impact-heading"><th scope="col">階段</th><th scope="col">受到影響是那些人或環境？</th><th scope="col">如何衡量此影響？</th></tr>
+      <tr class="causal-impact-heading"><th scope="col">階段</th><th scope="col">受到影響是那些人或環境？<span class="required-marker" aria-hidden="true"> *</span></th><th scope="col">如何衡量此影響？<span class="required-marker" aria-hidden="true"> *</span></th></tr>
       <tr><th scope="row">D 影響</th><td data-field="impact"></td><td data-field="measurement"></td></tr>
     </tbody>
   </table>`;
@@ -2072,7 +2072,7 @@ window.viewWorksheetDetailModal = async function(id) {
     document.getElementById("detailModalBody").innerHTML = `
       <div class="space-y-4 text-xs">
         <div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
-          <span class="font-bold text-slate-500">中心行動：</span>
+          <span class="font-bold text-slate-500">中心行動<span class="required-marker" aria-hidden="true"> *</span>：</span>
           <span class="font-black text-slate-900 text-sm ml-2">${ws.center_action} (${ws.center_custom || '標準行動'})</span>
           <h4 class="font-bold text-slate-500 mt-3 mb-1">活動規劃與成果：</h4>
           <p id="detailActivityDescription" class="whitespace-pre-wrap break-words text-sm text-slate-700"></p>
@@ -2082,7 +2082,7 @@ window.viewWorksheetDetailModal = async function(id) {
           <h4 class="font-extrabold text-slate-800 mb-2">放射型連動分析（機制與變化）：</h4>
           <table class="w-full text-left bg-white border border-slate-200 rounded-lg overflow-hidden">
             <thead class="bg-emerald-50 text-emerald-900 font-bold">
-              <tr><th class="p-2">連動目標</th><th class="p-2">作用機制</th><th class="p-2">可觀察變化</th></tr>
+              <tr><th class="p-2">連動目標<span class="required-marker" aria-hidden="true"> *</span></th><th class="p-2">作用機制<span class="required-marker" aria-hidden="true"> *</span></th><th class="p-2">可觀察變化<span class="required-marker" aria-hidden="true"> *</span></th></tr>
             </thead>
             <tbody>${radialHtml || '<tr><td colspan="3" class="p-3 text-center text-slate-400">無連動資料</td></tr>'}</tbody>
           </table>
@@ -2092,7 +2092,7 @@ window.viewWorksheetDetailModal = async function(id) {
           <h4 class="font-extrabold text-emerald-900 mb-2">善意拉扯檢核（負面影響與對策）：</h4>
           <table class="w-full text-left bg-white border border-slate-200 rounded-lg overflow-hidden">
             <thead class="bg-emerald-50 text-emerald-900 font-bold">
-              <tr><th class="p-2">可能傷到誰/什麼</th><th class="p-2">發生情況</th><th class="p-2">降低影響對策</th></tr>
+              <tr><th class="p-2">可能傷到誰/什麼<span class="required-marker" aria-hidden="true"> *</span></th><th class="p-2">發生情況<span class="required-marker" aria-hidden="true"> *</span></th><th class="p-2">降低影響對策<span class="required-marker" aria-hidden="true"> *</span></th></tr>
             </thead>
             <tbody>${tradeoffHtml || '<tr><td colspan="3" class="p-3 text-center text-slate-400">無拉扯檢核</td></tr>'}</tbody>
           </table>
@@ -2105,12 +2105,12 @@ window.viewWorksheetDetailModal = async function(id) {
 
         <div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
           <h4 class="font-bold text-slate-900 mb-1">六、自我檢核</h4>
-          ${Array.from(document.querySelectorAll('#ws_check1, #ws_check2, #ws_check3, #ws_check4')).map((input, i) => `<p>${ws.self_checks?.[i] ? '☑ 已勾選' : '☐ 未勾選'}：${input.nextElementSibling.textContent}</p>`).join('')}
+          ${Array.from(document.querySelectorAll('#ws_check1, #ws_check2, #ws_check3, #ws_check4')).map((input, i) => `<p>${ws.self_checks?.[i] ? '☑ 已勾選' : '☐ 未勾選'}：${input.nextElementSibling.textContent.replace(/\s*\*$/, '')}<span class="required-marker" aria-hidden="true"> *</span></p>`).join('')}
         </div>
 
         <div class="bg-emerald-50/50 p-3 rounded-xl border border-emerald-200">
           <h4 class="font-bold text-emerald-900 mb-1">七、我的連動承諾宣言</h4>
-          <p>「我願意從 <u>${commit.start_action || ''}</u> 開始，希望促進 <u>${commit.target_1 || ''}</u> 與 <u>${commit.target_2 || ''}</u>，也會留意 <u>${commit.risk_aware || ''}</u> 的風險。一個月後，我會用 <u>${commit.metric || ''}</u> 來確認自己有沒有做到。」</p>
+          <p>「我願意從 <span class="required-marker" aria-hidden="true"> *</span><u>${commit.start_action || ''}</u> 開始，希望促進 <span class="required-marker" aria-hidden="true"> *</span><u>${commit.target_1 || ''}</u> 與 <span class="required-marker" aria-hidden="true"> *</span><u>${commit.target_2 || ''}</u>，也會留意 <span class="required-marker" aria-hidden="true"> *</span><u>${commit.risk_aware || ''}</u> 的風險。一個月後，我會用 <span class="required-marker" aria-hidden="true"> *</span><u>${commit.metric || ''}</u> 來確認自己有沒有做到。」</p>
         </div>
 
         ${ws.score ? `
@@ -2120,7 +2120,21 @@ window.viewWorksheetDetailModal = async function(id) {
         </div>` : '<div class="text-slate-400 italic">目前尚未評分</div>'}
       </div>
     `;
-    document.getElementById("detailActivityDescription").textContent = describeActivity(ws.activity_details) || "未填寫";
+    const activityDescription = document.getElementById("detailActivityDescription");
+    activityDescription.replaceChildren();
+    const requiredActivityLabels = ['開始日期', '結束日期', '活動名稱', ...Object.values(activityPlanFields)];
+    const activityLines = describeActivity(ws.activity_details).split('\n');
+    activityLines.forEach((line, index) => {
+      const label = requiredActivityLabels.find(label => line.startsWith(`${label}：`));
+      if (label) {
+        activityDescription.append(document.createTextNode(label));
+        const marker = document.createElement('span');
+        marker.className = 'required-marker';
+        marker.textContent = ' *';
+        activityDescription.append(marker, document.createTextNode(line.slice(label.length)));
+      } else activityDescription.append(document.createTextNode(line || '未填寫'));
+      if (index < activityLines.length - 1) activityDescription.append(document.createTextNode('\n'));
+    });
   } catch (err) {
     showToast("無法載入練習單詳情", "error");
   }

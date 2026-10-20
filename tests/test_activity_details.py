@@ -52,7 +52,7 @@ class ActivityDetailsTests(unittest.TestCase):
         self.assertIn("2026-10-19", exported)
         self.assertIn("2026-10-21", exported)
         document = Document(io.BytesIO(self.client.get(url + "/export-docx", headers=self.admin).content))
-        self.assertIn("活動日期區間：2026-10-19 ～ 2026-10-21", "\n".join(p.text for p in document.paragraphs))
+        self.assertIn("開始日期 *：2026-10-19\n結束日期 *：2026-10-21", "\n".join(p.text for p in document.paragraphs))
         word = self.client.get(url + "/export-docx?format=doc", headers=self.admin)
         self.assertIn(b"2026-10-19", word.content)
         self.assertIn(b"2026-10-21", word.content)
@@ -82,7 +82,7 @@ class ActivityDetailsTests(unittest.TestCase):
         document = Document(io.BytesIO(self.client.get(url+"/export-docx",headers=self.admin).content))
         text = "\n".join(p.text for p in document.paragraphs)
         self.assertNotIn("已刪除的舊說明",text)
-        self.assertIn("1. 活動目的與理念：目的",text)
+        self.assertIn("1. 活動目的與理念 *：目的",text)
 
     def test_old_description_cannot_bypass_required_planning_fields(self):
         self.payload.pop("activity_details")

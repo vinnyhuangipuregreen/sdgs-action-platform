@@ -26,7 +26,9 @@ class ActivityPlanningTests(activity_tests.ActivityDetailsTests):
         rows = list(csv.DictReader(io.StringIO(self.client.get("/api/admin/export/csv",headers=self.admin).content.decode("utf-8-sig").lstrip("\ufeff"))))
         self.assertEqual(json.loads(rows[0]["活動規劃與成果資料"])["feedback"], "參與者意見")
         document = Document(io.BytesIO(self.client.get(url+"/export-docx",headers=self.admin).content))
-        self.assertIn(activity_text(loaded["activity_details"]),[p.text for p in document.paragraphs])
+        text = "\n".join(p.text for p in document.paragraphs)
+        for value in ("活動名稱 *：社區活動", "1. 活動目的與理念 *：目的", "實際參與人數：0", "5. 活動成果與效益：實際成果", "6. 參與者回饋與感受：參與者意見"):
+            self.assertIn(value, text)
         self.payload["activity_details"] = self.plan()
         self.assertEqual(self.client.put(url,headers=self.student,json=self.payload).status_code,200)
         self.assertEqual(self.client.get(url,headers=self.student).json()["activity_details"]["phase"],"before")

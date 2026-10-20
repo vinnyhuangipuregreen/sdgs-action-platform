@@ -183,7 +183,12 @@ function openCategoryEditor(item = null) {
     const title = document.createElement("label");
     title.htmlFor = `categoryTemplate_${field}`;
     title.className = "block text-xs font-bold text-slate-700 mb-2";
-    title.textContent = `${label}（${field in activityPlanFields ? '示範' : '填寫指引'}）（必填）`;
+    title.textContent = `${label}（${field in activityPlanFields ? '示範' : '填寫指引'}）`;
+    const marker = document.createElement('span');
+    marker.className = 'required-marker';
+    marker.setAttribute('aria-hidden', 'true');
+    marker.textContent = ' *';
+    title.appendChild(marker);
     const input = document.createElement("textarea");
     input.id = title.htmlFor;
     input.rows = 3;

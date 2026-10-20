@@ -216,3 +216,5 @@ body {
 .worksheet-history-row > div:last-child { flex-shrink: 0; }
 .worksheet-history-row button { min-height: 44px; }
 @media(max-width:600px) { #myWorksheetsModal .worksheet-history-dialog { width: calc(100vw - 32px); } }
+
+.required-marker { color: #dc2626; }

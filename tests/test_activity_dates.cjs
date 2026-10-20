@@ -26,7 +26,7 @@ test('dates round trip through form collection and reset when loading an old or 
   context.loadActivityDetails({ start_date: '2026-10-19', end_date: '2026-10-21' });
   assert.equal(context.collectActivityDetails().start_date, '2026-10-19');
   assert.equal(context.collectActivityDetails().end_date, '2026-10-21');
-  assert.match(context.describeActivity(context.collectActivityDetails()), /活動日期區間：2026-10-19 ～ 2026-10-21/);
+  assert.match(context.describeActivity(context.collectActivityDetails()), /開始日期：2026-10-19\n結束日期：2026-10-21/);
   for (const old of [{ purpose: '原本的內容' }, null]) {
     context.loadActivityDetails(old);
     assert.equal(document.getElementById('ws_activity_start_date').value, '');

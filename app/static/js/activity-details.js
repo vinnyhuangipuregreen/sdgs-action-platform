@@ -92,7 +92,7 @@ function validateActivityDetails(details) {
 function describeActivity(details) {
   if (!details) return '';
   const fields = {...activityPlanFields, ...(details.phase === 'after' ? activityResultFields : {})};
-  return [`活動日期區間：${details.start_date || '未填寫'} ～ ${details.end_date || '未填寫'}`,
+  return [`開始日期：${details.start_date || '未填寫'}`, `結束日期：${details.end_date || '未填寫'}`,
     details.phase === 'before' ? '活動前｜規劃' : '活動後｜成果', `活動名稱：${details.name}`,
     ...Object.entries(fields).map(([field, label]) => `${label}：${details[field] ?? ''}`)].join('\n');
 }

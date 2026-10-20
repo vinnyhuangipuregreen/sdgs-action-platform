@@ -34,6 +34,26 @@ class WorksheetDownloadTests(unittest.TestCase):
         self.assertTrue(response.content.startswith(b"PK"))
         self.assertTrue(Document(io.BytesIO(response.content)).tables)
 
+    def test_required_markers_are_red_in_both_word_formats(self):
+        from app.docx_exporter import create_worksheet_docx, create_worksheet_doc
+        from docx.shared import RGBColor
+        ws = {"center_action": "環保", "activity_details": {
+            "name": "海外交流", "start_date": "2026-10-19", "end_date": "2026-10-20",
+            "purpose": "目的", "process": "流程", "features": "特色", "audience": "親子",
+            "phase": "after", "participants": 0,
+        }}
+        document = Document(create_worksheet_docx(ws))
+        paragraph = next(p for p in document.paragraphs if "開始日期" in p.text)
+        for label in ("開始日期", "結束日期", "活動名稱", "1. 活動目的與理念", "2. 活動流程與內容", "3. 活動創意與特色", "4. 預計參與對象"):
+            self.assertIn(label + " *：", paragraph.text)
+        self.assertIn("實際參與人數：0", paragraph.text)
+        markers = [run for run in paragraph.runs if run.text == " *"]
+        self.assertEqual(len(markers), 7)
+        self.assertTrue(all(run.font.color.rgb == RGBColor(0xDC, 0x26, 0x26) for run in markers))
+        rtf = create_worksheet_doc(ws).getvalue()
+        self.assertIn(br"\colortbl ;\red220\green38\blue38;", rtf)
+        self.assertIn(br"\cf1  *}", rtf)
+
     def test_doc_download_requires_the_original_authorization(self):
         worksheet_id, _ = self.save({"chains": self.chains})
         response = self.client.get(f"/api/worksheets/{worksheet_id}/export-docx?format=doc")

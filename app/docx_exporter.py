@@ -1,7 +1,7 @@
 import io
 import json
 import docx
-from app.activity_details import activity_text
+from app.activity_details import activity_text, PLAN_FIELDS
 from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_TABLE_ALIGNMENT, WD_ALIGN_VERTICAL
@@ -28,6 +28,10 @@ def create_worksheet_docx(ws: dict) -> io.BytesIO:
     def set_cell_bg(cell, hex_color):
         shd = parse_xml(f'<w:shd {nsdecls("w")} w:fill="{hex_color}"/>')
         cell._tc.get_or_add_tcPr().append(shd)
+
+    def required_marker(paragraph):
+        marker = paragraph.add_run(" *")
+        marker.font.color.rgb = RGBColor(0xDC, 0x26, 0x26)
 
     # Header / Title Block
     title_p = doc.add_paragraph()
@@ -67,6 +71,8 @@ def create_worksheet_docx(ws: dict) -> io.BytesIO:
         c_lbl = cells[i*2]
         c_val = cells[i*2 + 1]
         c_lbl.text = label
+        if label == "中心行動":
+            required_marker(c_lbl.paragraphs[0])
         set_cell_bg(c_lbl, "F0FDF4")
         c_lbl.paragraphs[0].runs[0].font.bold = True
         c_lbl.paragraphs[0].runs[0].font.size = Pt(10)
@@ -90,7 +96,9 @@ def create_worksheet_docx(ws: dict) -> io.BytesIO:
 
     act_names = {"A": "A．一次淨灘", "B": "B．社區二手衣物交換", "C": "C．道場或家裡改用太陽能", "D": "D．自選佛光活動"}
     act_chosen = act_names.get(ws.get("center_action"), ws.get("center_action", "A"))
-    p_act = doc.add_paragraph(f"選定行動：{act_chosen}")
+    p_act = doc.add_paragraph("選定行動")
+    required_marker(p_act)
+    p_act.add_run(f"：{act_chosen}")
     if ws.get("center_custom"):
         p_act.add_run(f" — 自訂名稱：{ws.get('center_custom')}")
     p_act.runs[0].font.bold = True
@@ -98,7 +106,21 @@ def create_worksheet_docx(ws: dict) -> io.BytesIO:
     summary = activity_text(ws.get("activity_details"))
     if summary:
         doc.add_paragraph("活動規劃與成果：").runs[0].font.bold = True
-        doc.add_paragraph(summary)
+        details = ws.get("activity_details")
+        if isinstance(details, str):
+            details = json.loads(details)
+        lines = [f"開始日期：{details.get('start_date') or '未填寫'}",
+                 f"結束日期：{details.get('end_date') or '未填寫'}", *summary.split("\n")[1:]]
+        required_labels = {"開始日期", "結束日期", "活動名稱", *PLAN_FIELDS.values()}
+        paragraph = doc.add_paragraph()
+        for index, line in enumerate(lines):
+            if index:
+                paragraph.add_run("\n")
+            label, separator, value = line.partition("：")
+            paragraph.add_run(label)
+            if label in required_labels:
+                required_marker(paragraph)
+            paragraph.add_run(separator + value)
 
     # Section 2: Radial Analysis
     h2 = doc.add_paragraph()
@@ -123,6 +145,7 @@ def create_worksheet_docx(ws: dict) -> io.BytesIO:
     for idx, th in enumerate(r_headers):
         cell = r_table.rows[0].cells[idx]
         cell.text = th
+        required_marker(cell.paragraphs[0])
         set_cell_bg(cell, "059669")
         p = cell.paragraphs[0]
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -180,6 +203,7 @@ def create_worksheet_docx(ws: dict) -> io.BytesIO:
     for idx, th in enumerate(t_headers):
         cell = t_table.rows[0].cells[idx]
         cell.text = th
+        required_marker(cell.paragraphs[0])
         set_cell_bg(cell, "D97706")
         p = cell.paragraphs[0]
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -247,8 +271,10 @@ def create_worksheet_docx(ws: dict) -> io.BytesIO:
         ]
         for idx, values in enumerate(c_rows_data):
             row = c_table.rows[idx]
-            for cell, value in zip(row.cells, values):
+            for column_index, (cell, value) in enumerate(zip(row.cells, values)):
                 cell.text = value
+                if idx in (0, 4) and column_index > 0:
+                    required_marker(cell.paragraphs[0])
                 for paragraph in cell.paragraphs:
                     paragraph.paragraph_format.space_before = Pt(3)
                     paragraph.paragraph_format.space_after = Pt(3)
@@ -277,7 +303,8 @@ def create_worksheet_docx(ws: dict) -> io.BytesIO:
     ]
     for index, label in enumerate(check_labels):
         checked = index < len(checks) and checks[index]
-        doc.add_paragraph(f"{'已勾選' if checked else '未勾選'}：{label}")
+        paragraph = doc.add_paragraph(f"{'已勾選' if checked else '未勾選'}：{label}")
+        required_marker(paragraph)
 
     # Section 7: Commitment
     h6 = doc.add_paragraph()
@@ -299,22 +326,27 @@ def create_worksheet_docx(ws: dict) -> io.BytesIO:
     commit_p = doc.add_paragraph()
     commit_p.paragraph_format.line_spacing = 1.3
     commit_p.add_run("「我願意從 ")
+    required_marker(commit_p)
     r_act = commit_p.add_run(commit.get("start_action", "______"))
     r_act.font.bold = True
     r_act.font.underline = True
     commit_p.add_run(" 開始，希望促進 ")
+    required_marker(commit_p)
     r_t1 = commit_p.add_run(commit.get("target_1", "______"))
     r_t1.font.bold = True
     r_t1.font.underline = True
     commit_p.add_run(" 與 ")
+    required_marker(commit_p)
     r_t2 = commit_p.add_run(commit.get("target_2", "______"))
     r_t2.font.bold = True
     r_t2.font.underline = True
     commit_p.add_run("，也會留意 ")
+    required_marker(commit_p)
     r_rk = commit_p.add_run(commit.get("risk_aware", "______"))
     r_rk.font.bold = True
     r_rk.font.underline = True
     commit_p.add_run(" 的風險。一個月後，我會用 ")
+    required_marker(commit_p)
     r_mt = commit_p.add_run(commit.get("metric", "______"))
     r_mt.font.bold = True
     r_mt.font.underline = True
@@ -394,10 +426,12 @@ def create_worksheet_doc(ws: dict) -> io.BytesIO:
         for run in item.runs:
             size = round(run.font.size.pt * 2) if run.font.size else 22
             style = f"\\fs{size}" + (r"\b" if run.bold else "") + (r"\i" if run.italic else "") + (r"\ul" if run.underline else "")
+            if run.font.color.rgb == RGBColor(0xDC, 0x26, 0x26):
+                style += r"\cf1"
             runs.append("{" + style + " " + escape(run.text) + "}")
         return r"\pard" + (r"\intbl" if in_table else "") + (r"\keepn" if item.paragraph_format.keep_with_next else "") + alignment + r"\sa100 " + "".join(runs)
 
-    parts = [r"{\rtf1\ansi\ansicpg1252\deff0{\fonttbl{\f0\fnil Microsoft JhengHei;}}\uc1\paperw12240\paperh15840\margl1440\margr1440\margt1440\margb1440\f0\fs22 "]
+    parts = [r"{\rtf1\ansi\ansicpg1252\deff0{\fonttbl{\f0\fnil Microsoft JhengHei;}}{\colortbl ;\red220\green38\blue38;}\uc1\paperw12240\paperh15840\margl1440\margr1440\margt1440\margb1440\f0\fs22 "]
     for element in document.element.body:
         if element.tag.endswith("}p"):
             parts.append(paragraph(Paragraph(element, document)) + r"\par ")

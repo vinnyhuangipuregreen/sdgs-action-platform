@@ -75,9 +75,9 @@ async function openAcademicYearManager() {
       <form id="academicYearSearch" class="flex gap-2 mb-4"><label>查詢學年度 <input id="academicYearQuery" type="search" class="border rounded-lg px-3 py-2"></label><button class="px-4 py-2 border rounded-lg">查詢</button></form>
       <div class="overflow-x-auto mb-5"><table class="w-full text-left"><thead><tr><th>編號</th><th>學年度</th><th>期間</th><th>狀態</th><th>操作</th></tr></thead><tbody id="academicYearRows"></tbody></table></div>
       <form id="academicYearForm" class="space-y-4"><h4 id="academicYearFormTitle" class="font-bold">新增學年度</h4>
-      <div><label for="academicYearValue">學年度（必填）</label><select required id="academicYearValue" class="border rounded-lg px-3 py-2"></select></div>
-      <div class="flex flex-wrap gap-3"><label>期間開始（必填）<select required id="academicStartYear" class="border rounded-lg px-2 py-2"></select><select required id="academicStartMonth" class="border rounded-lg px-2 py-2"></select></label>
-      <label>期間結束（必填）<select required id="academicEndYear" class="border rounded-lg px-2 py-2"></select><select required id="academicEndMonth" class="border rounded-lg px-2 py-2"></select></label></div>
+      <div><label for="academicYearValue">學年度<span class="required-marker" aria-hidden="true"> *</span></label><select required id="academicYearValue" class="border rounded-lg px-3 py-2"></select></div>
+      <div class="flex flex-wrap gap-3"><label>期間開始<span class="required-marker" aria-hidden="true"> *</span><select required id="academicStartYear" class="border rounded-lg px-2 py-2"></select><select required id="academicStartMonth" class="border rounded-lg px-2 py-2"></select></label>
+      <label>期間結束<span class="required-marker" aria-hidden="true"> *</span><select required id="academicEndYear" class="border rounded-lg px-2 py-2"></select><select required id="academicEndMonth" class="border rounded-lg px-2 py-2"></select></label></div>
       <label class="block">複製教材來源 <select id="academicSourceYear" class="border rounded-lg px-3 py-2"></select></label>
       <p class="text-sm text-slate-500">只複製教材、活動分類與設定；練習單、成績、課程及報名名冊從空白開始。已有教材或紀錄的學年度不可刪除。</p>
       <p id="academicYearError" role="alert" class="text-red-600 whitespace-pre-wrap"></p>
