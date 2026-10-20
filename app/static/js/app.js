@@ -2230,7 +2230,7 @@ async function loadAdminStaff(search = "") {
         container.innerHTML = '<tr><td colspan="10" class="p-6 text-center text-slate-400">無符合條件之管理員／講師帳號</td></tr>';
         return;
       }
-      data.items.forEach(s => {
+      data.items.sort((a, b) => (a.id === 5 ? 3 : a.id) - (b.id === 5 ? 3 : b.id)).forEach(s => {
         const isPrimaryRootAdmin = (s.email === "admin");
         const roleBadge = s.role === "admin"
           ? '<span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-extrabold text-[11px]">🛡️ 系統管理員</span>'

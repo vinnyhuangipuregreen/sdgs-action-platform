@@ -91,3 +91,16 @@ test('opening a student after staff resets masking and preserves student editing
   assert.equal(env.requests[0].url, '/api/admin/students/4');
   assert.equal(JSON.parse(env.requests[0].options.body).phone, '0912345678');
 });
+
+test('staff roster sorts numerically by displayed ID and retains account action targets', async () => {
+  const env = setup();
+  env.context.fetch = async () => ({ok: true, json: async () => ({items:
+    [1, 2, 4, 5, 10, 6].map(id => ({id, name: 'Test', email: 'staff@example.invalid', role: 'admin'}))
+  })});
+  await env.context.loadAdminStaff();
+  const rows = env.fields.adminStaffTableBody.children.map(row => row.innerHTML);
+  assert.deepEqual(rows.map(row => Number(row.match(/>#(\d+)<\/td>/)[1])), [1, 2, 3, 4, 6, 10]);
+  assert.match(rows[2], /openEditStudentModal\(5,/);
+  assert.match(rows[2], /deleteSingleStaff\(5,/);
+  assert.match(rows[3], /openEditStudentModal\(4,/);
+});
