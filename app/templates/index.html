@@ -1199,6 +1199,7 @@
       </div>
 
       <p class="text-xs text-slate-500">每次最多 2,000 筆、檔案限 2 MB；姓名、帳號與電話不可空白。電話與分會編號請使用文字格式，以保留開頭的 0。</p>
+      <p id="importStudentsStatus" hidden role="status" aria-live="polite" class="text-sm font-bold text-sky-700"></p>
 
       <div class="flex justify-end gap-2 pt-2">
         <button onclick="document.getElementById('batchImportModal').classList.add('hidden')" class="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-bold rounded-xl">取消</button>
@@ -1322,7 +1323,7 @@
 
   <script src="/static/js/activity-details.js?v=20261020_required_markers"></script>
   <script src="/static/js/academic-years.js?v=20261020_required_markers"></script>
-  <script src="/static/js/app.js?v=20261020_student_xlsx"></script>
+  <script src="/static/js/app.js?v=20261020_import_progress"></script>
   <script src="/static/js/category-admin.js?v=20261020_required_markers"></script>
 </body>
 </html>

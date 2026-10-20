@@ -2717,6 +2717,9 @@ window.executeBatchImport = async function() {
   const button = document.getElementById("importStudentsSubmitBtn");
   if (button.disabled) return;
   button.disabled = true;
+  const status = document.getElementById("importStudentsStatus");
+  status.textContent = "資料匯入中，請稍候，謝謝。";
+  status.hidden = false;
   try {
     const form = new FormData();
     form.append("file", file);
@@ -2738,6 +2741,8 @@ window.executeBatchImport = async function() {
     showToast("匯入失敗，請稍後再試", "error");
   } finally {
     button.disabled = false;
+    status.hidden = true;
+    status.textContent = "";
   }
 };
 

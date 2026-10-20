@@ -12,6 +12,7 @@ function setup(filename, ok = true) {
   const fields = {
     importFileInput: { files: file ? [file] : [], value: filename || '' },
     importStudentsSubmitBtn: { disabled: false },
+    importStudentsStatus: { hidden: true, textContent: '' },
     batchImportModal: { classList: { add() { closed = true; } } },
   };
   const context = vm.createContext({
