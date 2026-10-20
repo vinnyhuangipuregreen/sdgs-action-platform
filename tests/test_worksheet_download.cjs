@@ -10,14 +10,14 @@ function setup(ok = true) {
   const context = vm.createContext({API_BASE:'/api', state:{token:'test-token'}, showToast(){}, showLoginModal(){}, setTimeout(){}, console,
     document:{body:{appendChild(){}},createElement(){return {click(){clicks.push(this.download);},remove(){}};}},
     window:{URL:{createObjectURL(){return 'blob:test';},revokeObjectURL(){}},open(url){urls.push(url);}},
-    fetch:async(url, options)=>{requests.push({url,options});if(!ok)throw new Error('test network failure');return {ok:true,headers:{get(){return "attachment; filename*=UTF-8''"+encodeURIComponent('A178_松山第五分會_李O立_連動分析練習單.docx');}},blob:async()=>({})};}});
+    fetch:async(url, options)=>{requests.push({url,options});if(!ok)throw new Error('test network failure');return {ok:true,headers:{get(){return "attachment; filename*=UTF-8''"+encodeURIComponent('A178_松山第五分會_李O立_連動分析練習單_20261020123456.docx');}},blob:async()=>({})};}});
   vm.runInContext(source.slice(start, end), context);
   return {context, clicks, requests, urls};
 }
-test('history download uses the server unit code, unit name and student name',async()=>{
+test('history download uses the server unit code, unit name, student name and download time',async()=>{
   const env=setup();await env.context.window.downloadWorksheetDocx(12);
   assert.equal(env.requests[0].url,'/api/worksheets/12/export-docx?format=docx');
-  assert.equal(env.clicks[0],'A178_松山第五分會_李O立_連動分析練習單.docx');
+  assert.equal(env.clicks[0],'A178_松山第五分會_李O立_連動分析練習單_20261020123456.docx');
 });
 test('network fallback preserves the requested doc format and authentication',async()=>{
   const env=setup(false);await env.context.window.downloadWorksheetDocx(12,'doc');

@@ -1,5 +1,7 @@
 import io
 import unittest
+from datetime import datetime, timezone, timedelta
+from unittest.mock import patch
 from urllib.parse import unquote
 from docx import Document
 from tests import test_causal_worksheets as fixtures
@@ -10,7 +12,10 @@ class WorksheetDownloadTests(unittest.TestCase):
     tearDown = fixtures.CausalWorksheetTests.tearDown
     save = fixtures.CausalWorksheetTests.save
 
-    def test_word_filename_uses_unit_code_unit_name_and_author(self):
+    @patch("app.main.datetime")
+    def test_word_filename_uses_unit_code_unit_name_author_and_download_time(self, clock):
+        taiwan = timezone(timedelta(hours=8))
+        clock.now.return_value = datetime(2026, 10, 20, 12, 34, 56, tzinfo=taiwan)
         worksheet_id, _ = self.save({"chains": self.chains})
         with fixtures.database.get_db() as conn:
             conn.execute("UPDATE admin SET unit_code='A178' WHERE id=1")
@@ -18,7 +23,8 @@ class WorksheetDownloadTests(unittest.TestCase):
         for file_format in ("docx", "doc"):
             response = self.client.get(f"/api/worksheets/{worksheet_id}/export-docx?format={file_format}", headers=self.headers)
             self.assertEqual(response.status_code, 200)
-            self.assertEqual(unquote(response.headers["content-disposition"]), f"attachment; filename*=UTF-8''A178_松山第五分會_李O立_連動分析練習單.{file_format}")
+            self.assertEqual(unquote(response.headers["content-disposition"]), f"attachment; filename*=UTF-8''A178_松山第五分會_李O立_連動分析練習單_20261020123456.{file_format}")
+        clock.now.assert_called_with(taiwan)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.headers["content-type"], "application/msword")
         self.assertTrue(response.content.startswith(b"{\\rtf1"))
@@ -32,7 +38,7 @@ class WorksheetDownloadTests(unittest.TestCase):
             conn.execute("UPDATE admin SET unit_code='A/178' WHERE id=1")
             conn.execute("UPDATE worksheets SET user_name=?,unit_name=? WHERE id=?", ('李/立', '北投:分會', worksheet_id))
         response = self.client.get(f"/api/worksheets/{worksheet_id}/export-docx", headers=self.headers)
-        self.assertEqual(unquote(response.headers["content-disposition"]), "attachment; filename*=UTF-8''A_178_北投_分會_李_立_連動分析練習單.docx")
+        self.assertRegex(unquote(response.headers["content-disposition"]), r"^attachment; filename\*=UTF-8''A_178_北投_分會_李_立_連動分析練習單_\d{14}\.docx$")
 
     def test_docx_export_keeps_its_real_format(self):
         worksheet_id, _ = self.save({"chains": self.chains})
