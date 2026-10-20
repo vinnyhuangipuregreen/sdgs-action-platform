@@ -2167,6 +2167,9 @@ async function submitGrade(id) {
     showToast("請輸入 0 ~ 100 之有效分數！", "error");
     return;
   }
+  const submitButton = document.getElementById("gradeSubmitBtn");
+  if (submitButton.disabled) return;
+  submitButton.disabled = true;
   try {
     const res = await fetch(`${API_BASE}/admin/worksheets/${id}/grade`, {
       method: "PUT",
@@ -2176,14 +2179,24 @@ async function submitGrade(id) {
       },
       body: JSON.stringify({ score, comment })
     });
-    const d = await res.json();
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      showToast(d.detail || "批閱儲存失敗，請稍後再試。", "error");
+      return;
+    }
     if (res.ok) {
       document.getElementById("gradeModal").classList.add("hidden");
-      showToast(`✓ 批閱完成！已記錄 ${score} 分，並發送指導通知信至學員信箱 (${d.email_target})！`, "success");
+      if (d.email_sent) {
+        showToast(`✓ 批閱完成！已記錄 ${score} 分，並發送指導通知信至學員信箱 (${d.email_target})！`, "success");
+      } else {
+        showToast(`評分已儲存（${score} 分），通知信尚未寄出。${d.email_warning || '請檢查寄信服務設定。'}`, "warning");
+      }
       loadAdminWorksheets();
     }
   } catch (err) {
-    showToast("批閱失敗", "error");
+    showToast("連線中斷，請重新載入列表確認評分是否已儲存。", "error");
+  } finally {
+    submitButton.disabled = false;
   }
 }
 

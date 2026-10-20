@@ -1110,11 +1110,13 @@ def grade_worksheet(worksheet_id: int, req: GradeSubmit, user: dict = Depends(re
     # Send email notification directly to student's email outside DB transaction
     ws["email"] = ws.get("student_email")
     email_res = send_grade_notification(ws, req.score, req.comment)
+    email_sent = email_res["success"]
     
     return {
         "success": True,
-        "message": f"批閱完成！已記錄成績 {req.score} 分，並已成功發送指導講評通知信至學員信箱 ({email_res['recipient']})！",
-        "email_sent": True,
+        "message": f"批閱完成！已記錄成績 {req.score} 分。" + ("通知信已寄出。" if email_sent else "通知信尚未寄出。"),
+        "email_sent": email_sent,
+        "email_warning": email_res.get("error", "") if not email_sent else "",
         "email_target": email_res["recipient"],
         "subject": email_res["subject"]
     }

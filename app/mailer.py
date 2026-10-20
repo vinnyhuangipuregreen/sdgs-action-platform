@@ -112,23 +112,8 @@ def send_grade_notification(ws: dict, score: int, comment: str) -> dict:
 (通知收件信箱: {recipient})
 """
 
-    # Record in database logs
-    with get_db() as conn:
-        c = conn.cursor()
-        c.execute("""
-        INSERT INTO system_email_logs (worksheet_id, recipient, student_name, subject, score, comment, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (worksheet_id, recipient, student_name, subject, score, comment, "success"))
-
-    # Also write a local copy for immediate review/inspection
-    out_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "artifacts", "file_generation", "ttl=63d", "output")
-    os.makedirs(out_dir, exist_ok=True)
-    with open(os.path.join(out_dir, "latest_grading_email.html"), "w", encoding="utf-8") as f:
-        f.write(html_content)
-    with open(os.path.join(out_dir, "latest_grading_email.txt"), "w", encoding="utf-8") as f:
-        f.write(text_content)
-
-    # If SMTP is configured in environment, attempt sending
+    sent = False
+    error = "尚未設定通知信服務，請設定 SMTP_HOST、SMTP_USER 與 SMTP_PASSWORD。"
     smtp_host = os.environ.get("SMTP_HOST")
     smtp_user = os.environ.get("SMTP_USER")
     smtp_pass = os.environ.get("SMTP_PASSWORD")
@@ -142,16 +127,31 @@ def send_grade_notification(ws: dict, score: int, comment: str) -> dict:
             msg.attach(MIMEText(text_content, "plain", "utf-8"))
             msg.attach(MIMEText(html_content, "html", "utf-8"))
             
-            with smtplib.SMTP(smtp_host, port, timeout=5) as server:
-                server.starttls()
+            smtp = smtplib.SMTP_SSL if port == 465 else smtplib.SMTP
+            with smtp(smtp_host, port, timeout=10) as server:
+                if port != 465:
+                    server.starttls()
                 server.login(smtp_user, smtp_pass)
                 server.sendmail(smtp_user, [recipient], msg.as_string())
+            sent = True
+            error = ""
         except Exception as e:
-            print("SMTP Send failed (offline sandbox fallback):", e)
+            print("Grade notification SMTP failed:", type(e).__name__)
+            error = "通知信寄送失敗，請檢查寄信服務設定後重試。"
+
+    try:
+        with get_db() as conn:
+            conn.execute("""
+            INSERT INTO system_email_logs (worksheet_id, recipient, student_name, subject, score, comment, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (worksheet_id, recipient, student_name, subject, score, comment, "success" if sent else "failed"))
+    except Exception as e:
+        print("Grade notification log failed:", type(e).__name__)
 
     return {
-        "success": True,
+        "success": sent,
+        "error": error,
         "recipient": recipient,
         "subject": subject,
-        "sent_at": datetime.now().isoformat()
+        "sent_at": datetime.now().isoformat() if sent else None
     }
