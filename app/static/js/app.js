@@ -1215,7 +1215,7 @@ function openMyWorksheetsModal() {
         ${ws.score ? `<div class="mt-2 text-xs font-bold text-emerald-700">評分：${ws.score} 分 ｜ 講師講評：${ws.teacher_comment || '無'}</div>` : ''}
       </div>
       <div class="flex items-center gap-2">
-        <button type="button" onclick="downloadWorksheetDocx(${ws.id}, 'doc')" class="cursor-pointer px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-xs font-semibold flex items-center gap-1">
+        <button type="button" onclick="downloadWorksheetDocx(${ws.id})" class="cursor-pointer px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-xs font-semibold flex items-center gap-1">
           📄 下載Word
         </button>
         <button class="px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg text-xs font-semibold" onclick="loadWorksheetToForm(${ws.id})">

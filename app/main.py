@@ -459,9 +459,9 @@ def export_worksheet_docx(worksheet_id: int, user: dict = Depends(require_user),
                     
         w["academic_year"] = get_year(user.get("academic_year_id",1))
         document_stream = create_worksheet_doc(w) if file_format == "doc" else create_worksheet_docx(w)
-        student_name = re.sub(r'[\\/:*?"<>|\x00-\x1f]', '_', w.get("user_name") or "學員").strip(" .")[:80] or "學員"
-        downloaded_at = datetime.now(timezone(timedelta(hours=8))).strftime("%Y%m%d%H%M%S")
-        filename = f"連動分析練習單_{student_name}_{downloaded_at}.{file_format}"
+        filename_parts = [re.sub(r'[\\/:*?"<>|\x00-\x1f]', '_', str(value)).strip(" .")[:80]
+                          for value in (w.get("unit_code") or "", w.get("unit_name") or "", w.get("user_name") or "學員")]
+        filename = "_".join([*filename_parts, f"連動分析練習單.{file_format}"])
         
         import urllib.parse
         encoded_filename = urllib.parse.quote(filename)
