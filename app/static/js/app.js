@@ -2708,78 +2708,45 @@ window.openBatchImportModal = function() {
 };
 
 window.executeBatchImport = async function() {
-  const textVal = document.getElementById("importTextarea").value.trim();
   const fileInput = document.getElementById("importFileInput");
-
-  let parsedStudents = [];
-
-  function parseCSVLine(line) {
-    const parts = line.split(",").map(p => p.trim());
-    if (parts.length >= 2 && parts[0] && parts[1] && parts[0] !== "學員姓名") {
-      return {
-        name: parts[0],
-        email: parts[1],
-        email_backup: parts[2] || "",
-        phone: parts[3] || "0920111111",
-        unit_code: parts[4] || "",
-        unit_name: parts[5] || parts[4] || "佛光學員",
-        role: "student"
-      };
-    }
-    return null;
-  }
-
-  if (textVal) {
-    const lines = textVal.split("\n");
-    for (let l of lines) {
-      const s = parseCSVLine(l);
-      if (s) parsedStudents.push(s);
-    }
-  }
-
-  if (fileInput.files.length > 0) {
-    const file = fileInput.files[0];
-    const text = await file.text();
-    const rows = text.split("\n");
-    for (let r of rows) {
-      const s = parseCSVLine(r);
-      if (s) parsedStudents.push(s);
-    }
-  }
-
-  if (parsedStudents.length === 0) {
-    showToast("未偵測到有效名冊資料，請確認格式（學員姓名, Email, 補課Email, 電話, 分會編號, 分會名稱）", "error");
+  const file = fileInput.files[0];
+  if (!file || !file.name.toLowerCase().endsWith(".xlsx")) {
+    showToast("請選擇 XLSX 學員名冊檔案", "error");
     return;
   }
-
+  const button = document.getElementById("importStudentsSubmitBtn");
+  if (button.disabled) return;
+  button.disabled = true;
   try {
-    const res = await fetch(`${API_BASE}/admin/students/batch-import`, {
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch(`${API_BASE}/admin/students/import-xlsx`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${state.token}`
-      },
-      body: JSON.stringify({ students: parsedStudents, default_role: "student" })
+      headers: { "Authorization": `Bearer ${state.token}` },
+      body: form
     });
-    const d = await res.json();
-    if (res.ok) {
-      showToast(d.message || "批次匯入完成！", "success");
-      document.getElementById("batchImportModal").classList.add("hidden");
-      document.getElementById("importTextarea").value = "";
-      fileInput.value = "";
-      loadAdminStudents();
+    const data = await res.json();
+    if (!res.ok) {
+      showToast(data.detail || "學員名冊匯入失敗", "error");
+      return;
     }
+    showToast(data.message || "批次匯入完成！", "success");
+    document.getElementById("batchImportModal").classList.add("hidden");
+    fileInput.value = "";
+    loadAdminStudents();
   } catch (err) {
-    showToast("匯入失敗", "error");
+    showToast("匯入失敗，請稍後再試", "error");
+  } finally {
+    button.disabled = false;
   }
 };
 
-window.exportStudentsCSV = function() {
+window.exportStudentsXLSX = function() {
   if (!state.token) {
     showToast("請先登入管理員帳號", "warning");
     return;
   }
-  window.open(`${API_BASE}/admin/students/export-csv?token=${encodeURIComponent(state.token)}`, "_blank");
+  window.open(`${API_BASE}/admin/students/export-xlsx?token=${encodeURIComponent(state.token)}`, "_blank");
 };
 
 window.exportWorksheetsCSV = async function() {

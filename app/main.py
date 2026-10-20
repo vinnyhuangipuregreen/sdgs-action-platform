@@ -28,6 +28,7 @@ from app.sso import install_sso
 from app.attendance_bridge import install_attendance_admin
 from app.academic_years import install_years, get_year, enrolled, enroll, student_ids, enrollment_filter, annual_profile, annual_profiles
 from app.year_scope import current_year_id
+from app.student_roster import read_roster, export_roster
 
 app = FastAPI(
     title="SDGs 與氣候行動連動分析與智慧學習平台",
@@ -1021,6 +1022,27 @@ def import_accounts(req, table):
 @app.post("/api/admin/students/batch-import")
 def batch_import_students(req: BatchImportRequest, user: dict = Depends(require_admin)):
     return import_accounts(req, "student")
+
+
+@app.post("/api/admin/students/import-xlsx")
+def import_students_xlsx(file: UploadFile = File(...), user: dict = Depends(require_admin)):
+    if not (file.filename or "").lower().endswith(".xlsx"):
+        raise HTTPException(400, "請選擇 XLSX 檔案")
+    students = read_roster(file.file.read(2 * 1024 * 1024 + 1))
+    return import_accounts(BatchImportRequest(students=students), "student")
+
+
+@app.get("/api/admin/students/export-xlsx")
+def export_students_xlsx(user: dict = Depends(require_admin)):
+    with get_accounts_db() as conn:
+        rows = conn.cursor().execute("SELECT id,name,email,email_backup,phone,unit_code,unit_name FROM student WHERE role='student' AND " + enrollment_filter() + " ORDER BY id ASC").fetchall()
+        profiles = annual_profiles([dict(row) for row in rows], current_year_id.get())
+    timestamp = datetime.now(timezone(timedelta(hours=8))).strftime("%Y%m%d%H%M%S")
+    return StreamingResponse(
+        export_roster(profiles),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename=student_{timestamp}.xlsx"}
+    )
 
 @app.post("/api/admin/staff/batch-import")
 def batch_import_staff(req: BatchImportRequest, user: dict = Depends(require_admin)):
