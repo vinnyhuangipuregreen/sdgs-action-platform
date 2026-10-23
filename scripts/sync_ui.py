@@ -16,7 +16,7 @@ NAV = [("home", "⌂", "首頁", ORIGIN + "/#home"),
 
 def header(active, account):
     links = ''.join(f'<a href="{url}"' + (' aria-current="page"' if module == active else '') + f'><span aria-hidden="true">{icon}</span>{label}</a>' for module, icon, label, url in NAV)
-    return f'''<header class="platform-header" data-ui-version="{VERSION}"><div class="platform-header-inner"><a class="platform-brand" href="{ORIGIN}/"><span class="brand-globe" aria-hidden="true">🌏</span><span><strong>BLIA SDGs 社會影響力系統</strong><small>實踐永續 × 連動分析 × 行動改變 × 共創未來</small></span></a><div class="platform-account">{account}</div></div><nav class="platform-nav" aria-label="主要功能"><div class="platform-nav-inner">{links}</div></nav></header>'''
+    return f'''<header class="platform-header" data-ui-version="{VERSION}"><div class="platform-header-inner"><a class="platform-brand" href="{ORIGIN}/"><span class="brand-globe" aria-hidden="true">🌏</span><span><strong>佛光永續學院</strong><small>實踐永續 × 連動分析 × 行動改變 × 共創未來</small></span></a><div class="platform-account">{account}</div></div><nav class="platform-nav" aria-label="主要功能"><div class="platform-nav-inner">{links}</div></nav></header>'''
 
 
 def outputs():
