@@ -2644,6 +2644,7 @@ window.openEditStudentModal = function(id, name, email, email_backup, phone, uni
   document.getElementById("editStudentUnitCode").value = unit_code || "";
   document.getElementById("editStudentUnitName").value = unit_name || "";
   document.getElementById("editStudentPassword").value = "";
+  document.getElementById("editStudentRoleLabel").innerHTML = (isStaff ? "權限角色" : "帳號權限角色") + '<span class="required-marker" aria-hidden="true"> *</span>';
   const roleSel = document.getElementById("editStudentRole");
   if (roleSel) {
     roleSel.innerHTML = accountType === "staff"
