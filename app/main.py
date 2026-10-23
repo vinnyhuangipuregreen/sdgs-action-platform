@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.concurrency import run_in_threadpool
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, model_validator
 from app.activity_details import ActivityDetails, activity_text
 
 from app.database import get_db, init_db, get_game_settings, set_game_settings, DEFAULT_GAME_SETTINGS
@@ -878,6 +878,17 @@ class StudentSaveSchema(BaseModel):
     password: Optional[str] = None
 
 class StaffSaveSchema(StudentSaveSchema):
+    unit_code: str = Field(min_length=1)
+    unit_name: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def require_unit_fields(self):
+        if not self.unit_code or not self.unit_code.strip() or not self.unit_name or not self.unit_name.strip():
+            raise ValueError("請填寫單位編號及單位名稱")
+        self.unit_code = self.unit_code.strip()
+        self.unit_name = self.unit_name.strip()
+        return self
+
     role: Literal["admin", "teacher"] = "admin"
 
 
@@ -892,10 +903,12 @@ def save_account(req, table, account_id=None):
             if match:
                 account_id = match["id"]
         if account_id is not None:
-            cursor.execute(f"SELECT email FROM {table} WHERE id = ?", (account_id,))
+            cursor.execute(f"SELECT email, phone FROM {table} WHERE id = ?", (account_id,))
             existing = cursor.fetchone()
             if not existing:
                 raise HTTPException(status_code=404, detail="找不到該帳號")
+            if table == "admin" and req.phone.strip() != existing["phone"] and not req.password:
+                req.password = req.phone.strip()
             if table == "admin" and existing["email"] == "admin" and (req.email.strip() != "admin" or req.role != "admin"):
                 raise HTTPException(status_code=400, detail="預設最高管理員不可變更登入帳號或角色")
         values = (req.name.strip(), req.email.strip(), req.email_backup or "", req.phone.strip(), req.unit_code or "", req.unit_name or "佛光學員", req.role)

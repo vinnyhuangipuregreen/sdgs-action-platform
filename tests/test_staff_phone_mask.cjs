@@ -104,3 +104,36 @@ test('staff roster sorts numerically by displayed ID and retains account action 
   assert.match(rows[2], /deleteSingleStaff\(5,/);
   assert.match(rows[3], /openEditStudentModal\(4,/);
 });
+
+test('staff editor has requested labels required units one role and hides the separate reset field', () => {
+  const env = setup();
+  const hidden = [];
+  env.context.document.getElementById('editStudentPasswordBox').classList.add = value => hidden.push(value);
+  open(env);
+  assert.deepEqual(hidden,['hidden']);
+  assert.match(env.fields.editStudentNameLabel.innerHTML,/管理員姓名/);
+  assert.equal(env.fields.editStudentEmailBackupLabel.innerHTML,'Email（備用）');
+  assert.match(env.fields.editStudentPhoneLabel.innerHTML,/密碼/);
+  assert.equal(env.fields.editStudentUnitCode.required,true);
+  assert.equal(env.fields.editStudentUnitName.required,true);
+  assert.match(env.fields.editStudentUnitNameLabel.innerHTML,/required-marker/);
+  assert.equal(env.fields.editStudentRole.innerHTML,'<option value="admin">系統管理員</option>');
+  assert.equal(env.fields.editStudentTitle.textContent,'修改管理帳號');
+  open(env,'student');
+  assert.equal(env.fields.editStudentUnitCode.required,false);
+  assert.equal(env.fields.editStudentUnitName.required,false);
+  assert.equal(env.fields.editStudentEmailBackupLabel.innerHTML,'Email（補課平台）');
+});
+
+test('blank staff units prevent an update while student optional units still save', async () => {
+  const env = setup();
+  open(env);
+  env.fields.editStudentUnitCode.value='  ';
+  await env.context.window.saveStudentEdit();
+  assert.equal(env.requests.length,0);
+  assert.equal(env.notices.at(-1),'請填寫單位編號及單位名稱！');
+  open(env,'student');
+  env.fields.editStudentUnitCode.value='';
+  await env.context.window.saveStudentEdit();
+  assert.equal(env.requests[0].url,'/api/admin/students/4');
+});

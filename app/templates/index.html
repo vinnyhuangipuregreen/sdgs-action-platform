@@ -1131,37 +1131,37 @@
   <div id="editStudentModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
     <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-3">
       <div class="flex justify-between items-center">
-        <h3 class="font-extrabold text-base text-slate-900">修改學員資料</h3>
+        <h3 id="editStudentTitle" class="font-extrabold text-base text-slate-900">修改學員資料</h3>
         <button onclick="document.getElementById('editStudentModal').classList.add('hidden')" class="text-slate-400 hover:text-slate-600 text-lg">✕</button>
       </div>
       <input type="hidden" id="editStudentId">
       <div>
-        <label class="block text-[11px] font-bold text-slate-700 mb-0.5">學員姓名<span class="required-marker" aria-hidden="true"> *</span></label>
+        <label id="editStudentNameLabel" for="editStudentName" class="block text-[11px] font-bold text-slate-700 mb-0.5">學員姓名<span class="required-marker" aria-hidden="true"> *</span></label>
         <input type="text" id="editStudentName" class="w-full text-xs border border-slate-300 rounded-xl p-2">
       </div>
       <div>
-        <label class="block text-[11px] font-bold text-slate-700 mb-0.5">Email（帳號）<span class="required-marker" aria-hidden="true"> *</span></label>
+        <label id="editStudentEmailLabel" for="editStudentEmail" class="block text-[11px] font-bold text-slate-700 mb-0.5">Email（帳號）<span class="required-marker" aria-hidden="true"> *</span></label>
         <input type="email" id="editStudentEmail" class="w-full text-xs border border-slate-300 rounded-xl p-2">
       </div>
       <div>
-        <label class="block text-[11px] font-bold text-slate-700 mb-0.5">Email（補課平台）</label>
+        <label id="editStudentEmailBackupLabel" for="editStudentEmailBackup" class="block text-[11px] font-bold text-slate-700 mb-0.5">Email（補課平台）</label>
         <input type="email" id="editStudentEmailBackup" class="w-full text-xs border border-slate-300 rounded-xl p-2">
       </div>
       <div>
-        <label class="block text-[11px] font-bold text-slate-700 mb-0.5">聯絡電話（密碼）<span class="required-marker" aria-hidden="true"> *</span></label>
+        <label id="editStudentPhoneLabel" for="editStudentPhone" class="block text-[11px] font-bold text-slate-700 mb-0.5">聯絡電話（密碼）<span class="required-marker" aria-hidden="true"> *</span></label>
         <input type="text" id="editStudentPhone" class="w-full text-xs border border-slate-300 rounded-xl p-2">
       </div>
       <div class="grid grid-cols-2 gap-2">
         <div>
-          <label class="block text-[11px] font-bold text-slate-700 mb-0.5">分會／分團編號</label>
+          <label id="editStudentUnitCodeLabel" for="editStudentUnitCode" class="block text-[11px] font-bold text-slate-700 mb-0.5">分會／分團編號</label>
           <input type="text" id="editStudentUnitCode" class="w-full text-xs border border-slate-300 rounded-xl p-2">
         </div>
         <div>
-          <label class="block text-[11px] font-bold text-slate-700 mb-0.5">所屬分會完整名稱</label>
+          <label id="editStudentUnitNameLabel" for="editStudentUnitName" class="block text-[11px] font-bold text-slate-700 mb-0.5">所屬分會完整名稱</label>
           <input type="text" id="editStudentUnitName" class="w-full text-xs border border-slate-300 rounded-xl p-2">
         </div>
       </div>
-      <div>
+      <div id="editStudentPasswordBox">
         <label class="block text-[11px] font-bold text-slate-700 mb-0.5">重設新密碼（若不變更請留空）</label>
         <input type="password" id="editStudentPassword" class="w-full text-xs border border-slate-300 rounded-xl p-2" placeholder="輸入新密碼">
       </div>
@@ -1212,46 +1212,41 @@
       <div class="flex justify-between items-center">
         <div class="flex items-center gap-2">
           <span class="text-lg">🛡️</span>
-          <h3 class="font-extrabold text-base text-slate-900">新增管理員／講師帳號</h3>
+          <h3 class="font-extrabold text-base text-slate-900">新增管理帳號</h3>
         </div>
         <button onclick="document.getElementById('addStaffModal').classList.add('hidden')" class="text-slate-400 hover:text-slate-600 text-lg">✕</button>
       </div>
       <div>
-        <label class="block text-[11px] font-bold text-slate-700 mb-0.5">管理員／講師姓名<span class="required-marker" aria-hidden="true"> *</span></label>
+        <label for="addStaffName" class="block text-[11px] font-bold text-slate-700 mb-0.5">管理員姓名<span class="required-marker" aria-hidden="true"> *</span></label>
         <input type="text" id="addStaffName" required class="w-full text-xs border border-slate-300 rounded-xl p-2" placeholder="例如：戴慶華 博士">
       </div>
       <div>
-        <label class="block text-[11px] font-bold text-slate-700 mb-0.5">登入帳號 / Email<span class="required-marker" aria-hidden="true"> *</span></label>
+        <label for="addStaffEmail" class="block text-[11px] font-bold text-slate-700 mb-0.5">Email（帳號）<span class="required-marker" aria-hidden="true"> *</span></label>
         <input type="text" id="addStaffEmail" required class="w-full text-xs border border-slate-300 rounded-xl p-2" placeholder="例如：admin2 或 teacher@fgu.edu.tw">
       </div>
       <div>
-        <label class="block text-[11px] font-bold text-slate-700 mb-0.5">備用 Email</label>
+        <label for="addStaffEmailBackup" class="block text-[11px] font-bold text-slate-700 mb-0.5">Email（備用）</label>
         <input type="email" id="addStaffEmailBackup" class="w-full text-xs border border-slate-300 rounded-xl p-2" placeholder="選填">
       </div>
       <div>
-        <label class="block text-[11px] font-bold text-slate-700 mb-0.5">聯絡電話（預設密碼）<span class="required-marker" aria-hidden="true"> *</span></label>
-        <input type="text" id="addStaffPhone" required class="w-full text-xs border border-slate-300 rounded-xl p-2" placeholder="0912345678">
+        <label for="addStaffPhone" class="block text-[11px] font-bold text-slate-700 mb-0.5">密碼<span class="required-marker" aria-hidden="true"> *</span></label>
+        <input type="password" id="addStaffPhone" required class="w-full text-xs border border-slate-300 rounded-xl p-2" placeholder="輸入密碼">
       </div>
       <div class="grid grid-cols-2 gap-2">
         <div>
-          <label class="block text-[11px] font-bold text-slate-700 mb-0.5">單位編號</label>
-          <input type="text" id="addStaffUnitCode" class="w-full text-xs border border-slate-300 rounded-xl p-2" placeholder="FGU">
+          <label for="addStaffUnitCode" class="block text-[11px] font-bold text-slate-700 mb-0.5">單位編號<span class="required-marker" aria-hidden="true"> *</span></label>
+          <input type="text" id="addStaffUnitCode" required class="w-full text-xs border border-slate-300 rounded-xl p-2" placeholder="FGU">
         </div>
         <div>
-          <label class="block text-[11px] font-bold text-slate-700 mb-0.5">所屬學院／單位名稱</label>
-          <input type="text" id="addStaffUnitName" class="w-full text-xs border border-slate-300 rounded-xl p-2" placeholder="佛光永續學院">
+          <label for="addStaffUnitName" class="block text-[11px] font-bold text-slate-700 mb-0.5">單位名稱<span class="required-marker" aria-hidden="true"> *</span></label>
+          <input type="text" id="addStaffUnitName" required class="w-full text-xs border border-slate-300 rounded-xl p-2" placeholder="佛光永續學院">
         </div>
       </div>
       <div>
-        <label class="block text-[11px] font-bold text-slate-700 mb-0.5">權限角色<span class="required-marker" aria-hidden="true"> *</span></label>
+        <label for="addStaffRole" class="block text-[11px] font-bold text-slate-700 mb-0.5">帳號權限角色<span class="required-marker" aria-hidden="true"> *</span></label>
         <select id="addStaffRole" class="w-full text-xs border border-slate-300 rounded-xl p-2 bg-white">
-          <option value="admin">🛡️ 系統管理員 (admin)</option>
-          <option value="teacher">👩‍🏫 授課講師／助教 (teacher)</option>
+          <option value="admin">系統管理員</option>
         </select>
-      </div>
-      <div>
-        <label class="block text-[11px] font-bold text-slate-700 mb-0.5">自訂登入密碼（若留空預設為電話）</label>
-        <input type="password" id="addStaffPassword" class="w-full text-xs border border-slate-300 rounded-xl p-2" placeholder="留空即以電話為密碼">
       </div>
       <div class="flex justify-end gap-2 pt-2">
         <button onclick="document.getElementById('addStaffModal').classList.add('hidden')" class="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-bold rounded-xl">取消</button>
@@ -1259,6 +1254,7 @@
       </div>
     </div>
   </div>
+
 
   <!-- Batch Import Staff Modal -->
   <div id="batchImportStaffModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
@@ -1321,7 +1317,7 @@
 
   <script src="/static/js/activity-details.js?v=20261020_required_dates"></script>
   <script src="/static/js/academic-years.js?v=20261020_required_markers"></script>
-  <script src="/static/js/app.js?v=20261021_staff_id_sort"></script>
+  <script src="/static/js/app.js?v=20261023_staff_editor"></script>
   <script src="/static/js/category-admin.js?v=20261020_required_markers"></script>
 </body>
 </html>

@@ -51,6 +51,26 @@ class StaffAccountsTests(unittest.TestCase):
             row = conn.execute(f"SELECT email FROM {table} WHERE id = ?", (account_id,)).fetchone()
         return {"Authorization": "Bearer " + create_access_token({"id": account_id, "name": name, "email": row["email"] if row else name + "@example.invalid", "role": role})}
 
+    def test_staff_units_are_required_and_password_edit_changes_login(self):
+        payload={"name":"Manager","email":"manager@example.invalid","phone":"first-pass","unit_code":"TEST","unit_name":"測試單位","role":"admin"}
+        for field in ("unit_code","unit_name"):
+            response=self.client.post("/api/admin/staff",headers=self.admin,json={**payload,field:"  "})
+            self.assertEqual(response.status_code,422,response.text)
+        response=self.client.post("/api/admin/staff",headers=self.admin,json=payload)
+        self.assertEqual(response.status_code,200,response.text)
+        sid=response.json()["id"]
+        def login(password):
+            return self.client.post("/api/auth/login",json={"account":payload["email"],"password":password,"account_type":"staff"})
+        self.assertEqual(login("first-pass").status_code,200)
+        with database.get_db() as conn:
+            original=conn.execute("SELECT password_hash FROM admin WHERE id=?",(sid,)).fetchone()[0]
+        self.assertEqual(self.client.put(f"/api/admin/staff/{sid}",headers=self.admin,json={**payload,"name":"Renamed","password":""}).status_code,200)
+        with database.get_db() as conn:
+            self.assertEqual(conn.execute("SELECT password_hash FROM admin WHERE id=?",(sid,)).fetchone()[0],original)
+        self.assertEqual(self.client.put(f"/api/admin/staff/{sid}",headers=self.admin,json={**payload,"phone":"changed-pass","password":""}).status_code,200)
+        self.assertEqual(login("changed-pass").status_code,200)
+        self.assertGreaterEqual(login("first-pass").status_code,400)
+
     def test_migration_preserves_passwords_records_and_is_repeatable(self):
         for _ in range(2):
             database._DB_INITIALIZED = False
@@ -142,7 +162,7 @@ class StaffAccountsTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.json()["user"]["id"], 2)
         headers = {"Authorization": "Bearer " + response.json()["token"]}
-        response = self.client.post("/api/admin/staff", headers=headers, json={"name": "Next", "email": "next@example.invalid", "phone": "123"})
+        response = self.client.post("/api/admin/staff", headers=headers, json={"name": "Next", "email": "next@example.invalid", "phone": "123", "unit_code":"TEST", "unit_name":"Test"})
         self.assertEqual(response.json()["id"], 3)
 
     def test_legacy_tables_do_not_block_completed_renames(self):
@@ -249,7 +269,7 @@ class StaffAccountsTests(unittest.TestCase):
         self.assertEqual([row["user_name"] for row in own], ["Admin"])
 
     def test_staff_crud_import_export_stays_out_of_students(self):
-        payload = {"name": "New staff", "email": "new@example.invalid", "phone": "555", "role": "teacher", "password": "test-password"}
+        payload = {"name": "New staff", "email": "new@example.invalid", "phone": "555", "role": "teacher", "password": "test-password", "unit_code":"TEST", "unit_name":"Test"}
         response = self.client.post("/api/admin/staff", headers=self.admin, json=payload)
         self.assertEqual(response.status_code, 200, response.text)
         account_id = response.json()["id"]

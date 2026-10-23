@@ -2304,13 +2304,13 @@ window.saveNewStaff = async function() {
   const email = document.getElementById("addStaffEmail").value.trim();
   const email_backup = document.getElementById("addStaffEmailBackup").value.trim();
   const phone = document.getElementById("addStaffPhone").value.trim();
-  const unit_code = document.getElementById("addStaffUnitCode").value.trim() || "FGU";
-  const unit_name = document.getElementById("addStaffUnitName").value.trim() || "佛光永續學院";
-  const role = document.getElementById("addStaffRole").value || "admin";
-  const password = document.getElementById("addStaffPassword").value.trim();
+  const unit_code = document.getElementById("addStaffUnitCode").value.trim();
+  const unit_name = document.getElementById("addStaffUnitName").value.trim();
+  const role = "admin";
+  const password = phone;
 
-  if (!name || !email || !phone) {
-    showToast("姓名、登入帳號/Email 與聯絡電話為必填欄位！", "error");
+  if (!name || !email || !phone || !unit_code || !unit_name) {
+    showToast("請填寫管理員姓名、Email（帳號）、密碼、單位編號及單位名稱！", "error");
     return;
   }
 
@@ -2331,7 +2331,7 @@ window.saveNewStaff = async function() {
       document.getElementById("addStaffEmail").value = "";
       document.getElementById("addStaffEmailBackup").value = "";
       document.getElementById("addStaffPhone").value = "";
-      document.getElementById("addStaffPassword").value = "";
+
       loadAdminStaff();
     } else {
       showToast(d.detail || "新增失敗", "error");
@@ -2612,6 +2612,22 @@ window.openEditStudentModal = function(id, name, email, email_backup, phone, uni
   const modal = document.getElementById("editStudentModal");
   if (!modal) return;
   modal.classList.remove("hidden");
+  const isStaff = accountType === "staff";
+  document.getElementById("editStudentTitle").textContent = isStaff ? "修改管理帳號" : "修改學員資料";
+  const labels = {
+    Name: isStaff ? "管理員姓名" : "學員姓名",
+    Email: "Email（帳號）",
+    EmailBackup: isStaff ? "Email（備用）" : "Email（補課平台）",
+    Phone: isStaff ? "密碼" : "聯絡電話（密碼）",
+    UnitCode: isStaff ? "單位編號" : "分會／分團編號",
+    UnitName: isStaff ? "單位名稱" : "所屬分會完整名稱"
+  };
+  for (const [field, label] of Object.entries(labels)) {
+    const required = ['Name', 'Email', 'Phone'].includes(field) || (isStaff && ['UnitCode', 'UnitName'].includes(field));
+    document.getElementById(`editStudent${field}Label`).innerHTML = label + (required ? '<span class="required-marker" aria-hidden="true"> *</span>' : '');
+    document.getElementById(`editStudent${field}`).required = required;
+  }
+  document.getElementById("editStudentPasswordBox").classList[isStaff ? "add" : "remove"]("hidden");
   document.getElementById("editStudentId").value = id;
   document.getElementById("editStudentName").value = name;
   document.getElementById("editStudentEmail").value = email;
@@ -2631,9 +2647,9 @@ window.openEditStudentModal = function(id, name, email, email_backup, phone, uni
   const roleSel = document.getElementById("editStudentRole");
   if (roleSel) {
     roleSel.innerHTML = accountType === "staff"
-      ? '<option value="teacher">授課講師／助教</option><option value="admin">系統管理員</option>'
+      ? '<option value="admin">系統管理員</option>'
       : '<option value="student">學員</option>';
-    roleSel.value = role || "student";
+    roleSel.value = isStaff ? "admin" : "student";
     roleSel.disabled = accountType === "student" || email === "admin";
   }
 };
@@ -2648,16 +2664,21 @@ window.saveStudentEdit = async function() {
     ? state.editingPhone : displayedPhone;
   const unit_code = document.getElementById("editStudentUnitCode").value.trim();
   const unit_name = document.getElementById("editStudentUnitName").value.trim();
-  const password = document.getElementById("editStudentPassword").value.trim();
+  const password = state.editingAccountType === "staff" ? "" : document.getElementById("editStudentPassword").value.trim();
   const role = document.getElementById("editStudentRole")?.value || "student";
 
   if (!name || !email || !phone) {
-    showToast("姓名、Email與電話為必填欄位", "error");
+    showToast(state.editingAccountType === "staff" ? "請填寫管理員姓名、Email（帳號）及密碼！" : "姓名、Email與電話為必填欄位", "error");
+    return;
+  }
+
+  if (state.editingAccountType === "staff" && (!unit_code || !unit_name)) {
+    showToast("請填寫單位編號及單位名稱！", "error");
     return;
   }
 
   if (state.editingAccountType === "staff" && phone.includes("*")) {
-    showToast("如需修改電話，請輸入完整內容；未修改則保留原值。", "error");
+    showToast("如需修改密碼，請輸入完整內容；未修改則保留原值。", "error");
     return;
   }
 

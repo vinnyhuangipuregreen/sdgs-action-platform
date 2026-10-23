@@ -21,7 +21,7 @@ test('editing uses the original account type and only offers roles from that tab
   });
   vm.runInContext(source.slice(source.indexOf('function maskStaffPhone('), source.indexOf('async function loadAdminStaff(')) + edit, context);
   for (const type of ['staff', 'student']) {
-    context.window.openEditStudentModal(1, 'Test', 'test@example.invalid', '', '555', '', '', type === 'staff' ? 'teacher' : 'student', type);
+    context.window.openEditStudentModal(1, 'Test', 'test@example.invalid', '', '555', 'TEST', 'Test', type === 'staff' ? 'teacher' : 'student', type);
     assert.equal(elements.editStudentRole.innerHTML.includes('value="student"'), type === 'student');
     assert.equal(elements.editStudentRole.innerHTML.includes('value="admin"'), type === 'staff');
     await context.window.saveStudentEdit();
@@ -40,4 +40,19 @@ test('staff deletion calls staff endpoints for both single and batch actions', a
   await context.window.deleteSingleStaff(2, 'Test');
   await context.window.executeBatchDeleteStaff();
   assert.deepEqual(requests, ['/api/admin/staff/2', '/api/admin/staff/batch-delete']);
+});
+
+test('new staff requires both unit fields and submits its single password with admin role', async () => {
+  const values = {addStaffName:'Manager',addStaffEmail:'manager@example.invalid',addStaffEmailBackup:'',addStaffPhone:'test-password',addStaffUnitCode:'',addStaffUnitName:'Unit',addStaffRole:'teacher'};
+  const requests = [], notices = [];
+  const context = vm.createContext({window:{},state:{token:'test'},API_BASE:'/api',document:{getElementById:id=>({value:values[id]})},
+    showToast:message=>notices.push(message),fetch:async(url,options)=>{requests.push(JSON.parse(options.body));return {ok:false,json:async()=>({})};}});
+  vm.runInContext(source.slice(source.indexOf('window.saveNewStaff ='),source.indexOf('window.deleteSingleStaff =')),context);
+  await context.window.saveNewStaff();
+  assert.equal(requests.length,0);
+  values.addStaffUnitCode='TEST';
+  await context.window.saveNewStaff();
+  assert.equal(requests[0].password,'test-password');
+  assert.equal(requests[0].role,'admin');
+  assert.equal(requests[0].unit_code,'TEST');
 });
