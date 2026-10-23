@@ -70,6 +70,13 @@ class AttendanceBridgeTests(unittest.TestCase):
         response.status_code = 404
         with patch("app.attendance_bridge.requests.request", return_value=response):
             self.assertEqual(self.client.get(path, headers=self.headers).status_code, 404)
+
+    def test_dashboard_styles_keep_the_original_public_course_illustration(self):
+        response = SimpleNamespace(status_code=200, content=b'.hero { background: url("/static/images/course-registration.png"); }', headers={"Content-Type": "text/css"})
+        with patch("app.attendance_bridge.requests.request", return_value=response):
+            result = self.client.get("/attendance-admin/static/css/attendance.css")
+        self.assertEqual(result.status_code, 200)
+        self.assertIn('https://sdgs-attendance-record.vercel.app/static/images/course-registration.png', result.text)
         self.assertEqual(upstream.call_args.kwargs["headers"]["Authorization"], "Bearer " + self.token)
         self.assertNotIn(self.token, result.text)
         self.assertEqual(result.headers["cache-control"], "no-store")

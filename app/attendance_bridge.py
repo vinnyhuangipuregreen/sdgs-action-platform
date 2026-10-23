@@ -36,6 +36,8 @@ def proxy_course_request(request, path, body, token):
     if path.startswith("static/css/"):
         headers["Cache-Control"] = "public, max-age=3600"
     content = upstream.content
+    if path.startswith("static/css/"):
+        content = content.decode("utf-8").replace("/static/images/", ORIGIN + "/static/images/").encode("utf-8")
     if "text/html" in upstream.headers.get("Content-Type", ""):
         html = content.decode("utf-8")
         # Both navigation links and the original inline fetch calls stay in this gateway.
