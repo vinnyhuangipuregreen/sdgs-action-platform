@@ -7,7 +7,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <link rel="stylesheet" href="/static/css/style.css?v=20261020_required_markers">
-  <link rel="stylesheet" href="/static/css/design-system.css?v=20261020_ipuregreen_logo">
+  <link rel="stylesheet" href="/static/css/design-system.css?v=20261023_admin_navigation">
   <script>
     tailwind.config = {
       theme: {
@@ -528,31 +528,19 @@
         <!-- 管理功能子頁籤導覽 -->
         <div class="flex flex-wrap items-center gap-2 pt-4" id="adminSubTabsNav">
           <button type="button" data-admin-subtab="dashboard" onclick="switchAdminSubTab('dashboard')"
-            class="admin-subtab-btn px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center gap-2 bg-emerald-700 text-white shadow-sm cursor-pointer">
-            <span>📊</span> 儀錶板
-          </button>
-          <button type="button" data-admin-subtab="matching" onclick="switchAdminSubTab('matching')" class="admin-subtab-btn px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-slate-100 text-slate-600 flex items-center gap-2">🏆 配對挑戰賽管理</button>
-          <button type="button" data-admin-subtab="attendance" onclick="switchAdminSubTab('attendance')" class="admin-subtab-btn px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-slate-100 text-slate-600 flex items-center gap-2">📚 課程簽到／請假／補課管理</button>
-          <button type="button" data-admin-subtab="categories" onclick="switchAdminSubTab('categories')"
-            class="admin-subtab-btn px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer">
-            <span>🗂️</span> 分類
-          </button>
-          <button type="button" data-admin-subtab="worksheets" onclick="switchAdminSubTab('worksheets')"
-            class="admin-subtab-btn px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer">
-            <span>📝</span> 學員練習單審核與評分管理
-          </button>
+            class="admin-subtab-btn px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center gap-2 bg-emerald-700 text-white shadow-sm cursor-pointer"><span>📊</span> 儀錶板</button>
           <button type="button" data-admin-subtab="staff" onclick="switchAdminSubTab('staff')"
-            class="admin-subtab-btn px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer">
-            <span>🛡️</span> 管理帳號與權限名單維護
-          </button>
+            class="admin-subtab-btn px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer"><span>🛡️</span> 管理員</button>
           <button type="button" data-admin-subtab="students" onclick="switchAdminSubTab('students')"
-            class="admin-subtab-btn px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer">
-            <span>🎓</span> 學員帳號與權限名冊維護
-          </button>
+            class="admin-subtab-btn px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer"><span>🎓</span> 學員</button>
+          <button type="button" data-admin-subtab="attendance" onclick="switchAdminSubTab('attendance')" class="admin-subtab-btn px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-slate-100 text-slate-600 flex items-center gap-2"><span>📚</span> 課程登錄</button>
+          <button type="button" data-admin-subtab="categories" onclick="switchAdminSubTab('categories')"
+            class="admin-subtab-btn px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer"><span>🗂️</span> 連動分析練習單(分類)</button>
+          <button type="button" data-admin-subtab="worksheets" onclick="switchAdminSubTab('worksheets')"
+            class="admin-subtab-btn px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer"><span>📝</span> 連動分析練習單(評分)</button>
+          <button type="button" data-admin-subtab="matching" onclick="switchAdminSubTab('matching')" class="admin-subtab-btn px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-slate-100 text-slate-600 flex items-center gap-2"><span>🏆</span> SDGs配對挑戰賽</button>
           <button type="button" data-admin-subtab="gamesettings" onclick="switchAdminSubTab('gamesettings')"
-            class="admin-subtab-btn px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer">
-            <span>🎮</span> 遊戲參數與計分管理
-          </button>
+            class="admin-subtab-btn px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer"><span>🎮</span> SDGs地球保衛戰</button>
         </div>
       </div>
 
