@@ -2517,7 +2517,9 @@ async function loadAdminStudents(search = state.studentSearch, page = state.stud
           <td class="p-3 text-slate-600 font-mono">${s.phone}</td>
           <td class="p-3 font-mono text-slate-600 font-bold">${s.unit_code || '-'}</td>
           <td class="p-3 text-slate-700 font-medium">${s.unit_name || '佛光學員'}</td>
-          <td class="p-3 text-right space-x-1">
+          <td class="p-3 text-right space-x-1 whitespace-nowrap">
+            <button type="button" class="px-2 py-1 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded font-semibold text-[11px] whitespace-nowrap"
+              onclick="openStudentAttendance(${s.id})">📚 課程登錄</button>
             <button class="px-2 py-1 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 rounded font-semibold text-[11px]"
               onclick="openEditStudentModal(${s.id}, '${(s.name || '').replace(/'/g, "\\'")}', '${(s.email || '').replace(/'/g, "\\'")}', '${(s.email_backup || '').replace(/'/g, "\\'")}', '${(s.phone || '').replace(/'/g, "\\'")}', '${(s.unit_code || '').replace(/'/g, "\\'")}', '${(s.unit_name || '佛光學員').replace(/'/g, "\\'")}', '${s.role || 'student'}')">
               修改
@@ -2539,6 +2541,42 @@ async function loadAdminStudents(search = state.studentSearch, page = state.stud
 }
 
 window.loadAdminStudents = loadAdminStudents;
+let studentAttendanceRequest = 0;
+window.closeStudentAttendance = function() {
+  studentAttendanceRequest++;
+  document.getElementById("studentAttendanceModal").classList.add("hidden");
+  document.getElementById("studentAttendanceFrame").srcdoc = "";
+};
+
+window.openStudentAttendance = async function(id) {
+  if (!state.token || !["admin", "teacher"].includes(state.user?.role)) return;
+  const requestId = ++studentAttendanceRequest;
+  const token = state.token;
+  const frame = document.getElementById("studentAttendanceFrame");
+  const status = document.getElementById("studentAttendanceStatus");
+  frame.classList.add("hidden");
+  frame.srcdoc = "";
+  status.classList.remove("hidden");
+  status.textContent = "正在載入學員課程登錄…";
+  document.getElementById("studentAttendanceModal").classList.remove("hidden");
+  try {
+    const response = await fetch(`${API_BASE}/attendance-admin/students/${id}/view`, {
+      headers: {Authorization: `Bearer ${token}`}, signal: AbortSignal.timeout(45000)
+    });
+    if (state.token !== token || requestId !== studentAttendanceRequest) return;
+    if (response.status === 401) { closeStudentAttendance(); handleLogout(); return; }
+    if (!response.ok) throw new Error(response.status === 404 ? "此學年度查無此學員。" : "學員課程登錄暫時無法載入，請關閉後重試。");
+    const html = await response.text();
+    if (state.token !== token || requestId !== studentAttendanceRequest) return;
+    frame.srcdoc = html;
+    frame.classList.remove("hidden");
+    status.classList.add("hidden");
+  } catch (error) {
+    if (state.token !== token || requestId !== studentAttendanceRequest) return;
+    status.textContent = error.message === "此學年度查無此學員。" ? error.message : "學員課程登錄暫時無法載入，請關閉後重試。";
+  }
+};
+
 window.changeStudentPage = function(delta) {
   const page = state.studentPage + delta;
   if (page >= 1 && page <= state.studentTotalPages) return loadAdminStudents(state.studentSearch, page);

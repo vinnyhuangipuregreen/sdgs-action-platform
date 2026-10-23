@@ -53,6 +53,23 @@ class AttendanceBridgeTests(unittest.TestCase):
         self.assertIn('fetch(`/attendance-admin/api/admin/courses/${id}`)', result.text)
         self.assertIn("location.replace('/attendance-admin/admin')", result.text)
         self.assertEqual(upstream.call_args.args[1], "https://sdgs-attendance-record.vercel.app/admin")
+
+    def test_student_dashboard_uses_staff_session_and_platform_student_id(self):
+        path = "/api/attendance-admin/students/433/view"
+        self.assertEqual(self.client.get(path).status_code, 401)
+        student = create_access_token({"id": 1, "name": "Student", "email": "student", "role": "student"})
+        self.assertEqual(self.client.get(path, headers={"Authorization": "Bearer " + student}).status_code, 403)
+        response = SimpleNamespace(status_code=200, content=b'<link href="/static/css/attendance.css"><h1>Student dashboard</h1>', headers={"Content-Type": "text/html"})
+        with patch("app.attendance_bridge.requests.request", return_value=response) as upstream:
+            result = self.client.get(path, headers=self.headers)
+        self.assertEqual(result.status_code, 200)
+        self.assertIn("HttpOnly", result.headers["set-cookie"])
+        self.assertIn('/attendance-admin/static/css/attendance.css', result.text)
+        self.assertEqual(upstream.call_args.args[1], "https://sdgs-attendance-record.vercel.app/admin/students/433/dashboard")
+        self.assertEqual(upstream.call_args.kwargs["headers"]["Authorization"], "Bearer " + self.token)
+        response.status_code = 404
+        with patch("app.attendance_bridge.requests.request", return_value=response):
+            self.assertEqual(self.client.get(path, headers=self.headers).status_code, 404)
         self.assertEqual(upstream.call_args.kwargs["headers"]["Authorization"], "Bearer " + self.token)
         self.assertNotIn(self.token, result.text)
         self.assertEqual(result.headers["cache-control"], "no-store")

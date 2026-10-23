@@ -71,6 +71,7 @@ test('visible IDs start at one across pages while actions retain account IDs', a
     assert.match(rows[0].html, new RegExp(`value="${first + 432}"`));
     assert.match(rows[0].html, new RegExp(`openEditStudentModal\\(${first + 432},`));
     assert.match(rows[0].html, new RegExp(`deleteSingleStudent\\(${first + 432},`));
+    assert.match(rows[0].html, new RegExp(`openStudentAttendance\\(${first + 432}\\)`));
   }
 });
 

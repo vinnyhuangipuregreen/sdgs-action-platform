@@ -798,10 +798,9 @@
             <div>
               <div class="flex items-center gap-2">
                 <span class="text-lg">🎓</span>
-                <h3 class="font-black text-base sm:text-lg text-slate-900">學員帳號與權限名冊維護 (完整 6 欄位架構)</h3>
+                <h3 class="font-black text-base sm:text-lg text-slate-900">學員</h3>
                 <span class="text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold">學員專屬名冊</span>
               </div>
-              <p class="text-xs text-slate-500 mt-1">支援【新增】、【修改】、【刪除】、【瀏覽】、【匯入】與【匯出】學員名單（管理員帳號已獨立至管理名單分頁）</p>
             </div>
             <div class="flex flex-wrap items-center gap-2 w-full lg:w-auto">
               <input type="text" id="adminStudentSearch" oninput="loadAdminStudents(this.value)" class="text-xs border border-slate-300 rounded-xl px-3.5 py-2 w-44 bg-white focus:ring-emerald-500" placeholder="搜尋姓名/Email/分會">
@@ -1071,6 +1070,18 @@
     </div>
   </div>
 
+  <!-- Student Attendance Modal -->
+  <div id="studentAttendanceModal" role="dialog" aria-modal="true" aria-labelledby="studentAttendanceTitle" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+    <div class="bg-white rounded-3xl shadow-xl w-full max-w-6xl h-[90vh] flex flex-col overflow-hidden">
+      <div class="p-4 border-b flex items-center justify-between gap-4">
+        <h3 id="studentAttendanceTitle" class="font-black text-lg text-slate-900">學員課程登錄</h3>
+        <button type="button" onclick="closeStudentAttendance()" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-bold">關閉</button>
+      </div>
+      <p id="studentAttendanceStatus" role="status" class="p-4 text-sm text-slate-600"></p>
+      <iframe id="studentAttendanceFrame" class="hidden w-full flex-1 border-0" title="學員課程登錄紀錄" src="about:blank"></iframe>
+    </div>
+  </div>
+
   <!-- Add Student Modal -->
   <div id="addStudentModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
     <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-3">
@@ -1305,7 +1316,7 @@
 
   <script src="/static/js/activity-details.js?v=20261020_required_dates"></script>
   <script src="/static/js/academic-years.js?v=20261020_required_markers"></script>
-  <script src="/static/js/app.js?v=20261023_staff_labels"></script>
+  <script src="/static/js/app.js?v=20261023_student_attendance"></script>
   <script src="/static/js/category-admin.js?v=20261020_required_markers"></script>
 </body>
 </html>

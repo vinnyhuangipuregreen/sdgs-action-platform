@@ -10,7 +10,7 @@ ORIGIN = "https://sdgs-attendance-record.vercel.app"
 PREFIX = "/attendance-admin"
 COOKIE = "attendance_admin_session"
 ROUTES = {
-    "GET": r"(?:admin(?:/courses/\d+/(?:attendance|leaves|pathdemy))?|api/admin/(?:courses|pathdemy)/sample-excel|api/admin/courses/\d+/pathdemy/sample-excel|api/admin/courses/\d+/(?:attendance|leaves|pathdemy)/export|static/css/(?:design-system|attendance)\.css)",
+    "GET": r"(?:admin(?:/courses/\d+/(?:attendance|leaves|pathdemy)|/students/\d+/dashboard)?|api/admin/(?:courses|pathdemy)/sample-excel|api/admin/courses/\d+/pathdemy/sample-excel|api/admin/courses/\d+/(?:attendance|leaves|pathdemy)/export|static/css/(?:design-system|attendance)\.css)",
     "POST": r"api/admin/courses(?:/import|/\d+/pathdemy/import)?",
     "PUT": r"api/admin/courses/\d+",
     "DELETE": r"api/admin/courses/\d+(?:/(?:leaves|pathdemy)/\d+)?",
@@ -48,10 +48,11 @@ def proxy_course_request(request, path, body, token):
 
 
 def install_attendance_admin(app, require_admin, get_current_user):
-    @app.get("/api/attendance-admin/view")
-    def start_session(request: Request, user=Depends(require_admin)):
+    def open_view(request, user, path):
         token = request.headers.get("authorization", "").removeprefix("Bearer ")
-        response = proxy_course_request(request, "admin", b"", token)
+        response = proxy_course_request(request, path, b"", token)
+        if response.status_code == 404:
+            raise HTTPException(404, "此學年度查無此學員")
         if response.status_code != 200 or "text/html" not in response.headers.get("content-type", ""):
             raise HTTPException(503, "原課程後台暫時無法載入，請稍後重試")
         response.set_cookie(COOKIE, token, path=PREFIX, httponly=True,
@@ -59,6 +60,14 @@ def install_attendance_admin(app, require_admin, get_current_user):
                             max_age=max(0, int(user["exp"] - time.time())))
         response.headers["Cache-Control"] = "no-store"
         return response
+
+    @app.get("/api/attendance-admin/view")
+    def start_session(request: Request, user=Depends(require_admin)):
+        return open_view(request, user, "admin")
+
+    @app.get("/api/attendance-admin/students/{student_id}/view")
+    def student_view(student_id: int, request: Request, user=Depends(require_admin)):
+        return open_view(request, user, f"admin/students/{student_id}/dashboard")
 
     @app.api_route(PREFIX + "/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
     async def course_admin(request: Request, path: str):
