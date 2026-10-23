@@ -53,6 +53,9 @@ class AttendanceBridgeTests(unittest.TestCase):
         self.assertIn('fetch(`/attendance-admin/api/admin/courses/${id}`)', result.text)
         self.assertIn("location.replace('/attendance-admin/admin')", result.text)
         self.assertEqual(upstream.call_args.args[1], "https://sdgs-attendance-record.vercel.app/admin")
+        self.assertEqual(upstream.call_args.kwargs["headers"]["Authorization"], "Bearer " + self.token)
+        self.assertNotIn(self.token, result.text)
+        self.assertEqual(result.headers["cache-control"], "no-store")
 
     def test_student_dashboard_uses_staff_session_and_platform_student_id(self):
         path = "/api/attendance-admin/students/433/view"
@@ -77,9 +80,6 @@ class AttendanceBridgeTests(unittest.TestCase):
             result = self.client.get("/attendance-admin/static/css/attendance.css")
         self.assertEqual(result.status_code, 200)
         self.assertIn('https://sdgs-attendance-record.vercel.app/static/images/course-registration.png', result.text)
-        self.assertEqual(upstream.call_args.kwargs["headers"]["Authorization"], "Bearer " + self.token)
-        self.assertNotIn(self.token, result.text)
-        self.assertEqual(result.headers["cache-control"], "no-store")
 
     def test_import_keeps_the_multipart_body_and_blocks_cross_site_writes(self):
         self.start()
