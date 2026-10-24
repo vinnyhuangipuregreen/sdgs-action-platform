@@ -6,6 +6,22 @@ const source=fs.readFileSync(require('node:path').join(__dirname,'../app/static/
 const durationSource=source.slice(source.indexOf('  async function duration('),source.indexOf('  async function saveEditor('));
 const flushSource=source.slice(source.indexOf('  async function flush('),source.indexOf('  function tick('));
 
+test('category lists and editors display independent numbers while actions keep relation IDs',async()=>{
+  const listeners={},elements={};
+  const options={terms:[{id:3,number:1,kind:'course',name:'課程分類'},{id:7,number:1,kind:'material',name:'教材分類'}],instructors:[],staff:[]};
+  const context=vm.createContext({window:{addEventListener(){}},state:{token:'test'},structuredClone,
+    document:{addEventListener(name,fn){listeners[name]=fn;},getElementById(id){return elements[id]??=( {innerHTML:'',showModal(){},addEventListener(){}} );}},
+    fetch:async()=>({ok:true,json:async()=>options}),showToast(message){assert.fail(message);}});
+  vm.runInContext(source,context);
+  for(const [type,id] of [['nsp_categories',3],['nsp_material_categories',7]]){
+    await context.window.NSP.admin(type);
+    assert.match(elements['adminSubPane_'+type].innerHTML,/<td>#1<\/td>/);
+    assert.match(elements['adminSubPane_'+type].innerHTML,new RegExp('data-id="'+id+'"'));
+    await listeners.click({target:{closest:()=>({dataset:{nsp:'edit',id:String(id),type}})}});
+    assert.match(elements.nspDialog.innerHTML,/name="display_id" type="text" value="1" readonly/);
+  }
+});
+
 test('video metadata updates the current lesson row after an editor rerender',async()=>{
   function row(){const fields={'[data-lesson-url]':{value:'https://example.invalid/video.mp4'},'[data-lesson-duration]':{value:0},'.nsp-detect-status':{textContent:''}};return {dataset:{lessonId:'stable_id'},fields,querySelector:s=>fields[s]};}
   const old=row(),replacement=row();let current=old,video;

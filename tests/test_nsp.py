@@ -97,3 +97,52 @@ class NspTests(unittest.TestCase):
             result=self.request('GET','/admin/catalog')
         self.assertEqual(result,[{'id':1,'title':'原課程'}])
         self.assertEqual(upstream.call_args.kwargs['headers']['Authorization'],self.admin['Authorization'])
+
+    def test_legacy_category_numbering_preserves_all_existing_course_links(self):
+        from app.nsp import _ready
+        initialize()
+        with database.get_db(unscoped=True) as conn:
+            for kind in ('course', 'material'):
+                conn.execute("INSERT INTO nsp_terms (year_id,kind,name,created_by,created_at,updated_by,updated_at) VALUES (1,?,'temporary','','','','')", (kind,))
+            conn.execute('DELETE FROM nsp_terms')
+        req = self.prepare()
+        self.assertEqual(req['category_id'], 3)
+        cid = self.request('POST', '/admin/courses', req)['id']
+        self.request('PUT', f'/courses/{cid}/progress/lesson_1', {'position':20,'watched_delta':20}, headers=self.student)
+        self.request('PUT', f'/courses/{cid}/bookmark', headers=self.student)
+        tables = ('nsp_terms', 'nsp_courses', 'nsp_instructors', 'nsp_progress', 'nsp_bookmarks')
+        with database.get_db(unscoped=True) as conn:
+            before = {t:[dict(r) for r in conn.execute('SELECT * FROM '+t)] for t in tables}
+            conn.execute('DROP TRIGGER nsp_term_number_on_insert')
+            conn.execute('DROP TABLE nsp_term_numbers')
+        _ready.clear()
+        initialize()
+        terms = self.request('GET', '/admin/options')['terms']
+        self.assertEqual([(t['id'],t['kind'],t['number']) for t in terms], [(3,'course',1),(4,'material',1)])
+        with database.get_db(unscoped=True) as conn:
+            self.assertEqual(before, {t:[dict(r) for r in conn.execute('SELECT * FROM '+t)] for t in tables})
+        _ready.clear()
+        initialize()
+        self.assertEqual(terms, self.request('GET', '/admin/options')['terms'])
+        public = self.request('GET', '/courses', headers=self.student)[0]
+        self.assertEqual(public['category'], 'NSP自然永續培訓')
+        self.assertEqual(public['materials'][0]['category_id'], 4)
+        self.assertEqual(public['progress'][0]['position'], 20)
+
+    def test_category_numbers_are_independent_stable_and_not_reused(self):
+        self.prepare()
+        self.request('POST', '/admin/terms/course', {'name':'分類二'})
+        terms = self.request('GET', '/admin/options')['terms']
+        removed = next(t for t in terms if t['name']=='分類二')
+        self.assertEqual(removed['number'], 2)
+        self.request('DELETE', f"/admin/terms/{removed['id']}")
+        self.request('POST', '/admin/terms/course', {'name':'分類三'})
+        self.request('POST', '/admin/terms/material', {'name':'教材二'})
+        self.request('PUT', '/admin/terms/course/1', {'name':'分類一改名'})
+        terms = self.request('GET', '/admin/options')['terms']
+        self.assertEqual([(t['name'],t['number']) for t in terms], [('分類一改名',1),('講義',1),('分類三',3),('教材二',2)])
+        year = self.create_year()
+        other = self.switch(year)
+        for kind in ('course', 'material'):
+            self.request('POST', '/admin/terms/'+kind, {'name':'新年度分類'}, headers=other)
+        self.assertEqual([t['number'] for t in self.request('GET', '/admin/options', headers=other)['terms']], [1,1])

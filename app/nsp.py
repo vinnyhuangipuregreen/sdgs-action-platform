@@ -82,6 +82,19 @@ def initialize():
     with get_db(unscoped=True) as conn:
         for sql in statements:
             conn.cursor().execute(sql)
+        # Public category numbers are independent of the IDs used by course links.
+        numbering = [
+            """CREATE TABLE IF NOT EXISTS nsp_term_numbers (term_id INTEGER PRIMARY KEY, year_id INTEGER NOT NULL, kind TEXT NOT NULL, number INTEGER NOT NULL, UNIQUE(year_id,kind,number))""",
+            """INSERT OR IGNORE INTO nsp_term_numbers (term_id,year_id,kind,number) SELECT id,year_id,kind,ROW_NUMBER() OVER (PARTITION BY year_id,kind ORDER BY id) FROM nsp_terms""",
+            """CREATE TRIGGER IF NOT EXISTS nsp_term_number_on_insert AFTER INSERT ON nsp_terms BEGIN INSERT INTO nsp_term_numbers (term_id,year_id,kind,number) SELECT NEW.id,NEW.year_id,NEW.kind,COALESCE(MAX(number),0)+1 FROM nsp_term_numbers WHERE year_id=NEW.year_id AND kind=NEW.kind; END""",
+        ]
+        cursor = conn.cursor()
+        if hasattr(cursor, "execute_transaction"):
+            cursor.execute_transaction(numbering)
+        else:
+            cursor.execute("BEGIN IMMEDIATE")
+            for sql in numbering:
+                cursor.execute(sql)
     _ready.add(key)
 
 
@@ -183,7 +196,7 @@ def install_nsp(app, require_user, require_admin):
     @app.get("/api/nsp/admin/options")
     def options(user=Depends(require_admin)):
         with database() as conn:
-            terms = [dict(r) for r in conn.cursor().execute("SELECT * FROM nsp_terms WHERE year_id=? ORDER BY id", (current_year_id.get(),)).fetchall()]
+            terms = [dict(r) for r in conn.cursor().execute("SELECT t.*,n.number FROM nsp_terms t JOIN nsp_term_numbers n ON n.term_id=t.id WHERE t.year_id=? ORDER BY t.id", (current_year_id.get(),)).fetchall()]
             instructors = [dict(r) for r in conn.cursor().execute("SELECT * FROM nsp_instructors WHERE year_id=? ORDER BY id", (current_year_id.get(),)).fetchall()]
         with get_accounts_db() as conn:
             staff = [dict(r) for r in conn.cursor().execute("SELECT id,name,email FROM admin WHERE role IN ('admin','teacher') ORDER BY id").fetchall()]
