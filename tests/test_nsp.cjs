@@ -6,6 +6,25 @@ const source=fs.readFileSync(require('node:path').join(__dirname,'../app/static/
 const durationSource=source.slice(source.indexOf('  async function duration('),source.indexOf('  async function saveEditor('));
 const flushSource=source.slice(source.indexOf('  async function flush('),source.indexOf('  function tick('));
 
+test('YouTube iframe blocks popups and top navigation before loading while retaining playback API access',()=>{
+  const frame={attributes:{},setAttribute(name,value){this.attributes[name]=value;}};
+  Object.defineProperty(frame,'src',{set(value){
+    assert.equal(frame.attributes.sandbox,'allow-scripts allow-same-origin allow-presentation');
+    this.source=value;
+  }});
+  const helper=source.slice(source.indexOf('  function youtubeFrame('),source.indexOf('  async function play('));
+  const context=vm.createContext({URL,location:{origin:'https://example.invalid'},document:{createElement(tag){assert.equal(tag,'iframe');return frame;}}});
+  vm.runInContext(helper+'\nthis.makeFrame=youtubeFrame;',context);
+  context.makeFrame('M7lc1UVf-VE','課程影片',12);
+  const url=new URL(frame.source);
+  assert.equal(url.searchParams.get('enablejsapi'),'1');
+  assert.equal(url.searchParams.get('origin'),'https://example.invalid');
+  assert.equal(url.searchParams.get('start'),'12');
+  assert.doesNotMatch(frame.attributes.sandbox,/allow-popups|allow-top-navigation/);
+  assert.match(frame.allow,/fullscreen/);
+  assert.equal(frame.referrerPolicy,'strict-origin-when-cross-origin');
+});
+
 test('Google Drive cover sharing URLs become image URLs without changing other image hosts',()=>{
   const coverSource=source.slice(source.indexOf('  const coverImage ='),source.indexOf('  const uid ='));
   const context=vm.createContext({URL});

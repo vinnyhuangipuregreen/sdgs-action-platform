@@ -120,6 +120,18 @@ window.NSP = (() => {
     player=null; p.yt?.destroy(); p.video?.pause();
     return saved;
   }
+  function youtubeFrame(id,title,start=0) {
+    const frame=document.createElement('iframe');
+    frame.id='nspYouTube'; frame.title=title;
+    frame.setAttribute('sandbox','allow-scripts allow-same-origin allow-presentation');
+    frame.allow='autoplay; encrypted-media; picture-in-picture; fullscreen';
+    frame.allowFullscreen=true; frame.frameBorder='0';
+    frame.referrerPolicy='strict-origin-when-cross-origin';
+    const url=new URL(`https://www.youtube.com/embed/${id}`);
+    for(const [key,value] of Object.entries({enablejsapi:1,origin:location.origin,start,rel:0,playsinline:1}))url.searchParams.set(key,value);
+    frame.src=url.href;
+    return frame;
+  }
   async function play(id,lessonId) {
     await stop(); const c=course(id),l=lessons(c).find(l=>l.id===lessonId); if(!l)return;
     window.scrollTo(0,0);
@@ -128,8 +140,9 @@ window.NSP = (() => {
     const p={c,l,token:state.token,pending:0,sending:false,clock:Date.now(),lastSave:Date.now()}; player=p; updateProgress(c);
     const videoId=youtubeId(l.url);
     if(videoId){
-      document.getElementById('nspVideo').innerHTML='<div id="nspYouTube"></div>';
-      try{const YT=await youtube();if(player!==p)return;p.yt=new YT.Player('nspYouTube',{videoId,playerVars:{start:Math.floor(saved?.position||0),rel:0},events:{onReady:()=>{p.position=()=>p.yt.getCurrentTime();p.playing=()=>p.yt.getPlayerState()===1;p.rate=()=>p.yt.getPlaybackRate();},onStateChange:event=>{if([0,2].includes(event.data))flush(p);},onError:()=>{document.getElementById('nspSaveStatus').textContent='影片無法播放，請確認連結及嵌入權限';}}});}catch(error){document.getElementById('nspSaveStatus').textContent=error.message;}
+      const frame=youtubeFrame(videoId,l.title,Math.floor(saved?.position||0));
+      document.getElementById('nspVideo').appendChild(frame);
+      try{const YT=await youtube();if(player!==p)return;p.yt=new YT.Player(frame,{events:{onReady:()=>{p.position=()=>p.yt.getCurrentTime();p.playing=()=>p.yt.getPlayerState()===1;p.rate=()=>p.yt.getPlaybackRate();},onStateChange:event=>{if([0,2].includes(event.data))flush(p);},onError:()=>{document.getElementById('nspSaveStatus').textContent='影片無法播放，請確認連結及嵌入權限';}}});}catch(error){document.getElementById('nspSaveStatus').textContent=error.message;}
     }else{
       const v=document.createElement('video');v.controls=true;v.preload='metadata';v.src=l.url;v.poster=coverImage(c.cover_url);v.playsInline=true;document.getElementById('nspVideo').appendChild(v);p.video=v;p.position=()=>v.currentTime;p.playing=()=>!v.paused&&!v.ended;p.rate=()=>v.playbackRate;
       v.addEventListener('loadedmetadata',()=>{v.currentTime=Math.min(saved?.position||0,v.duration||0);});v.addEventListener('pause',()=>{if(player===p)flush(p);});v.addEventListener('ended',()=>{if(player===p)flush(p);});v.addEventListener('error',()=>{if(player===p)document.getElementById('nspSaveStatus').textContent='影片無法播放，請使用可公開存取的影片檔案或 YouTube 網址';});
