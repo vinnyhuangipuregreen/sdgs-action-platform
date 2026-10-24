@@ -754,10 +754,10 @@
                 ＋ 新增管理帳號
               </button>
               <button type="button" onclick="openBatchImportStaffModal()" class="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-sm cursor-pointer">
-                📥 匯入管理名單
+                📥 匯入名單
               </button>
-              <button type="button" onclick="exportStaffCSV()" class="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold shadow-sm cursor-pointer">
-                📤 匯出管理名單 (CSV)
+              <button type="button" onclick="exportStaffXLSX()" class="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold shadow-sm cursor-pointer">
+                📤 匯出名單
               </button>
               <button type="button" id="batchDeleteStaffBtn" onclick="executeBatchDeleteStaff()" disabled class="px-3.5 py-2 bg-red-600 hover:bg-red-700 disabled:bg-slate-200 text-white rounded-xl text-xs font-bold cursor-pointer">
                 🗑️ 刪除選取 (<span id="selectedStaffCount">0</span>)
@@ -1262,23 +1262,23 @@
   <div id="batchImportStaffModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
     <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-emerald-100 space-y-4">
       <div class="flex justify-between items-center">
-        <h3 class="font-extrabold text-base text-slate-900">📥 批次匯入管理員／講師名單</h3>
+        <h3 class="font-extrabold text-base text-slate-900">📥 管理員—匯入名單</h3>
         <button onclick="document.getElementById('batchImportStaffModal').classList.add('hidden')" class="text-slate-400 hover:text-slate-600 text-lg">✕</button>
       </div>
       <p class="text-xs text-slate-500">
-        標準 6 欄位格式：<code class="bg-slate-100 text-slate-700 px-1 py-0.5 rounded font-mono">姓名, 登入帳號/Email, 備用Email, 聯絡電話（密碼）, 單位編號, 所屬單位名稱</code>
+        <code class="bg-slate-100 text-slate-700 px-1 py-0.5 rounded font-mono">管理員姓名, Email（帳號）, Email（備用）, 密碼, 單位編號, 單位名稱, 權限角色</code>
       </p>
       <div>
-        <label class="block text-xs font-bold text-slate-700 mb-1">方式一：上傳 CSV 檔案</label>
-        <input type="file" id="importStaffFileInput" accept=".csv,.txt" class="w-full text-xs border border-slate-300 rounded-xl p-2 bg-slate-50">
+        <label class="block text-xs font-bold text-slate-700 mb-1">方式一：上傳 XLSX 檔案</label>
+        <input type="file" id="importStaffFileInput" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="w-full text-xs border border-slate-300 rounded-xl p-2 bg-slate-50">
       </div>
       <div>
-        <label class="block text-xs font-bold text-slate-700 mb-1">方式二：直接貼上管理名單內容</label>
-        <textarea id="importStaffTextarea" rows="4" class="w-full text-xs border border-slate-300 rounded-xl p-2.5 font-mono" placeholder="張講師, teacher01@fgu.edu.tw, backup@fgu.edu.tw, 0912345678, FGU, 佛光永續學院"></textarea>
+        <label class="block text-xs font-bold text-slate-700 mb-1">方式二：直接貼上內容</label>
+        <textarea id="importStaffTextarea" rows="4" class="w-full text-xs border border-slate-300 rounded-xl p-2.5 font-mono" placeholder="管理員, admin@gmail.com, admin_backup@gmail.com, XXXXXXXX, ipuregreen, 綠色公益基金會, 系統管理員"></textarea>
       </div>
       <div class="flex justify-end gap-2 pt-2">
         <button onclick="document.getElementById('batchImportStaffModal').classList.add('hidden')" class="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-bold rounded-xl">取消</button>
-        <button onclick="executeBatchImportStaff()" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md">確認批次匯入</button>
+        <button id="importStaffSubmitBtn" onclick="executeBatchImportStaff()" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md">確認批次匯入</button>
       </div>
     </div>
   </div>
@@ -1319,7 +1319,7 @@
 
   <script src="/static/js/activity-details.js?v=20261020_required_dates"></script>
   <script src="/static/js/academic-years.js?v=20261020_required_markers"></script>
-  <script src="/static/js/app.js?v=20261023_student_attendance"></script>
+  <script src="/static/js/app.js?v=20261024_staff_xlsx"></script>
   <script src="/static/js/category-admin.js?v=20261020_required_markers"></script>
 </body>
 </html>

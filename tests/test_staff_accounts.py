@@ -275,7 +275,7 @@ class StaffAccountsTests(unittest.TestCase):
         account_id = response.json()["id"]
         response = self.client.put(f"/api/admin/staff/{account_id}", headers=self.admin, json={**payload, "name": "Updated"})
         self.assertEqual(response.status_code, 200, response.text)
-        imported = self.client.post("/api/admin/staff/batch-import", headers=self.admin, json={"students": [{"name": "Imported", "email": "imported@example.invalid", "role": "admin"}]})
+        imported = self.client.post("/api/admin/staff/batch-import", headers=self.admin, json={"students": [{"name": "Imported", "email": "imported@example.invalid", "phone": "000123", "unit_code": "TEST", "unit_name": "Test", "role": "admin"}]})
         self.assertEqual(imported.json()["imported_count"], 1)
         students = self.client.get("/api/admin/students", headers=self.admin).json()["items"]
         self.assertEqual([row["name"] for row in students], ["Student"])

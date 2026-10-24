@@ -2389,78 +2389,59 @@ window.openBatchImportStaffModal = function() {
 };
 
 window.executeBatchImportStaff = async function() {
-  const textVal = document.getElementById("importStaffTextarea").value.trim();
+  const textarea = document.getElementById("importStaffTextarea");
   const fileInput = document.getElementById("importStaffFileInput");
-
-  let parsedStaff = [];
-
-  function parseCSVLine(line) {
-    const parts = line.split(",").map(p => p.trim());
-    if (parts.length >= 2 && parts[0] && parts[1] && !["姓名", "管理員／講師姓名", "學員姓名"].includes(parts[0])) {
-      return {
-        name: parts[0],
-        email: parts[1],
-        email_backup: parts[2] || "",
-        phone: parts[3] || "0912345678",
-        unit_code: parts[4] || "FGU",
-        unit_name: parts[5] || parts[4] || "佛光永續學院",
-        role: parts[6] || "admin"
-      };
-    }
-    return null;
-  }
-
-  if (textVal) {
-    const lines = textVal.split("\n");
-    for (let l of lines) {
-      const s = parseCSVLine(l);
-      if (s) parsedStaff.push(s);
-    }
-  }
-
-  if (fileInput && fileInput.files.length > 0) {
-    const file = fileInput.files[0];
-    const text = await file.text();
-    const rows = text.split("\n");
-    for (let r of rows) {
-      const s = parseCSVLine(r);
-      if (s) parsedStaff.push(s);
-    }
-  }
-
-  if (parsedStaff.length === 0) {
-    showToast("未偵測到有效管理名單資料，請確認格式（姓名, 帳號/Email, 備用Email, 電話, 單位編號, 單位名稱）", "error");
+  const file = fileInput.files[0];
+  const text = textarea.value.trim();
+  if ((!file && !text) || (file && text)) {
+    showToast("請擇一上傳 XLSX 檔案或直接貼上內容", "error");
     return;
   }
-
-  try {
-    const res = await fetch(`${API_BASE}/admin/staff/batch-import`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${state.token}`
-      },
-      body: JSON.stringify({ students: parsedStaff, default_role: "admin" })
-    });
-    const d = await res.json();
-    if (res.ok) {
-      showToast(d.message || "管理名單批次匯入完成！", "success");
-      document.getElementById("batchImportStaffModal").classList.add("hidden");
-      document.getElementById("importStaffTextarea").value = "";
-      if (fileInput) fileInput.value = "";
-      loadAdminStaff();
+  if (file && !file.name.toLowerCase().endsWith(".xlsx")) {
+    showToast("請選擇 XLSX 檔案", "error");
+    return;
+  }
+  const button = document.getElementById("importStaffSubmitBtn");
+  if (button.disabled) return;
+  let body, headers = { Authorization: `Bearer ${state.token}` };
+  if (file) {
+    body = new FormData();
+    body.append("file", file);
+  } else {
+    const rows = text.split(/\r?\n/).filter(line => line.trim()).map(line => line.split(",").map(value => value.trim()));
+    if (rows[0]?.[0] === "管理員姓名") rows.shift();
+    if (!rows.length || rows.some(row => row.length !== 7)) {
+      showToast("請依指定的七個欄位貼上內容，每位管理員一行", "error");
+      return;
     }
-  } catch (err) {
-    showToast("匯入失敗", "error");
+    body = JSON.stringify({ students: rows.map(row => Object.fromEntries(["name", "email", "email_backup", "phone", "unit_code", "unit_name", "role"].map((field, index) => [field, row[index]]))) });
+    headers["Content-Type"] = "application/json";
+  }
+  button.disabled = true;
+  button.textContent = "資料匯入中，請稍候，謝謝。";
+  try {
+    const res = await fetch(`${API_BASE}/admin/staff/${file ? "import-xlsx" : "batch-import"}`, { method: "POST", headers, body });
+    const data = await res.json();
+    if (!res.ok) { showToast(data.detail || "管理員名單匯入失敗", "error"); return; }
+    showToast(data.message || "管理員名單匯入完成！", "success");
+    document.getElementById("batchImportStaffModal").classList.add("hidden");
+    textarea.value = "";
+    fileInput.value = "";
+    loadAdminStaff();
+  } catch {
+    showToast("匯入失敗，請稍後再試", "error");
+  } finally {
+    button.disabled = false;
+    button.textContent = "確認批次匯入";
   }
 };
 
-window.exportStaffCSV = function() {
+window.exportStaffXLSX = function() {
   if (!state.token) {
     showToast("請先登入管理員帳號", "warning");
     return;
   }
-  window.open(`${API_BASE}/admin/staff/export-csv?token=${encodeURIComponent(state.token)}`, "_blank");
+  window.open(`${API_BASE}/admin/staff/export-xlsx?token=${encodeURIComponent(state.token)}`, "_blank");
 };
 
 // ==============================================================================

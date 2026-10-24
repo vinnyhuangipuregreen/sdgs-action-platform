@@ -29,6 +29,8 @@ from app.attendance_bridge import install_attendance_admin
 from app.academic_years import install_years, get_year, enrolled, enroll, student_ids, enrollment_filter, annual_profile, annual_profiles
 from app.year_scope import current_year_id
 from app.student_roster import read_roster, export_roster
+from app.student_roster import validate_staff_rows
+from urllib.parse import quote
 
 app = FastAPI(
     title="SDGs 與氣候行動連動分析與智慧學習平台",
@@ -1060,7 +1062,27 @@ def export_students_xlsx(user: dict = Depends(require_admin)):
 
 @app.post("/api/admin/staff/batch-import")
 def batch_import_staff(req: BatchImportRequest, user: dict = Depends(require_admin)):
+    validate_staff_rows(req.students)
     return import_accounts(req, "admin")
+
+
+@app.post("/api/admin/staff/import-xlsx")
+def import_staff_xlsx(file: UploadFile = File(...), user: dict = Depends(require_admin)):
+    if not (file.filename or "").lower().endswith(".xlsx"):
+        raise HTTPException(400, "請選擇 XLSX 檔案")
+    staff = read_roster(file.file.read(2 * 1024 * 1024 + 1), staff=True)
+    return import_accounts(BatchImportRequest(students=staff), "admin")
+
+
+@app.get("/api/admin/staff/export-xlsx")
+def export_staff_xlsx(user: dict = Depends(require_admin)):
+    with get_accounts_db() as conn:
+        rows = conn.cursor().execute("SELECT name,email,email_backup,phone,unit_code,unit_name,role FROM admin WHERE role IN ('admin','teacher') ORDER BY id ASC").fetchall()
+    timestamp = datetime.now(timezone(timedelta(hours=8))).strftime("%Y%m%d%H%M%S")
+    filename = quote(f"管理員_{timestamp}.xlsx")
+    return StreamingResponse(export_roster([dict(row) for row in rows], staff=True),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename=admin_{timestamp}.xlsx; filename*=UTF-8''{filename}"})
 
 @app.get("/api/admin/students/export-csv")
 def export_students_csv(user: dict = Depends(require_admin)):
