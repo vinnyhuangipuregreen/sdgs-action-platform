@@ -58,3 +58,6 @@
 @media(max-width:800px){.nsp-stats { grid-template-columns:1fr 1fr; }.nsp-course-detail,.nsp-learning { grid-template-columns:1fr; }.nsp-outline { max-height:260px; }.nsp-form-grid,.nsp-edit-material,.nsp-edit-lesson { grid-template-columns:1fr; }.nsp-edit-section>.nsp-admin-heading { flex-wrap:wrap; }.nsp-row-actions { flex-direction:row; }.nsp-welcome { padding:22px; }.nsp-welcome h2 { font-size:23px; }.nsp-player-header strong { flex-basis:70%; }}
 @media(max-width:500px){.nsp-course-grid { grid-template-columns:1fr; }.nsp-stats { gap:10px; }.nsp-stats>div { padding:16px; grid-template-columns:30px 1fr; }.nsp-stats strong { font-size:23px; }.nsp-content { padding:18px; }.nsp-catalog-toolbar { align-items:stretch; flex-direction:column; }}
 
+
+.nsp-editor-number { display:block; color:#1d4ed8; font-size:16px; font-weight:700; line-height:1.5; margin-bottom:8px; }
+.nsp-edit-lesson>.nsp-editor-number,.nsp-edit-material>.nsp-editor-number { grid-column:1 / -1; margin-bottom:-6px; }

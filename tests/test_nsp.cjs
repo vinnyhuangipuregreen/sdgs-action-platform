@@ -6,6 +6,25 @@ const source=fs.readFileSync(require('node:path').join(__dirname,'../app/static/
 const durationSource=source.slice(source.indexOf('  async function duration('),source.indexOf('  async function saveEditor('));
 const flushSource=source.slice(source.indexOf('  async function flush('),source.indexOf('  function tick('));
 
+test('editor section, lesson and material numbers follow their current order without changing IDs',()=>{
+  const elements={nspSectionEditor:{},nspMaterialEditor:{}};
+  const lesson=id=>({id,title:id,url:'https://example.invalid/'+id,duration:30});
+  const edit={sections:[{title:'章節甲',lessons:[lesson('a'),lesson('b')]},{title:'章節乙',lessons:[lesson('c')]}],materials:[{title:'教材甲'},{title:'教材乙'}]};
+  const context=vm.createContext({edit,meta:{terms:[]},document:{getElementById:id=>elements[id]},esc:v=>v??'',field:(label,value)=>value,button:()=>'',options:()=>'',empty:()=>''});
+  const renderSource=source.slice(source.indexOf('  function renderSections('),source.indexOf('  async function duration('));
+  const moveSource=source.slice(source.indexOf('  function move('),source.indexOf("  document.addEventListener('click'"));
+  vm.runInContext(renderSource+moveSource+'\nrenderSections();renderMaterials();',context);
+  assert.match(elements.nspSectionEditor.innerHTML,/#章節1[\s\S]*章節甲[\s\S]*#影片1-1[\s\S]*#影片1-2[\s\S]*#章節2[\s\S]*#影片2-1/);
+  assert.match(elements.nspMaterialEditor.innerHTML,/#教材1[\s\S]*教材甲[\s\S]*#教材2[\s\S]*教材乙/);
+  vm.runInContext('move(edit.sections,1,-1);move(edit.materials,1,-1);renderSections();renderMaterials();',context);
+  assert.match(elements.nspSectionEditor.innerHTML,/#章節1[\s\S]*章節乙[\s\S]*data-lesson-id="c"[\s\S]*#影片1-1/);
+  assert.match(elements.nspMaterialEditor.innerHTML,/#教材1[\s\S]*教材乙/);
+  vm.runInContext('edit.sections.splice(0,1);edit.sections[0].lessons.splice(0,1);edit.materials.splice(0,1);renderSections();renderMaterials();',context);
+  assert.match(elements.nspSectionEditor.innerHTML,/data-lesson-id="b"[\s\S]*#影片1-1/);
+  assert.doesNotMatch(elements.nspSectionEditor.innerHTML,/#章節2|#影片1-2/);
+  assert.doesNotMatch(elements.nspMaterialEditor.innerHTML,/#教材2/);
+});
+
 test('YouTube iframe blocks popups and top navigation before loading while retaining playback API access',()=>{
   const frame={attributes:{},setAttribute(name,value){this.attributes[name]=value;}};
   Object.defineProperty(frame,'src',{set(value){
