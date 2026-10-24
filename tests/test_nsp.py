@@ -22,7 +22,7 @@ class NspTests(unittest.TestCase):
     def prepare(self):
         self.request('POST','/admin/terms/course',{'name':'NSP自然永續培訓'})
         self.request('POST','/admin/terms/material',{'name':'講義'})
-        self.request('POST','/admin/instructors',{'name':'講師','staff_id':1,'bio':'簡介','expertise':'永續'})
+        self.request('POST','/admin/instructors',{'name':'講師','email':'teacher@example.invalid','bio':'簡介','expertise':'永續'})
         options = self.request('GET','/admin/options')
         return {'title':'NSP測試課程','category_id':options['terms'][0]['id'], 'cover_url':'https://example.invalid/cover.png','info_html':'<h3>課程資訊</h3><p>內容<script>alert(1)</script><a href="javascript:alert(1)">連結</a></p>', 'instructor_ids':[options['instructors'][0]['id']], 'sections':[{'title':'章節一','lessons':[{'id':'lesson_1','title':'影片一','url':'https://example.invalid/video.mp4','duration':100}]}], 'materials':[{'title':'教材','category_id':options['terms'][1]['id'],'url':'https://example.invalid/file.pdf','note':'課後複習'}], 'status':'published'}
 
@@ -72,7 +72,45 @@ class NspTests(unittest.TestCase):
         self.request('POST','/admin/courses',malformed,status=422)
         self.request('POST','/admin/terms/course',{'name':'  '},status=400)
         self.request('POST','/admin/terms/course',{'name':'NSP自然永續培訓'},status=409)
-        self.request('POST','/admin/instructors',{'name':'無效','staff_id':999,'expertise':'永續'},status=400)
+        self.request('POST','/admin/instructors',{'name':'無效','email':'invalid','bio':'簡介','expertise':'永續'},status=422)
+
+    def test_instructor_email_is_independent_and_bio_is_required(self):
+        req = self.prepare()
+        cid = self.request('POST', '/admin/courses', req)['id']
+        iid = req['instructor_ids'][0]
+        body = {'name':'外聘講師','email':'external@example.invalid','bio':'外聘講師簡介','expertise':'永續教育'}
+        with patch('app.nsp.get_accounts_db', side_effect=AssertionError('Instructor editing must not query administrators')):
+            self.request('PUT', f'/admin/instructors/{iid}', body)
+            self.request('POST', '/admin/instructors', {**body,'email':'another@example.invalid'})
+            rows = self.request('GET', '/admin/options')['instructors']
+        self.assertEqual(rows[0]['email'], body['email'])
+        self.assertEqual(rows[0]['bio'], body['bio'])
+        self.assertEqual(self.request('GET', '/admin/courses')[0]['instructor_ids'], [iid])
+        self.assertEqual(self.request('GET', '/courses', headers=self.student)[0]['instructors'], ['外聘講師'])
+        for invalid in ({'bio':''},{'bio':'  '},{'email':''},{'email':'not-an-email'}):
+            self.request('POST', '/admin/instructors', {**body,**invalid}, status=422)
+            self.request('PUT', f'/admin/instructors/{iid}', {**body,**invalid}, status=422)
+        self.request('POST', '/admin/instructors', {k:v for k,v in body.items() if k!='bio'}, status=422)
+
+    def test_legacy_instructor_email_migrates_without_changing_course_links(self):
+        from app.nsp import _ready
+        req = self.prepare()
+        self.request('POST', '/admin/courses', req)
+        with database.get_db(unscoped=True) as conn:
+            conn.execute('UPDATE nsp_instructors SET staff_id=1')
+            conn.execute('ALTER TABLE nsp_instructors DROP COLUMN email')
+            courses = [dict(r) for r in conn.execute('SELECT * FROM nsp_courses')]
+        _ready.clear()
+        initialize()
+        rows = self.request('GET', '/admin/options')['instructors']
+        self.assertEqual(rows[0]['email'], 'test@example.invalid')
+        self.assertEqual(rows[0]['id'], req['instructor_ids'][0])
+        with database.get_db(unscoped=True) as conn:
+            self.assertEqual(courses, [dict(r) for r in conn.execute('SELECT * FROM nsp_courses')])
+        _ready.clear()
+        with patch('app.nsp.get_accounts_db', side_effect=AssertionError('Stored email must remain independent')):
+            initialize()
+            self.assertEqual(self.request('GET', '/admin/options')['instructors'][0]['email'], 'test@example.invalid')
 
     def test_year_isolation_permission_checks_and_changed_video_resets_completion(self):
         req=self.prepare();cid=self.request('POST','/admin/courses',req)['id']

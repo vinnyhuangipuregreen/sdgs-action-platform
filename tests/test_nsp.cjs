@@ -22,6 +22,26 @@ test('category lists and editors display independent numbers while actions keep 
   }
 });
 
+test('instructor editors use an independent email input and require the biography',async()=>{
+  const listeners={},elements={};
+  const options={terms:[],instructors:[{id:3,name:'外聘講師',email:'external@example.invalid',bio:'簡介',expertise:'永續'}]};
+  const context=vm.createContext({window:{addEventListener(){}},state:{token:'test'},structuredClone,
+    document:{addEventListener(name,fn){listeners[name]=fn;},getElementById(id){return elements[id]??={innerHTML:'',showModal(){},addEventListener(){}};}},
+    fetch:async()=>({ok:true,json:async()=>options}),showToast(message){assert.fail(message);}});
+  vm.runInContext(source,context);
+  await context.window.NSP.admin('nsp_instructors');
+  assert.match(elements.adminSubPane_nsp_instructors.innerHTML,/external@example.invalid/);
+  for(const action of ['new','edit']){
+    await listeners.click({target:{closest:()=>({dataset:{nsp:action,id:'3',type:'nsp_instructors'}})}});
+    const html=elements.nspDialog.innerHTML;
+    assert.match(html,/<input name="email" type="email"[^>]+required/);
+    assert.match(html,/講師簡介<span class="required-marker"> \*<\/span>/);
+    assert.match(html,/<textarea name="bio" rows="4" required>/);
+    assert.doesNotMatch(html,/name="staff_id"|<select/);
+    if(action==='edit')assert.match(html,/value="external@example.invalid"/);
+  }
+});
+
 test('video metadata updates the current lesson row after an editor rerender',async()=>{
   function row(){const fields={'[data-lesson-url]':{value:'https://example.invalid/video.mp4'},'[data-lesson-duration]':{value:0},'.nsp-detect-status':{textContent:''}};return {dataset:{lessonId:'stable_id'},fields,querySelector:s=>fields[s]};}
   const old=row(),replacement=row();let current=old,video;

@@ -95,6 +95,15 @@ def initialize():
             cursor.execute("BEGIN IMMEDIATE")
             for sql in numbering:
                 cursor.execute(sql)
+        if "email" not in {r["name"] for r in cursor.execute("PRAGMA table_info(nsp_instructors)").fetchall()}:
+            cursor.execute("ALTER TABLE nsp_instructors ADD COLUMN email TEXT NOT NULL DEFAULT ''")
+        legacy = cursor.execute("SELECT id,staff_id FROM nsp_instructors WHERE email='' AND staff_id>0").fetchall()
+        if legacy:
+            with get_accounts_db() as accounts:
+                emails = {r["id"]:r["email"] for r in accounts.cursor().execute("SELECT id,email FROM admin").fetchall()}
+            for row in legacy:
+                if row["staff_id"] in emails:
+                    cursor.execute("UPDATE nsp_instructors SET email=? WHERE id=? AND email=''", (emails[row["staff_id"]], row["id"]))
     _ready.add(key)
 
 
@@ -109,9 +118,19 @@ class TermWrite(BaseModel):
 
 class InstructorWrite(BaseModel):
     name: str = Field(min_length=1, max_length=100)
-    staff_id: int = Field(gt=0)
-    bio: str = Field(default="", max_length=10000)
+    email: str = Field(min_length=1, max_length=254)
+    bio: str = Field(min_length=1, max_length=10000)
     expertise: str = Field(min_length=1, max_length=10000)
+
+    @model_validator(mode="after")
+    def validate_profile(self):
+        self.email = self.email.strip()
+        self.bio = self.bio.strip()
+        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", self.email):
+            raise ValueError("請填寫有效的電子郵件")
+        if not self.bio:
+            raise ValueError("請填寫講師簡介")
+        return self
 
 
 class Lesson(BaseModel):
@@ -198,9 +217,7 @@ def install_nsp(app, require_user, require_admin):
         with database() as conn:
             terms = [dict(r) for r in conn.cursor().execute("SELECT t.*,n.number FROM nsp_terms t JOIN nsp_term_numbers n ON n.term_id=t.id WHERE t.year_id=? ORDER BY t.id", (current_year_id.get(),)).fetchall()]
             instructors = [dict(r) for r in conn.cursor().execute("SELECT * FROM nsp_instructors WHERE year_id=? ORDER BY id", (current_year_id.get(),)).fetchall()]
-        with get_accounts_db() as conn:
-            staff = [dict(r) for r in conn.cursor().execute("SELECT id,name,email FROM admin WHERE role IN ('admin','teacher') ORDER BY id").fetchall()]
-        return {"terms": terms, "instructors": instructors, "staff": staff}
+        return {"terms": terms, "instructors": instructors}
 
     @app.get("/api/nsp/admin/catalog")
     def catalog(request: Request, user=Depends(require_admin)):
@@ -253,16 +270,13 @@ def install_nsp(app, require_user, require_admin):
     def save_instructor(req, user, item_id=None):
         if not req.name.strip() or not req.expertise.strip():
             raise HTTPException(400, "請填寫講師名稱與專長")
-        with get_accounts_db() as conn:
-            if not conn.cursor().execute("SELECT id FROM admin WHERE id=? AND role IN ('admin','teacher')", (req.staff_id,)).fetchone():
-                raise HTTPException(400, "請選擇有效的管理員電子郵件")
         with database() as conn:
             if item_id is None:
-                conn.cursor().execute("INSERT INTO nsp_instructors (year_id,name,staff_id,bio,expertise,created_by,created_at,updated_by,updated_at) VALUES (?,?,?,?,?,?,?,?,?)", (current_year_id.get(), req.name.strip(), req.staff_id, req.bio, req.expertise.strip(), user["email"], now(), user["email"], now()))
+                conn.cursor().execute("INSERT INTO nsp_instructors (year_id,name,staff_id,email,bio,expertise,created_by,created_at,updated_by,updated_at) VALUES (?,?,0,?,?,?,?,?,?,?)", (current_year_id.get(), req.name.strip(), req.email, req.bio, req.expertise.strip(), user["email"], now(), user["email"], now()))
             else:
                 if not conn.cursor().execute("SELECT id FROM nsp_instructors WHERE year_id=? AND id=?", (current_year_id.get(), item_id)).fetchone():
                     raise HTTPException(404, "找不到講師")
-                conn.cursor().execute("UPDATE nsp_instructors SET name=?,staff_id=?,bio=?,expertise=?,updated_by=?,updated_at=? WHERE year_id=? AND id=?", (req.name.strip(), req.staff_id, req.bio, req.expertise.strip(), user["email"], now(), current_year_id.get(), item_id))
+                conn.cursor().execute("UPDATE nsp_instructors SET name=?,email=?,bio=?,expertise=?,updated_by=?,updated_at=? WHERE year_id=? AND id=?", (req.name.strip(), req.email, req.bio, req.expertise.strip(), user["email"], now(), current_year_id.get(), item_id))
         return {"success": True}
 
     @app.get("/api/nsp/admin/courses")
