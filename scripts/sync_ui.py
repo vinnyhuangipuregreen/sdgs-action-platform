@@ -6,6 +6,7 @@ ROOT = Path(__file__).resolve().parents[1]
 VERSION = "20261019_ui1280"
 ORIGIN = "https://sdgs-action-platform.vercel.app"
 NAV = [("home", "⌂", "首頁", ORIGIN + "/#home"),
+       ("attendance", "📚", "課程登錄", "https://sdgs-attendance-record.vercel.app/dashboard"),
        ("nsp", "📚", "NSP數位學習", ORIGIN + "/#nsp"),
        ("matching", "🏆", "SDGs配對挑戰賽", "https://sdgs-matching-game.vercel.app/"),
        ("worksheet", "▤", "連動分析練習單", ORIGIN + "/#worksheet"),
