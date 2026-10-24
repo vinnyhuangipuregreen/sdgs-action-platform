@@ -98,6 +98,20 @@ test('all four admin lists show administrator names and Taipei timestamps',async
   assert.match(details,/修改：管理員乙／2026-10-25 00:00:00/);
 });
 
+test('course list and editor display number one but keep the original course ID for actions',async()=>{
+  const elements={},listeners={};
+  const course={id:2,number:1,title:'導論：自然永續的核心觀念與倫理基礎',status:'published'};
+  const context=vm.createContext({window:{addEventListener(){}},state:{token:'test'},structuredClone,
+    document:{addEventListener(name,fn){listeners[name]=fn;},getElementById(id){return elements[id]??={innerHTML:'',value:'',open:true,classList:{add(){}},showModal(){},addEventListener(){}};}},
+    fetch:async path=>({ok:true,json:async()=>path.endsWith('/courses')?[course]:path.endsWith('/catalog')?[]:{terms:[],instructors:[]}}),showToast(message){assert.fail(message);}});
+  vm.runInContext(source,context);
+  await context.window.NSP.admin('nsp_courses');
+  assert.match(elements.adminSubPane_nsp_courses.innerHTML,/<td>#1<\/td>/);
+  assert.match(elements.adminSubPane_nsp_courses.innerHTML,/data-id="2"/);
+  await listeners.click({target:{closest:()=>({dataset:{nsp:'edit',id:'2',type:'nsp_courses'}})}});
+  assert.match(elements.nspDialog.innerHTML,/name="display_id" type="text" value="1" readonly/);
+});
+
 test('video metadata updates the current lesson row after an editor rerender',async()=>{
   function row(){const fields={'[data-lesson-url]':{value:'https://example.invalid/video.mp4'},'[data-lesson-duration]':{value:0},'.nsp-detect-status':{textContent:''}};return {dataset:{lessonId:'stable_id'},fields,querySelector:s=>fields[s]};}
   const old=row(),replacement=row();let current=old,video;

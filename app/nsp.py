@@ -90,6 +90,9 @@ def initialize():
             """CREATE TABLE IF NOT EXISTS nsp_instructor_numbers (instructor_id INTEGER PRIMARY KEY, year_id INTEGER NOT NULL, number INTEGER NOT NULL, UNIQUE(year_id,number))""",
             """INSERT OR IGNORE INTO nsp_instructor_numbers (instructor_id,year_id,number) SELECT id,year_id,ROW_NUMBER() OVER (PARTITION BY year_id ORDER BY id) FROM nsp_instructors""",
             """CREATE TRIGGER IF NOT EXISTS nsp_instructor_number_on_insert AFTER INSERT ON nsp_instructors BEGIN INSERT INTO nsp_instructor_numbers (instructor_id,year_id,number) SELECT NEW.id,NEW.year_id,COALESCE(MAX(number),0)+1 FROM nsp_instructor_numbers WHERE year_id=NEW.year_id; END""",
+            """CREATE TABLE IF NOT EXISTS nsp_course_numbers (course_id INTEGER PRIMARY KEY, year_id INTEGER NOT NULL, number INTEGER NOT NULL, UNIQUE(year_id,number))""",
+            """INSERT OR IGNORE INTO nsp_course_numbers (course_id,year_id,number) SELECT id,year_id,ROW_NUMBER() OVER (PARTITION BY year_id ORDER BY id) FROM nsp_courses""",
+            """CREATE TRIGGER IF NOT EXISTS nsp_course_number_on_insert AFTER INSERT ON nsp_courses BEGIN INSERT INTO nsp_course_numbers (course_id,year_id,number) SELECT NEW.id,NEW.year_id,COALESCE(MAX(number),0)+1 FROM nsp_course_numbers WHERE year_id=NEW.year_id; END""",
         ]
         cursor = conn.cursor()
         if hasattr(cursor, "execute_transaction"):
@@ -296,7 +299,7 @@ def install_nsp(app, require_user, require_admin):
     @app.get("/api/nsp/admin/courses")
     def admin_courses(user=Depends(require_admin)):
         with database() as conn:
-            rows = [course_data(row) for row in conn.cursor().execute("SELECT * FROM nsp_courses WHERE year_id=? ORDER BY id DESC", (current_year_id.get(),)).fetchall()]
+            rows = [course_data(row) for row in conn.cursor().execute("SELECT c.*,n.number FROM nsp_courses c JOIN nsp_course_numbers n ON n.course_id=c.id WHERE c.year_id=? ORDER BY c.id DESC", (current_year_id.get(),)).fetchall()]
         return add_audit_names(rows)
 
     @app.post("/api/nsp/admin/courses")

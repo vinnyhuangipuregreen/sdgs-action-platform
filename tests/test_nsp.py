@@ -177,6 +177,36 @@ class NspTests(unittest.TestCase):
         self.assertEqual(result,[{'id':1,'title':'原課程'}])
         self.assertEqual(upstream.call_args.kwargs['headers']['Authorization'],self.admin['Authorization'])
 
+    def test_course_number_migration_preserves_content_progress_and_relations(self):
+        from app.nsp import _ready
+        req = self.prepare()
+        temporary = self.request('POST', '/admin/courses', req)['id']
+        self.request('DELETE', f'/admin/courses/{temporary}')
+        cid = self.request('POST', '/admin/courses', req)['id']
+        self.assertEqual(cid, 2)
+        self.request('PUT', f'/courses/{cid}/progress/lesson_1', {'position':20,'watched_delta':20}, headers=self.student)
+        self.request('PUT', f'/courses/{cid}/bookmark', headers=self.student)
+        tables = ('nsp_courses','nsp_progress','nsp_bookmarks')
+        with database.get_db(unscoped=True) as conn:
+            before = {t:[dict(r) for r in conn.execute('SELECT * FROM '+t)] for t in tables}
+            conn.execute('DROP TRIGGER nsp_course_number_on_insert')
+            conn.execute('DROP TABLE nsp_course_numbers')
+        _ready.clear()
+        initialize()
+        course = self.request('GET', '/admin/courses')[0]
+        self.assertEqual((course['id'],course['number']), (cid,1))
+        with database.get_db(unscoped=True) as conn:
+            self.assertEqual(before, {t:[dict(r) for r in conn.execute('SELECT * FROM '+t)] for t in tables})
+        _ready.clear()
+        initialize()
+        self.assertEqual(self.request('GET', '/admin/courses')[0]['number'], 1)
+        self.request('POST', '/admin/courses', {**req,'title':'第二門'})
+        second = self.request('GET', '/admin/courses')[0]
+        self.assertEqual(second['number'], 2)
+        self.request('DELETE', f"/admin/courses/{second['id']}")
+        self.request('POST', '/admin/courses', {**req,'title':'第三門'})
+        self.assertEqual(self.request('GET', '/admin/courses')[0]['number'], 3)
+
     def test_legacy_category_numbering_preserves_all_existing_course_links(self):
         from app.nsp import _ready
         initialize()
