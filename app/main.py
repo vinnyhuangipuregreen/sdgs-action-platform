@@ -113,6 +113,8 @@ def require_admin(current_user: dict = Depends(require_user)) -> dict:
 
 install_attendance_admin(app, require_admin, get_current_user)
 install_years(app, require_admin, require_user)
+from app.nsp import install_nsp
+install_nsp(app, require_user, require_admin)
 
 
 @app.api_route("/api/matching-admin/{path:path}", methods=["GET", "PUT", "DELETE"])

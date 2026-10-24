@@ -27,8 +27,9 @@ class DesignSystemTests(unittest.TestCase):
         for filename in ("hero", "matching", "worksheet", "carbon", "toolbox", "food", "wishing"):
             self.assertTrue((ROOT / f"app/static/images/{filename}.png").is_file())
 
-    def test_course_registration_is_once_and_immediately_before_admin(self):
+    def test_primary_navigation_has_the_requested_seven_items_in_order(self):
         html = (ROOT / "app/templates/index.html").read_text(encoding="utf-8")
         nav = html.split('aria-label="主要功能"', 1)[1].split("</nav>", 1)[0]
-        self.assertEqual(nav.count("課程登錄"), 1)
-        self.assertRegex(nav, r'href="https://sdgs-attendance-record.vercel.app/dashboard"[^>]*>.*?課程登錄</a>\s*<button data-nav-tab="admin"')
+        labels = re.findall(r'</span>([^<]+)</(?:a|button)>', nav)
+        self.assertEqual(labels, ["首頁", "NSP數位學習", "SDGs配對挑戰賽", "連動分析練習單", "活動碳足跡盤查表", "智慧工具箱", "管理後台"])
+        self.assertIn('id="adminSubPane_attendance"', html)

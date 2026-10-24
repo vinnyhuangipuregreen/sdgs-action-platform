@@ -221,6 +221,10 @@ def install_years(app, require_admin, require_user):
             for name, label in labels.items():
                 counts[label] = conn.cursor().execute(f"SELECT COUNT(*) FROM {table_name(name,year_id)}").fetchone()[0]
             counts["學員報名名冊"] = conn.cursor().execute("SELECT COUNT(*) FROM academic_enrollments WHERE year_id=?", (year_id,)).fetchone()[0]
+        from app.nsp import database as nsp_database
+        with nsp_database() as conn:
+            for table, label in (("nsp_courses", "課程"), ("nsp_terms", "分類"), ("nsp_instructors", "講師"), ("nsp_progress", "學習紀錄")):
+                counts[f"[NSP數位學習]{label}"] = conn.cursor().execute(f"SELECT COUNT(*) FROM {table} WHERE year_id=?", (year_id,)).fetchone()[0]
         token = request.headers["authorization"].removeprefix("Bearer ")
         for module in MODULES:
             counts.update(module_call(module, "GET", f"/api/admin/academic-years/{year_id}/dependencies", token))

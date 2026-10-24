@@ -114,7 +114,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (resumeCourseSignIn()) return;
   const initialTab = location.hash.slice(1);
   const adminEntry = ["admin", "admin-matching", "admin-attendance"].includes(initialTab);
-  const publicTabs = ["home", "worksheet", "carbon", "food", "sdgs", "earth_defense", "leaderboard"];
+  const publicTabs = ["home", "nsp", "worksheet", "carbon", "food", "sdgs", "earth_defense", "leaderboard"];
   switchTab(publicTabs.includes(initialTab) ? initialTab : "home");
   await checkAuth(false);
   if (new URLSearchParams(location.search).get("ui") === "login") document.getElementById("logoutBtn").click();
@@ -209,6 +209,7 @@ function handleAdminAccess() {
 }
 
 function switchTab(tabId) {
+  if (state.activeTab === "nsp" && tabId !== "nsp") window.NSP?.stop();
   if (tabId === "worksheet" && state.user?.account_type !== "student" && state.user?.role !== "student") {
     state.studentDestination = "worksheet";
     if (!state.token || state.user) showLoginModal(true);
@@ -233,6 +234,7 @@ function switchTab(tabId) {
     targetTabBtn.classList.remove("text-slate-600");
   }
 
+  if (tabId === "nsp") window.NSP?.load();
   if (tabId === "leaderboard") loadLeaderboard();
   if (tabId === "admin") loadAdminDashboard();
   if (tabId === "earth_defense") {
@@ -263,6 +265,7 @@ async function checkAuth(loadWorksheets = true) {
       updateUserUI();
       showLoginModal(false);
       if (state.studentDestination === "worksheet") switchTab("worksheet");
+      if (state.activeTab === "nsp" || state.studentDestination === "nsp") switchTab("nsp");
       if (loadWorksheets && state.user.role === "student") await loadMyWorksheets(true);
     } else {
       handleLogout();
@@ -328,6 +331,7 @@ async function handleLogin(e, explicitStudentId = null) {
       state.studentDestination = null;
       switchTab("worksheet");
     }
+    if (state.studentDestination === "nsp") { state.studentDestination = null; switchTab("nsp"); }
     // 切換或登入新帳號時，自動載入該帳號之表單資料
     await loadMyWorksheets(true);
   } catch (err) {
@@ -377,6 +381,7 @@ async function handleAdminLogin(e) {
 }
 
 function handleLogout() {
+  window.NSP?.stop(false);
   const attendanceFrame = document.getElementById("attendanceAdminFrame");
   if (attendanceFrame) { attendanceFrame.removeAttribute("srcdoc"); attendanceFrame.src = "about:blank"; attendanceFrame.classList.add("hidden"); }
   state.attendanceAdminSession = null;
@@ -1877,6 +1882,7 @@ window.switchAdminSubTab = function(subTab) {
     setTimeout(() => renderAdminCharts(state.lastAdminStats), 30);
   }
   if (subTab === "categories") loadAdminCategories();
+  if (subTab.startsWith("nsp_")) window.NSP?.admin(subTab);
 };
 
 async function loadAttendanceAdmin() {

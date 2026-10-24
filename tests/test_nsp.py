@@ -1,0 +1,99 @@
+import copy
+import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
+from app import database
+from app.nsp import initialize
+from tests import test_academic_years as fixtures
+
+
+class NspTests(unittest.TestCase):
+    setUp = fixtures.AcademicYearTests.setUp
+    tearDown = fixtures.AcademicYearTests.tearDown
+    headers = fixtures.AcademicYearTests.headers
+    create_year = fixtures.AcademicYearTests.create_year
+    switch = fixtures.AcademicYearTests.switch
+
+    def request(self, method, path, body=None, headers=None, status=200):
+        response = self.client.request(method, '/api/nsp'+path, headers=headers or self.admin, **({'json':body} if body is not None else {}))
+        self.assertEqual(response.status_code, status, response.text)
+        return response.json()
+
+    def prepare(self):
+        self.request('POST','/admin/terms/course',{'name':'NSP自然永續培訓'})
+        self.request('POST','/admin/terms/material',{'name':'講義'})
+        self.request('POST','/admin/instructors',{'name':'講師','staff_id':1,'bio':'簡介','expertise':'永續'})
+        options = self.request('GET','/admin/options')
+        return {'title':'NSP測試課程','category_id':options['terms'][0]['id'], 'cover_url':'https://example.invalid/cover.png','info_html':'<h3>課程資訊</h3><p>內容<script>alert(1)</script><a href="javascript:alert(1)">連結</a></p>', 'instructor_ids':[options['instructors'][0]['id']], 'sections':[{'title':'章節一','lessons':[{'id':'lesson_1','title':'影片一','url':'https://example.invalid/video.mp4','duration':100}]}], 'materials':[{'title':'教材','category_id':options['terms'][1]['id'],'url':'https://example.invalid/file.pdf','note':'課後複習'}], 'status':'published'}
+
+    def test_authoring_publish_progress_and_account_boundaries(self):
+        req=self.prepare()
+        course_id=self.request('POST','/admin/courses',req)['id']
+        public=self.request('GET','/courses',headers=self.student)[0]
+        self.assertEqual(public['id'],course_id)
+        self.assertEqual(public['category'],'NSP自然永續培訓')
+        self.assertEqual(public['instructors'],['講師'])
+        self.assertNotIn('<script',public['info_html'])
+        self.assertNotIn('javascript:',public['info_html'])
+        self.assertEqual(public['percent'],0)
+        for _ in range(3):
+            result=self.request('PUT',f'/courses/{course_id}/progress/lesson_1',{'position':95,'watched_delta':30},headers=self.student)
+        self.assertEqual(result['completed'],1)
+        public=self.request('GET','/courses',headers=self.student)[0]
+        self.assertEqual(public['percent'],100)
+        self.assertEqual(public['progress'][0]['position'],95)
+        self.assertEqual(public['learners'],1)
+        self.assertEqual(self.request('GET','/courses')[0]['percent'],0) # staff id=student id
+        self.assertTrue(self.request('PUT',f'/courses/{course_id}/bookmark',headers=self.student)['bookmarked'])
+        self.assertTrue(self.request('GET','/courses',headers=self.student)[0]['bookmarked'])
+        self.assertFalse(self.request('GET','/courses')[0]['bookmarked'])
+        self.request('PUT',f'/courses/{course_id}/progress/unknown',{'position':1},headers=self.student,status=404)
+        self.request('PUT',f'/courses/{course_id}/progress/lesson_1',{'position':95,'watched_delta':31},headers=self.student,status=422)
+        self.request('DELETE',f"/admin/terms/{req['category_id']}",status=409)
+        self.request('DELETE',f"/admin/instructors/{req['instructor_ids'][0]}",status=409)
+        self.request('DELETE',f'/admin/courses/{course_id}')
+        self.assertEqual(self.request('GET','/courses',headers=self.student),[])
+        with database.get_db(unscoped=True) as conn:
+            self.assertEqual(conn.execute('SELECT COUNT(*) FROM nsp_progress').fetchone()[0],0)
+
+    def test_drafts_validation_audit_and_stale_edits(self):
+        req=self.prepare()
+        draft={'title':'草稿課程','category_id':req['category_id']}
+        course_id=self.request('POST','/admin/courses',draft)['id']
+        self.assertEqual(self.request('GET','/courses',headers=self.student),[])
+        row=self.request('GET','/admin/courses')[0]
+        self.assertEqual(row['created_by'],'test@example.invalid')
+        self.assertTrue(row['created_at'].endswith('+08:00'))
+        self.request('PUT',f'/admin/courses/{course_id}',{**draft,'version':row['version'],'status':'published'},status=422)
+        self.request('PUT',f'/admin/courses/{course_id}',{**req,'version':row['version']})
+        self.request('PUT',f'/admin/courses/{course_id}',{**req,'version':row['version']},status=409)
+        self.request('POST','/admin/courses',{**req,'cover_url':'javascript:alert(1)'},status=422)
+        malformed=copy.deepcopy(req);malformed['sections'][0]['lessons'].append(malformed['sections'][0]['lessons'][0])
+        self.request('POST','/admin/courses',malformed,status=422)
+        self.request('POST','/admin/terms/course',{'name':'  '},status=400)
+        self.request('POST','/admin/terms/course',{'name':'NSP自然永續培訓'},status=409)
+        self.request('POST','/admin/instructors',{'name':'無效','staff_id':999,'expertise':'永續'},status=400)
+
+    def test_year_isolation_permission_checks_and_changed_video_resets_completion(self):
+        req=self.prepare();cid=self.request('POST','/admin/courses',req)['id']
+        self.request('PUT',f'/courses/{cid}/progress/lesson_1',{'position':20,'watched_delta':20},headers=self.student)
+        admin=self.request('GET','/admin/courses')[0]
+        req['sections'][0]['lessons'][0]['url']='https://example.invalid/replaced.mp4'
+        self.request('PUT',f'/admin/courses/{cid}',{**req,'version':admin['version']})
+        self.assertEqual(self.request('GET','/courses',headers=self.student)[0]['progress'],[])
+        for path in ['/admin/options','/admin/courses','/admin/catalog']:
+            self.request('GET',path,headers=self.student,status=403)
+        self.assertEqual(self.client.get('/api/nsp/courses').status_code,401)
+        year_id=self.create_year();other=self.switch(year_id)
+        self.assertEqual(self.request('GET','/courses',headers=other),[])
+        self.request('PUT',f'/admin/courses/{cid}',req,headers=other,status=400)
+        self.request('POST','/admin/courses',req,headers=other,status=400)
+        self.assertEqual(self.request('GET','/admin/options',headers=other)['terms'],[])
+        self.request('DELETE',f'/admin/courses/{cid}',headers=other,status=404)
+
+    def test_catalog_uses_existing_staff_token_without_exposing_it(self):
+        response=SimpleNamespace(raise_for_status=lambda:None,json=lambda:[{'id':1,'title':'原課程'}])
+        with patch('app.nsp.requests.get',return_value=response) as upstream:
+            result=self.request('GET','/admin/catalog')
+        self.assertEqual(result,[{'id':1,'title':'原課程'}])
+        self.assertEqual(upstream.call_args.kwargs['headers']['Authorization'],self.admin['Authorization'])
