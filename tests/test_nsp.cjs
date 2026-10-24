@@ -6,6 +6,18 @@ const source=fs.readFileSync(require('node:path').join(__dirname,'../app/static/
 const durationSource=source.slice(source.indexOf('  async function duration('),source.indexOf('  async function saveEditor('));
 const flushSource=source.slice(source.indexOf('  async function flush('),source.indexOf('  function tick('));
 
+test('Google Drive cover sharing URLs become image URLs without changing other image hosts',()=>{
+  const coverSource=source.slice(source.indexOf('  const coverImage ='),source.indexOf('  const uid ='));
+  const context=vm.createContext({URL});
+  vm.runInContext(coverSource+'\nthis.imageURL=coverImage;',context);
+  const id='1OL4vP6591syyBq2asr2v3-t6lQb7YAPz';
+  for(const url of [`https://drive.google.com/file/d/${id}/view?usp=sharing`,`https://drive.google.com/open?id=${id}`,`https://drive.google.com/uc?export=view&id=${id}`]){
+    assert.equal(context.imageURL(url),`https://drive.google.com/thumbnail?id=${id}&sz=w1200`);
+  }
+  assert.match(context.imageURL(`https://drive.google.com/file/d/${id}/view?resourcekey=test-key`),/resourcekey=test-key/);
+  for(const url of ['', 'https://example.invalid/cover.png',`https://drive.google.com.example.invalid/file/d/${id}/view`,'https://drive.google.com/drive/folders/test'])assert.equal(context.imageURL(url),url);
+});
+
 test('category lists and editors display independent numbers while actions keep relation IDs',async()=>{
   const listeners={},elements={};
   const options={terms:[{id:3,number:1,kind:'course',name:'課程分類'},{id:7,number:1,kind:'material',name:'教材分類'}],instructors:[],staff:[]};
