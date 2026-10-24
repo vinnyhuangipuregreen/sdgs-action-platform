@@ -8,7 +8,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <link rel="stylesheet" href="/static/css/style.css?v=20261020_required_markers">
   <link rel="stylesheet" href="/static/css/design-system.css?v=20261023_admin_navigation">
-  <link rel="stylesheet" href="/static/css/nsp.css?v=20261024_nsp_release">
+  <link rel="stylesheet" href="/static/css/nsp.css?v=20261024_nsp_home">
   <script>
     tailwind.config = {
       theme: {
@@ -72,7 +72,11 @@
           <img src="/static/images/hero.png?v=20261019_positions" alt="師生與永續地球、校園及綠色環境的主題插圖" width="2172" height="724" fetchpriority="high">
           <div class="hero-copy"><span class="eyebrow">從理解，走向實踐</span><h2>歡迎使用<br>佛光永續學院</h2><p>從學習到行動，讓永續變成日常。</p><span class="hero-caption">專業學術研究 · 永續發展 · 數位科技 · 友善學習</span></div>
         </div>
-        <aside class="home-note ds-card nsp-home-entry"><span class="note-leaf" aria-hidden="true">📚</span><h3>NSP數位學習</h3><p>積累知識、持續精進，開啟您的永續學習旅程。</p><button class="ds-button" data-open-tab="nsp">進入學習中心 →</button></aside>
+        <aside class="home-note ds-card nsp-home-entry" aria-labelledby="nspHomeTitle">
+          <img class="nsp-home-art" src="/static/images/nsp-learning.png" alt="書本中生長的嫩芽，象徵永續學習" width="1254" height="1254">
+          <div class="nsp-home-copy"><h3 id="nspHomeTitle">NSP數位學習</h3><p>讓知識萌芽，讓永續成為日常。</p></div>
+          <button class="ds-button nsp-home-button" data-open-tab="nsp">進入學習中心 <span aria-hidden="true">→</span></button>
+        </aside>
       </div>
       <div class="module-section-heading"><h2>探索實踐模組</h2><p>讓每一次學習，都成為改變的起點。</p></div>
       <div class="module-grid">
