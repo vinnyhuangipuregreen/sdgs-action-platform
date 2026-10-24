@@ -82,7 +82,7 @@ class NspTests(unittest.TestCase):
         with patch('app.nsp.get_accounts_db', side_effect=AssertionError('Instructor editing must not query administrators')):
             self.request('PUT', f'/admin/instructors/{iid}', body)
             self.request('POST', '/admin/instructors', {**body,'email':'another@example.invalid'})
-            rows = self.request('GET', '/admin/options')['instructors']
+        rows = self.request('GET', '/admin/options')['instructors']
         self.assertEqual(rows[0]['email'], body['email'])
         self.assertEqual(rows[0]['bio'], body['bio'])
         self.assertEqual(self.request('GET', '/admin/courses')[0]['instructor_ids'], [iid])
@@ -110,7 +110,48 @@ class NspTests(unittest.TestCase):
         _ready.clear()
         with patch('app.nsp.get_accounts_db', side_effect=AssertionError('Stored email must remain independent')):
             initialize()
-            self.assertEqual(self.request('GET', '/admin/options')['instructors'][0]['email'], 'test@example.invalid')
+        self.assertEqual(self.request('GET', '/admin/options')['instructors'][0]['email'], 'test@example.invalid')
+
+    def test_instructor_number_migration_preserves_course_links_and_never_reuses_numbers(self):
+        from app.nsp import _ready
+        initialize()
+        with database.get_db(unscoped=True) as conn:
+            conn.execute("INSERT INTO nsp_instructors (year_id,name,staff_id,bio,expertise,created_by,created_at,updated_by,updated_at,email) VALUES (1,'temporary',0,'','','','','','','temporary@example.invalid')")
+            conn.execute('DELETE FROM nsp_instructors')
+        req = self.prepare()
+        iid = req['instructor_ids'][0]
+        self.assertEqual(iid, 2)
+        self.request('POST', '/admin/courses', req)
+        with database.get_db(unscoped=True) as conn:
+            before = [dict(r) for r in conn.execute('SELECT * FROM nsp_courses')]
+            conn.execute('DROP TRIGGER nsp_instructor_number_on_insert')
+            conn.execute('DROP TABLE nsp_instructor_numbers')
+        _ready.clear()
+        initialize()
+        rows = self.request('GET', '/admin/options')['instructors']
+        self.assertEqual((rows[0]['id'], rows[0]['number']), (iid,1))
+        with database.get_db(unscoped=True) as conn:
+            self.assertEqual(before, [dict(r) for r in conn.execute('SELECT * FROM nsp_courses')])
+        body = {'name':'第二位講師','email':'second@example.invalid','bio':'簡介','expertise':'永續'}
+        self.request('POST', '/admin/instructors', body)
+        row = self.request('GET', '/admin/options')['instructors'][-1]
+        self.assertEqual(row['number'], 2)
+        self.request('DELETE', f"/admin/instructors/{row['id']}")
+        self.request('POST', '/admin/instructors', {**body,'name':'第三位講師'})
+        self.assertEqual(self.request('GET', '/admin/options')['instructors'][-1]['number'], 3)
+
+    def test_all_admin_audits_resolve_names_without_rewriting_history(self):
+        req = self.prepare()
+        self.request('POST', '/admin/courses', req)
+        with database.get_db(unscoped=True) as conn:
+            conn.execute("UPDATE admin SET name='管理員甲' WHERE id=1")
+        data = self.request('GET', '/admin/options')
+        rows = data['terms'] + data['instructors'] + self.request('GET', '/admin/courses')
+        for row in rows:
+            self.assertEqual(row['created_by_name'], '管理員甲')
+            self.assertEqual(row['updated_by_name'], '管理員甲')
+            self.assertEqual(row['created_by'], 'test@example.invalid')
+            self.assertTrue(row['created_at'].endswith('+08:00'))
 
     def test_year_isolation_permission_checks_and_changed_video_resets_completion(self):
         req=self.prepare();cid=self.request('POST','/admin/courses',req)['id']

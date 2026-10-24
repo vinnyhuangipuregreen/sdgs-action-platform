@@ -24,13 +24,14 @@ test('category lists and editors display independent numbers while actions keep 
 
 test('instructor editors use an independent email input and require the biography',async()=>{
   const listeners={},elements={};
-  const options={terms:[],instructors:[{id:3,name:'外聘講師',email:'external@example.invalid',bio:'簡介',expertise:'永續'}]};
+  const options={terms:[],instructors:[{id:3,number:1,name:'外聘講師',email:'external@example.invalid',bio:'簡介',expertise:'永續'}]};
   const context=vm.createContext({window:{addEventListener(){}},state:{token:'test'},structuredClone,
     document:{addEventListener(name,fn){listeners[name]=fn;},getElementById(id){return elements[id]??={innerHTML:'',showModal(){},addEventListener(){}};}},
     fetch:async()=>({ok:true,json:async()=>options}),showToast(message){assert.fail(message);}});
   vm.runInContext(source,context);
   await context.window.NSP.admin('nsp_instructors');
   assert.match(elements.adminSubPane_nsp_instructors.innerHTML,/external@example.invalid/);
+  assert.match(elements.adminSubPane_nsp_instructors.innerHTML,/<td>#1<\/td>/);
   for(const action of ['new','edit']){
     await listeners.click({target:{closest:()=>({dataset:{nsp:action,id:'3',type:'nsp_instructors'}})}});
     const html=elements.nspDialog.innerHTML;
@@ -38,8 +39,32 @@ test('instructor editors use an independent email input and require the biograph
     assert.match(html,/講師簡介<span class="required-marker"> \*<\/span>/);
     assert.match(html,/<textarea name="bio" rows="4" required>/);
     assert.doesNotMatch(html,/name="staff_id"|<select/);
-    if(action==='edit')assert.match(html,/value="external@example.invalid"/);
+    if(action==='edit'){
+      assert.match(html,/value="external@example.invalid"/);
+      assert.match(html,/name="display_id" type="text" value="1" readonly/);
+    }
   }
+});
+
+test('all four admin lists show administrator names and Taipei timestamps',async()=>{
+  const elements={};
+  const row={id:3,number:1,name:'項目',title:'課程',status:'draft',created_by:'actor@example.invalid',updated_by:'actor@example.invalid',created_by_name:'管理員甲',updated_by_name:'管理員乙',created_at:'2026-10-24T11:12:59Z',updated_at:'2026-10-24T16:00:00Z'};
+  const options={terms:[{...row,kind:'course'},{...row,kind:'material'}],instructors:[{...row,email:'teacher@example.invalid'}]};
+  const context=vm.createContext({window:{addEventListener(){}},state:{token:'test'},
+    document:{addEventListener(){},getElementById(id){return elements[id]??={innerHTML:''};}},
+    fetch:async path=>({ok:true,json:async()=>path.endsWith('/courses')?[row]:options})});
+  vm.runInContext(source,context);
+  for(const type of ['nsp_courses','nsp_categories','nsp_material_categories','nsp_instructors']){
+    await context.window.NSP.admin(type);
+    const html=elements['adminSubPane_'+type].innerHTML;
+    assert.match(html,/管理員甲<br>2026-10-24 19:12:59/);
+    assert.match(html,/管理員乙<br>2026-10-25 00:00:00/);
+    assert.doesNotMatch(html,/actor@example.invalid/);
+  }
+  const auditSource=source.slice(source.indexOf('  const auditDate ='),source.indexOf('  const required ='));
+  const details=vm.runInNewContext(auditSource+'\nauditDetails(row)',{row,esc:value=>value??''});
+  assert.match(details,/建立：管理員甲／2026-10-24 19:12:59/);
+  assert.match(details,/修改：管理員乙／2026-10-25 00:00:00/);
 });
 
 test('video metadata updates the current lesson row after an editor rerender',async()=>{
