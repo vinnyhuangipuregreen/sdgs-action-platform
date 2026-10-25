@@ -102,19 +102,19 @@ test('all four admin lists show administrator names and Taipei timestamps',async
   const options={terms:[{...row,kind:'course'},{...row,kind:'material'}],instructors:[{...row,email:'teacher@example.invalid'}]};
   const context=vm.createContext({window:{addEventListener(){}},state:{token:'test'},
     document:{addEventListener(){},getElementById(id){return elements[id]??={innerHTML:''};}},
-    fetch:async path=>({ok:true,json:async()=>path.endsWith('/courses')?[row]:options})});
+    fetch:async path=>({ok:true,json:async()=>path.endsWith('/courses')?[row]:path.endsWith('/catalog')?[]:options})});
   vm.runInContext(source,context);
   for(const type of ['nsp_courses','nsp_categories','nsp_material_categories','nsp_instructors']){
     await context.window.NSP.admin(type);
     const html=elements['adminSubPane_'+type].innerHTML;
-    assert.match(html,/管理員甲<br>2026-10-24 19:12:59/);
-    assert.match(html,/管理員乙<br>2026-10-25 00:00:00/);
+    assert.match(html,/管理員甲<br>2026\/10\/24 19:12:59/);
+    assert.match(html,/管理員乙<br>2026\/10\/25 00:00:00/);
     assert.doesNotMatch(html,/actor@example.invalid/);
   }
   const auditSource=source.slice(source.indexOf('  const auditDate ='),source.indexOf('  const required ='));
   const details=vm.runInNewContext(auditSource+'\nauditDetails(row)',{row,esc:value=>value??''});
-  assert.match(details,/建立：管理員甲／2026-10-24 19:12:59/);
-  assert.match(details,/修改：管理員乙／2026-10-25 00:00:00/);
+  assert.match(details,/建立：管理員甲／2026\/10\/24 19:12:59/);
+  assert.match(details,/修改：管理員乙／2026\/10\/25 00:00:00/);
 });
 
 test('course list and editor display number one but keep the original course ID for actions',async()=>{
@@ -162,4 +162,27 @@ test('an account switch prevents progress from being sent with the next user tok
   vm.runInContext(flushSource,context);
   await context.flush({token:'old',position:()=>10});
   assert.equal(called,false);
+});
+
+
+test('course dates appear after numbers and in add/edit title options without changing titles',async()=>{
+  const elements={},listeners={};
+  const title='導論：自然永續的核心觀念與倫理基礎';
+  const course={id:2,number:1,title,status:'published'};
+  const catalog=[{id:10,title,course_date:'2026/09/15'},{id:11,title:'未排定課程'}];
+  const context=vm.createContext({window:{addEventListener(){}},state:{token:'test'},structuredClone,
+    document:{addEventListener(name,fn){listeners[name]=fn;},getElementById(id){return elements[id]??={innerHTML:'',value:'',open:true,classList:{add(){}},showModal(){},addEventListener(){}};}},
+    fetch:async path=>({ok:true,json:async()=>path.endsWith('/courses')?[course,{id:3,number:2,title:'自訂課程',status:'draft'}]:path.endsWith('/catalog')?catalog:{terms:[],instructors:[]}}),showToast(message){assert.fail(message);}});
+  vm.runInContext(source,context);
+  await context.window.NSP.admin('nsp_courses');
+  assert.match(elements.adminSubPane_nsp_courses.innerHTML,/<th>編號<\/th><th>課程日期<\/th><th>課程名稱<\/th>/);
+  assert.match(elements.adminSubPane_nsp_courses.innerHTML,/<td>#1<\/td><td>2026\/09\/15<\/td>/);
+  assert.match(elements.adminSubPane_nsp_courses.innerHTML,/<td>#2<\/td><td>—<\/td>/);
+  for(const action of ['new','edit']){
+    await listeners.click({target:{closest:()=>({dataset:{nsp:action,id:action==='edit'?'2':'',type:'nsp_courses'}})}});
+    assert.ok(elements.nspTitleSelect.innerHTML.includes('value="'+title+'"'));
+    assert.ok(elements.nspTitleSelect.innerHTML.includes('>[2026/09/15]'+title+'</option>'));
+    assert.ok(elements.nspTitleSelect.innerHTML.includes('>未排定課程</option>'));
+    assert.equal(elements.nspTitleSelect.value,action==='edit'?title:'__other');
+  }
 });

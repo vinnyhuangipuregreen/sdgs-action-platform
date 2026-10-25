@@ -29,7 +29,7 @@ window.NSP = (() => {
   const auditDate = value => {
     if (!value) return '';
     const parts = Object.fromEntries(new Intl.DateTimeFormat('en-GB', {timeZone:'Asia/Taipei',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).formatToParts(new Date(value)).map(p=>[p.type,p.value]));
-    return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
+    return `${parts.year}/${parts.month}/${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
   };
   const audit = row => `<small>${esc(row.created_by_name)}<br>${esc(auditDate(row.created_at))}</small></td><td><small>${esc(row.updated_by_name)}<br>${esc(auditDate(row.updated_at))}</small>`;
   const auditDetails = row => row.created_at ? '建立：'+esc(row.created_by_name)+'／'+esc(auditDate(row.created_at))+'<br>修改：'+esc(row.updated_by_name)+'／'+esc(auditDate(row.updated_at)) : '建立與修改帳號、時間由系統自動記錄。';
@@ -156,9 +156,14 @@ window.NSP = (() => {
     try {
       meta=await api('/admin/options');
       adminRows=type==='nsp_courses'?await api('/admin/courses'):type==='nsp_instructors'?meta.instructors:meta.terms.filter(t=>t.kind===(type==='nsp_categories'?'course':'material'));
+      let catalogError='';
+      if(type==='nsp_courses'){
+        catalog=[];
+        try{catalog=await api('/admin/catalog');}catch(error){catalogError=error.message;}
+      }
       if(activeAdmin!==type)return;
       const instructor=type==='nsp_instructors', isCourse=type==='nsp_courses';
-      mount.innerHTML=`<div class="ds-card nsp-admin"><div class="nsp-admin-heading"><div><span class="eyebrow">NSP 數位學習</span><h3>${labels[type]}</h3></div>${button('＋ 新增'+(isCourse?'課程':instructor?'講師':'分類'),'new',`data-type="${type}"`)}</div><div class="nsp-table-wrap"><table><thead><tr><th>編號</th><th>${isCourse?'課程名稱':instructor?'講師名稱':'分類名稱'}</th>${instructor?'<th>電子郵件</th>':''}${isCourse?'<th>狀態</th>':''}<th>建立資訊</th><th>修改資訊</th><th>操作</th></tr></thead><tbody>${adminRows.map(row=>`<tr><td>#${row.number}</td><td>${esc(row.name||row.title)}</td>${instructor?`<td>${esc(row.email)}</td>`:''}${isCourse?`<td><span class="nsp-tag">${row.status==='published'?'已發布':'草稿'}</span></td>`:''}<td>${audit(row)}</td><td>${button('修改','edit',`data-id="${row.id}" data-type="${type}"`,true)} ${button('刪除','delete',`data-id="${row.id}" data-type="${type}"`,true)}</td></tr>`).join('')||'<tr><td colspan="7">尚無資料，請新增。</td></tr>'}</tbody></table></div></div>`;
+      mount.innerHTML=`<div class="ds-card nsp-admin"><div class="nsp-admin-heading"><div><span class="eyebrow">NSP 數位學習</span><h3>${labels[type]}</h3></div>${button('＋ 新增'+(isCourse?'課程':instructor?'講師':'分類'),'new',`data-type="${type}"`)}</div>${catalogError?empty(catalogError):''}<div class="nsp-table-wrap"><table><thead><tr><th>編號</th>${isCourse?'<th>課程日期</th>':''}<th>${isCourse?'課程名稱':instructor?'講師名稱':'分類名稱'}</th>${instructor?'<th>電子郵件</th>':''}${isCourse?'<th>狀態</th>':''}<th>建立資訊</th><th>修改資訊</th><th>操作</th></tr></thead><tbody>${adminRows.map(row=>`<tr><td>#${row.number}</td>${isCourse?`<td>${esc([...new Set(catalog.filter(c=>c.title===row.title).map(c=>c.course_date?.replaceAll('-','/')).filter(Boolean))].join('、')||'—')}</td>`:''}<td>${esc(row.name||row.title)}</td>${instructor?`<td>${esc(row.email)}</td>`:''}${isCourse?`<td><span class="nsp-tag">${row.status==='published'?'已發布':'草稿'}</span></td>`:''}<td>${audit(row)}</td><td>${button('修改','edit',`data-id="${row.id}" data-type="${type}"`,true)} ${button('刪除','delete',`data-id="${row.id}" data-type="${type}"`,true)}</td></tr>`).join('')||'<tr><td colspan="7">尚無資料，請新增。</td></tr>'}</tbody></table></div></div>`;
     }catch(error){mount.innerHTML=empty(error.message);}
   }
   function openDialog(title,body) {
@@ -181,7 +186,7 @@ window.NSP = (() => {
   }
   function renderTitleOptions() {
     const select=document.getElementById('nspTitleSelect'); const title=document.getElementById('nspCustomTitle').value||edit.title;
-    select.innerHTML=options(catalog,title,'title','title')+'<option value="__other">其他</option>';
+    select.innerHTML=options(catalog.map(c=>({...c,label:c.course_date?'['+c.course_date.replaceAll('-', '/')+']'+c.title:c.title})),title,'title','label')+'<option value="__other">其他</option>';
     select.value=catalog.some(c=>c.title===title)?title:'__other';
     document.getElementById('nspCustomTitle').hidden=select.value!=='__other';
   }
