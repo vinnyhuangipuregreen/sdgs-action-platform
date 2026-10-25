@@ -350,15 +350,22 @@ test('course cards and detail show date icons and completed makeup lessons',asyn
 });
 
 test('returning makeup students see their completion timestamp and the 100 percent rule',async()=>{
-  const elements={},listeners={};
+  const elements={},listeners={},alerts=[];
   const c={id:1,title:'測試',category:'分類',instructors:[],sections:[{title:'章節',lessons:[{id:'a',title:'影片',url:'https://example.invalid/a.mp4',duration:7}]}],materials:[],progress:[],total:1,completed:1,percent:100,makeup_completed:true,makeup_completed_at:'2026-10-25 19:12:59'};
-  const context=vm.createContext({URL,window:{addEventListener(){},scrollTo(){}},state:{token:'test',activeTab:'nsp',user:{name:'黃雅筠'}},setInterval(){},clearInterval(){},
+  const context=vm.createContext({URL,window:{addEventListener(){},scrollTo(){},alert(message){alerts.push(message);}},state:{token:'test',activeTab:'nsp',user:{name:'黃雅筠'}},setInterval(){},clearInterval(){},
     document:{addEventListener(n,f){listeners[n]=f;},querySelector(){return null;},getElementById(id){return elements[id]??={innerHTML:'',value:'',checked:false,addEventListener(){},appendChild(){}};},createElement(){return {addEventListener(){},pause(){}};}},fetch:async()=>({ok:true,json:async()=>[c]})});
   vm.runInContext(source,context);await context.window.NSP.load();
   await listeners.click({target:{closest:()=>({dataset:{nsp:'play',id:'1',lesson:'a'}})}});
   assert.match(elements.nspApp.innerHTML,/黃雅筠 學員 您好！您已於 2026\/10\/25 19:12:59 完成學習。/);
   assert.match(elements.nspApp.innerHTML,/每 10 秒自動儲存，觀看達影片 100% 後計為完成；播完自動播放下一支/);
   assert.doesNotMatch(elements.nspApp.innerHTML,/90%/);
+  assert.deepEqual(alerts,['黃雅筠 學員 您好！歡迎您再次學習，您第一次已於 2026/10/25 19:12:59 完成學習，系統會記錄第一次的學習紀錄。']);
+  await listeners.click({target:{closest:()=>({dataset:{nsp:'play',id:'1',lesson:'a'}})}});
+  assert.equal(alerts.length,1);
+  await listeners.click({target:{closest:()=>({dataset:{nsp:'detail',id:'1'}})}});
+  await listeners.click({target:{closest:()=>({dataset:{nsp:'play',id:'1',lesson:'a'}})}});
+  assert.equal(alerts.length,2);
+
 });
 
 test('the final playback fraction is saved even after the ended state stops playing',()=>{
@@ -367,4 +374,17 @@ test('the final playback fraction is saved even after the ended state stops play
   vm.runInContext(tickSource,context);
   const p={pending:0,clock:99320,lastSave:100000,l:{duration:7},mediaDuration:()=>6.8,playing:()=>false,rate:()=>1};
   context.tick(p,true);assert.ok(Math.abs(p.pending-0.7)<1e-9);
+});
+
+
+test('first completion alerts only after successful makeup sync and preserves its timestamp on repeat saves',async()=>{
+  for(const synced of [true,false]){
+    const alerts=[],c={id:1,progress:[],learners:0},p={c,l:{id:'a'},token:'test',pending:7,position:()=>7};
+    const saved={completed:1,makeup_synced:synced,...(synced?{makeup_completed_at:'2026-10-26 19:12:59'}:{})};
+    const context=vm.createContext({player:p,state:{token:'test',user:{name:'學員甲'}},window:{alert:message=>alerts.push(message)},api:async()=>saved,updateProgress(){},document:{getElementById:()=>({})}});
+    vm.runInContext(flushSource,context);
+    await context.flush(p);await context.flush(p);
+    assert.deepEqual(alerts,synced?['學員甲 學員 您好！恭喜您已於 2026/10/26 19:12:59 完成學習，歡迎您再次學習！']:[]);
+    if(synced){assert.equal(c.makeup_completed_at,'2026-10-26 19:12:59');assert.equal(c.makeup_completed,true);}
+  }
 });

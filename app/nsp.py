@@ -260,9 +260,9 @@ def sync_makeup(request, course_id):
             headers={"Authorization": request.headers.get("authorization", ""), "X-Academic-Year": str(current_year_id.get())},
             json={"course_id": course_id}, timeout=(5, 20))
         response.raise_for_status()
-        return True
+        return {"makeup_synced": True, "makeup_completed_at": response.json()["makeup_completed_at"]}
     except requests.RequestException:
-        return False
+        return {"makeup_synced": False}
 
 
 def install_nsp(app, require_user, require_admin):
@@ -432,7 +432,8 @@ def install_nsp(app, require_user, require_admin):
                             else:
                                 course["progress"].append({"lesson_id": lesson["id"], "completed": 1})
                 elif course["total"] and course["completed"] == course["total"]:
-                    course["makeup_synced"] = sync_makeup(request, course["id"])
+                    course.update(sync_makeup(request, course["id"]))
+                    course["makeup_completed"] = course["makeup_synced"]
         return sorted(result, key=lambda c: ("-".join(p.zfill(2) for p in c["course_date"].replace("/", "-").split("-")), c["id"]), reverse=True)
 
     @app.get("/api/nsp/courses/{course_id}/completion")
@@ -458,7 +459,7 @@ def install_nsp(app, require_user, require_admin):
             all_done = get_account_type(user) == "student" and completion_record(conn, course, user)["completed"]
         result = {"success": True, "watched": watched, "completed": completed}
         if all_done:
-            result["makeup_synced"] = sync_makeup(request, course_id)
+            result.update(sync_makeup(request, course_id))
         return result
 
     @app.put("/api/nsp/courses/{course_id}/bookmark")

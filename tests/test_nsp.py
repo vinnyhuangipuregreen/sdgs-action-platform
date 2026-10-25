@@ -14,7 +14,7 @@ class NspTests(unittest.TestCase):
         counts_patch = patch('app.nsp.requests.get', return_value=response)
         counts_patch.start()
         self.addCleanup(counts_patch.stop)
-        sync_patch = patch('app.nsp.requests.post', return_value=response)
+        sync_patch = patch('app.nsp.requests.post', return_value=SimpleNamespace(raise_for_status=lambda:None, json=lambda:{'makeup_completed_at':'2026-10-26 19:12:59'}))
         self.sync_mock = sync_patch.start()
         self.addCleanup(sync_patch.stop)
     tearDown = fixtures.AcademicYearTests.tearDown
@@ -318,6 +318,7 @@ class NspTests(unittest.TestCase):
         self.assertNotIn('makeup_synced',result)
         result=self.request('PUT',f'/courses/{cid}/progress/lesson_1',{'position':100,'watched_delta':10},headers=self.student)
         self.assertTrue(result['makeup_synced'])
+        self.assertEqual(result['makeup_completed_at'],'2026-10-26 19:12:59')
         verified = self.request('GET',path,headers=self.student)
         self.assertTrue(verified['completed'])
         self.assertEqual(verified['title'],req['title'])
