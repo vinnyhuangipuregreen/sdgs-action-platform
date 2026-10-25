@@ -331,3 +331,19 @@ test('makeup count replaces started-learner totals consistently in cards and adm
   await context.window.NSP.admin('nsp_courses');
   assert.match(elements.adminSubPane_nsp_courses.innerHTML,/<th>補課人數<\/th>/);assert.match(elements.adminSubPane_nsp_courses.innerHTML,/<td>33<\/td>/);
 });
+
+test('course cards and detail show date icons and completed makeup lessons',async()=>{
+  const elements={},listeners={};
+  const c={id:1,title:'測試課程',category:'分類',instructors:['講師'],course_date:'2026-10-20',makeup_count:12,makeup_completed:true,sections:[{title:'第一章',lessons:[{id:'a',title:'第一支',duration:7},{id:'b',title:'第二支',duration:7}]}],materials:[],progress:[],total:2,completed:2,percent:100,cover_url:'',info_html:'介紹',material_categories:{}};
+  const context=vm.createContext({window:{addEventListener(){},scrollTo(){}},state:{token:'test',activeTab:'nsp'},
+    document:{addEventListener(n,f){listeners[n]=f;},getElementById(id){return elements[id]??={innerHTML:'',value:'',checked:false,addEventListener(){}};}},fetch:async()=>({ok:true,json:async()=>[c]})});
+  vm.runInContext(source,context);await context.window.NSP.load();
+  assert.match(elements.nspCourseGrid.innerHTML,/🕒 2026\/10\/20/);
+  assert.match(elements.nspCourseGrid.innerHTML,/value="100"/);
+  await listeners.click({target:{closest:()=>({dataset:{nsp:'detail',id:'1'}})}});
+  const html=elements.nspApp.innerHTML;
+  assert.match(html,/🌿 分類/);assert.match(html,/🕒 2026\/10\/20/);
+  assert.match(html,/👤 授課講師/);assert.match(html,/🌳 完成學習：12/);
+  assert.match(html,/⌛ 學習進度：2\/2（100%）/);
+  assert.match(html,/✅ 第一支/);assert.match(html,/✅ 第二支/);
+});

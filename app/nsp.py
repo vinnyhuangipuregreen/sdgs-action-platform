@@ -239,6 +239,8 @@ def add_makeup_counts(rows, request):
     for row in rows:
         matches = [c for c in catalog or [] if c["title"] == row["title"]]
         row["makeup_count"] = matches[0]["makeup_count"] if len(matches) == 1 else (0 if catalog is not None and not matches else None)
+        row["course_date"] = matches[0].get("course_date", "") if len(matches) == 1 else ""
+        row["makeup_completed"] = bool(len(matches) == 1 and matches[0].get("makeup_completed"))
     return rows
 
 
@@ -415,11 +417,22 @@ def install_nsp(app, require_user, require_admin):
                 course["bookmarked"] = course["id"] in bookmarks
                 course["material_categories"] = terms
                 result.append(course)
+        result = add_makeup_counts(result, request)
         if get_account_type(user) == "student":
             for course in result:
-                if course["total"] and course["completed"] == course["total"]:
+                if course["makeup_completed"]:
+                    course["completed"] = course["total"]
+                    course["percent"] = 100
+                    for section in course["sections"]:
+                        for lesson in section["lessons"]:
+                            saved = next((p for p in course["progress"] if p["lesson_id"] == lesson["id"]), None)
+                            if saved:
+                                saved["completed"] = 1
+                            else:
+                                course["progress"].append({"lesson_id": lesson["id"], "completed": 1})
+                elif course["total"] and course["completed"] == course["total"]:
                     course["makeup_synced"] = sync_makeup(request, course["id"])
-        return add_makeup_counts(result, request)
+        return sorted(result, key=lambda c: ("-".join(p.zfill(2) for p in c["course_date"].replace("/", "-").split("-")), c["id"]), reverse=True)
 
     @app.get("/api/nsp/courses/{course_id}/completion")
     def completion(course_id: int, user=Depends(require_user)):

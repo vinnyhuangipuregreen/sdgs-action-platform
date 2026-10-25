@@ -280,6 +280,25 @@ class NspTests(unittest.TestCase):
         with patch('app.nsp.requests.get', side_effect=requests.RequestException):
             self.assertIsNone(self.request('GET','/courses',headers=self.student)[0]['makeup_count'])
 
+    def test_makeup_records_complete_display_only_and_courses_sort_by_date(self):
+        req=self.prepare()
+        first=self.request('POST','/admin/courses',req)['id']
+        second=self.request('POST','/admin/courses',{**req,'title':'較早課程'})['id']
+        response=SimpleNamespace(raise_for_status=lambda:None,json=lambda:[
+            {'title':req['title'],'course_date':'2026/10/20','makeup_count':2,'makeup_completed':True},
+            {'title':'較早課程','course_date':'2026/9/15','makeup_count':5,'makeup_completed':False}])
+        with patch('app.nsp.requests.get',return_value=response):
+            rows=self.request('GET','/courses',headers=self.student)
+        self.assertEqual([r['id'] for r in rows],[first,second])
+        self.assertEqual(rows[0]['course_date'],'2026/10/20')
+        self.assertEqual((rows[0]['percent'],rows[0]['completed']),(100,1))
+        self.assertTrue(all(p['completed'] for p in rows[0]['progress']))
+        self.assertEqual(rows[1]['percent'],0)
+        self.sync_mock.assert_not_called()
+        with database.get_db(unscoped=True) as conn:
+            self.assertEqual(conn.execute('SELECT COUNT(*) FROM nsp_progress').fetchone()[0],0)
+        self.assertFalse(self.request('GET',f'/courses/{first}/completion',headers=self.student)['completed'])
+
     def test_makeup_sync_requires_all_current_lessons_and_student_identity(self):
         req = self.prepare()
         req['sections'].append({'title':'第二章','lessons':[{'id':'lesson_2','title':'第二支','url':'https://example.invalid/two.mp4','duration':10}]})
