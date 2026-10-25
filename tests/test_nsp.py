@@ -46,10 +46,14 @@ class NspTests(unittest.TestCase):
         self.assertEqual(public['percent'],0)
         for _ in range(3):
             result=self.request('PUT',f'/courses/{course_id}/progress/lesson_1',{'position':95,'watched_delta':30},headers=self.student)
+        self.assertEqual(result['completed'],0)
+        result=self.request('PUT',f'/courses/{course_id}/progress/lesson_1',{'position':99,'watched_delta':9},headers=self.student)
+        self.assertEqual(result['completed'],0)
+        result=self.request('PUT',f'/courses/{course_id}/progress/lesson_1',{'position':100,'watched_delta':1},headers=self.student)
         self.assertEqual(result['completed'],1)
         public=self.request('GET','/courses',headers=self.student)[0]
         self.assertEqual(public['percent'],100)
-        self.assertEqual(public['progress'][0]['position'],95)
+        self.assertEqual(public['progress'][0]['position'],100)
         self.assertEqual(public['learners'],1)
         self.assertEqual(self.request('GET','/admin/courses')[0]['learners'],1)
         self.assertEqual(self.request('GET','/courses')[0]['percent'],0) # staff id=student id
@@ -285,12 +289,13 @@ class NspTests(unittest.TestCase):
         first=self.request('POST','/admin/courses',req)['id']
         second=self.request('POST','/admin/courses',{**req,'title':'較早課程'})['id']
         response=SimpleNamespace(raise_for_status=lambda:None,json=lambda:[
-            {'title':req['title'],'course_date':'2026/10/20','makeup_count':2,'makeup_completed':True},
+            {'title':req['title'],'course_date':'2026/10/20','makeup_count':2,'makeup_completed':True,'makeup_completed_at':'2026-10-25 19:12:59'},
             {'title':'較早課程','course_date':'2026/9/15','makeup_count':5,'makeup_completed':False}])
         with patch('app.nsp.requests.get',return_value=response):
             rows=self.request('GET','/courses',headers=self.student)
         self.assertEqual([r['id'] for r in rows],[first,second])
         self.assertEqual(rows[0]['course_date'],'2026/10/20')
+        self.assertEqual(rows[0]['makeup_completed_at'],'2026-10-25 19:12:59')
         self.assertEqual((rows[0]['percent'],rows[0]['completed']),(100,1))
         self.assertTrue(all(p['completed'] for p in rows[0]['progress']))
         self.assertEqual(rows[1]['percent'],0)
@@ -310,6 +315,8 @@ class NspTests(unittest.TestCase):
         self.sync_mock.assert_not_called()
         for _ in range(3):
             result = self.request('PUT',f'/courses/{cid}/progress/lesson_1',{'position':100,'watched_delta':30},headers=self.student)
+        self.assertNotIn('makeup_synced',result)
+        result=self.request('PUT',f'/courses/{cid}/progress/lesson_1',{'position':100,'watched_delta':10},headers=self.student)
         self.assertTrue(result['makeup_synced'])
         verified = self.request('GET',path,headers=self.student)
         self.assertTrue(verified['completed'])

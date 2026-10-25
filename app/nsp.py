@@ -240,6 +240,7 @@ def add_makeup_counts(rows, request):
         matches = [c for c in catalog or [] if c["title"] == row["title"]]
         row["makeup_count"] = matches[0]["makeup_count"] if len(matches) == 1 else (0 if catalog is not None and not matches else None)
         row["course_date"] = matches[0].get("course_date", "") if len(matches) == 1 else ""
+        row["makeup_completed_at"] = matches[0].get("makeup_completed_at", "") if len(matches) == 1 else ""
         row["makeup_completed"] = bool(len(matches) == 1 and matches[0].get("makeup_completed"))
     return rows
 
@@ -451,7 +452,7 @@ def install_nsp(app, require_user, require_admin):
             key = (*identity(user), course_id, lesson_id)
             duration = lesson["duration"]
             delta = min(duration, req.watched_delta)
-            conn.cursor().execute("INSERT INTO nsp_progress VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(year_id,account_type,user_id,course_id,lesson_id) DO UPDATE SET position=excluded.position,watched=MIN(?,nsp_progress.watched+excluded.watched),completed=MAX(nsp_progress.completed,CASE WHEN ?>0 AND nsp_progress.watched+excluded.watched>=?*.9 THEN 1 ELSE 0 END),updated_at=excluded.updated_at", (*key, min(req.position, duration), delta, int(duration > 0 and delta >= duration*.9), now(), duration, duration, duration))
+            conn.cursor().execute("INSERT INTO nsp_progress VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(year_id,account_type,user_id,course_id,lesson_id) DO UPDATE SET position=excluded.position,watched=MIN(?,nsp_progress.watched+excluded.watched),completed=MAX(nsp_progress.completed,CASE WHEN ?>0 AND ROUND(nsp_progress.watched+excluded.watched,6)>=? THEN 1 ELSE 0 END),updated_at=excluded.updated_at", (*key, min(req.position, duration), delta, int(duration > 0 and round(delta,6) >= duration), now(), duration, duration, duration))
             saved = conn.cursor().execute("SELECT watched,completed FROM nsp_progress WHERE year_id=? AND account_type=? AND user_id=? AND course_id=? AND lesson_id=?", key).fetchone()
             watched, completed = saved[0], saved[1]
             all_done = get_account_type(user) == "student" and completion_record(conn, course, user)["completed"]

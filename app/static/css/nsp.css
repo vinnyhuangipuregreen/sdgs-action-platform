@@ -75,3 +75,5 @@
 #nspMakeupDialog .nsp-preview-header { flex-shrink:0; }
 #nspMakeupStatus { padding:0 16px; }
 #nspMakeupFrame { width:100%; flex:1; min-height:0; border:0; border-radius:0 0 22px 22px; }
+
+.nsp-completion-notice { padding: 16px 18px 0; }
