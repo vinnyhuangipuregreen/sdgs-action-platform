@@ -37,7 +37,7 @@ window.NSP = (() => {
   const field = (label, control) => `<label class="nsp-field"><span>${label}</span>${control}</label>`;
   const input = (name, value='', type='text', extra='') => `<input name="${name}" type="${type}" value="${esc(value)}" ${extra}>`;
   const options = (rows, selected, value='id', text='name') => '<option value="">請選擇</option>'+rows.map(r=>`<option value="${esc(r[value])}" ${String(r[value])===String(selected)?'selected':''}>${esc(r[text])}</option>`).join('');
-  let courses=[], meta={terms:[],instructors:[]}, adminRows=[], catalog=[], activeAdmin='', edit=null, player=null, previewCourse=null, generation=0;
+  let courses=[], meta={terms:[],instructors:[]}, adminRows=[], catalog=[], activeAdmin='', edit=null, player=null, previewCourse=null, generation=0, makeupRequest=0;
   const root = () => document.getElementById(previewCourse?'nspPreviewContent':'nspApp');
   const dialog = () => document.getElementById('nspDialog');
   const minutes = seconds => { const total=Math.round(seconds||0); return `${Math.floor(total/60)}:${String(total%60).padStart(2,'0')}`; };
@@ -182,6 +182,31 @@ window.NSP = (() => {
     if(!p.preview)p.timer=setInterval(()=>tick(p),1000);
   }
 
+  async function makeup(id) {
+    const row=adminRows.find(c=>c.id===Number(id));
+    const matches=catalog.filter(c=>c.title===row?.title);
+    if(matches.length!==1)throw new Error(matches.length?'有多筆同名課程，請至「課程登錄」選擇正確的課程補課名單。':'找不到對應的課程登錄資料，請先確認課程名稱。');
+    const token=state.token,request=++makeupRequest,modal=document.getElementById('nspMakeupDialog');
+    modal.innerHTML=`<header class="nsp-preview-header"><h2>學員補課名單</h2>${button('返回後台課程列表','makeup-close','',true)}</header><p id="nspMakeupStatus" role="status" class="nsp-help">正在讀取學員補課名單…</p><iframe id="nspMakeupFrame" title="${esc(row.title)}：學員補課名單" hidden></iframe>`;
+    modal.onclose=()=>{makeupRequest++;modal.innerHTML='';};
+    modal.showModal();
+    try{
+      const response=await fetch(`/api/attendance-admin/courses/${matches[0].id}/makeup/view`,{headers:{Authorization:`Bearer ${token}`},signal:AbortSignal.timeout(45000)});
+      if(state.token!==token || request!==makeupRequest)return;
+      if(response.status===401){modal.close();handleLogout();return;}
+      if(!response.ok)throw new Error('學員補課名單暫時無法載入，請關閉後重試。');
+      const html=await response.text();
+      if(state.token!==token || request!==makeupRequest)return;
+      const frame=document.getElementById('nspMakeupFrame');frame.srcdoc=html;frame.hidden=false;
+      document.getElementById('nspMakeupStatus').textContent='';
+    }catch(error){if(state.token===token && request===makeupRequest)document.getElementById('nspMakeupStatus').textContent=error.message;}
+  }
+  window.addEventListener('message',event=>{
+    const frame=document.getElementById('nspMakeupFrame');
+    if(event.origin!==location.origin || !frame || event.source!==frame.contentWindow)return;
+    if(event.data?.type==='nsp-makeup-close')document.getElementById('nspMakeupDialog').close();
+    else if(event.data?.type==='attendance-admin-expired'){document.getElementById('nspMakeupDialog').close();handleLogout();}
+  });
   async function admin(type) {
     activeAdmin=type; const mount=document.getElementById(`adminSubPane_${type}`);
     mount.innerHTML=empty('正在載入…');
@@ -195,7 +220,7 @@ window.NSP = (() => {
       }
       if(activeAdmin!==type)return;
       const instructor=type==='nsp_instructors', isCourse=type==='nsp_courses';
-      mount.innerHTML=`<div class="ds-card nsp-admin"><div class="nsp-admin-heading"><div><span class="eyebrow">NSP 數位學習</span><h3>${labels[type]}</h3></div>${button('＋ 新增'+(isCourse?'課程':instructor?'講師':'分類'),'new',`data-type="${type}"`)}</div>${catalogError?empty(catalogError):''}<div class="nsp-table-wrap"><table><thead><tr><th>編號</th>${isCourse?'<th>課程日期</th>':''}<th>${isCourse?'課程名稱':instructor?'講師名稱':'分類名稱'}</th>${instructor?'<th>電子郵件</th>':''}${isCourse?'<th>狀態</th>':''}<th>建立資訊</th><th>修改資訊</th><th>操作</th></tr></thead><tbody>${adminRows.map(row=>`<tr><td>#${row.number}</td>${isCourse?`<td>${esc([...new Set(catalog.filter(c=>c.title===row.title).map(c=>c.course_date?.replaceAll('-','/')).filter(Boolean))].join('、')||'—')}</td>`:''}<td>${esc(row.name||row.title)}</td>${instructor?`<td>${esc(row.email)}</td>`:''}${isCourse?`<td><span class="nsp-tag">${row.status==='published'?'已發布':'草稿'}</span></td>`:''}<td>${audit(row)}</td><td>${isCourse?button('預覽','preview',`data-id="${row.id}"`,true)+' ':''}${button('修改','edit',`data-id="${row.id}" data-type="${type}"`,true)} ${button('刪除','delete',`data-id="${row.id}" data-type="${type}"`,true)}</td></tr>`).join('')||'<tr><td colspan="7">尚無資料，請新增。</td></tr>'}</tbody></table></div></div>`;
+      mount.innerHTML=`<div class="ds-card nsp-admin"><div class="nsp-admin-heading"><div><span class="eyebrow">NSP 數位學習</span><h3>${labels[type]}</h3></div>${button('＋ 新增'+(isCourse?'課程':instructor?'講師':'分類'),'new',`data-type="${type}"`)}</div>${catalogError?empty(catalogError):''}<div class="nsp-table-wrap"><table><thead><tr><th>編號</th>${isCourse?'<th>課程日期</th>':''}<th>${isCourse?'課程名稱':instructor?'講師名稱':'分類名稱'}</th>${instructor?'<th>電子郵件</th>':''}${isCourse?'<th>狀態</th>':''}<th>建立資訊</th><th>修改資訊</th><th>操作</th></tr></thead><tbody>${adminRows.map(row=>`<tr><td>#${row.number}</td>${isCourse?`<td>${esc([...new Set(catalog.filter(c=>c.title===row.title).map(c=>c.course_date?.replaceAll('-','/')).filter(Boolean))].join('、')||'—')}</td>`:''}<td>${esc(row.name||row.title)}</td>${instructor?`<td>${esc(row.email)}</td>`:''}${isCourse?`<td><span class="nsp-tag">${row.status==='published'?'已發布':'草稿'}</span></td>`:''}<td>${audit(row)}</td><td>${isCourse?button('預覽','preview',`data-id="${row.id}"`,true)+' '+button('補課','makeup',`data-id="${row.id}"`,true)+' ':''}${button('修改','edit',`data-id="${row.id}" data-type="${type}"`,true)} ${button('刪除','delete',`data-id="${row.id}" data-type="${type}"`,true)}</td></tr>`).join('')||'<tr><td colspan="7">尚無資料，請新增。</td></tr>'}</tbody></table></div></div>`;
     }catch(error){mount.innerHTML=empty(error.message);}
   }
   function openDialog(title,body) {
@@ -273,6 +298,8 @@ window.NSP = (() => {
     try{
       if(action==='login'){state.studentDestination='nsp';showLoginModal(true);}
       else if(action==='catalog')await load();
+      else if(action==='makeup')await makeup(id);
+      else if(action==='makeup-close')document.getElementById('nspMakeupDialog').close();
       else if(action==='preview')await preview(id);
       else if(action==='preview-close')document.getElementById('nspPreviewDialog').close();
       else if(action==='detail')await detail(id);

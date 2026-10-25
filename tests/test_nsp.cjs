@@ -281,3 +281,30 @@ test('YouTube auto-next requests autoplay while normal opening retains the saved
   context.youtubeFrame('M7lc1UVf-VE','影片',12);assert.equal(new URL(frame.src).searchParams.get('start'),'12');assert.equal(new URL(frame.src).searchParams.has('autoplay'),false);
   context.youtubeFrame('M7lc1UVf-VE','影片',0,true);assert.equal(new URL(frame.src).searchParams.get('autoplay'),'1');
 });
+
+
+test('makeup opens the matching attendance course rather than the independent NSP ID',async()=>{
+  const elements={},listeners={},calls=[],errors=[];
+  let catalog=[{id:17,title:'導論',course_date:'2026/09/15'}];
+  const context=vm.createContext({AbortSignal,window:{addEventListener(){}},state:{token:'test'},
+    document:{addEventListener(name,fn){listeners[name]=fn;},getElementById(id){return elements[id]??={innerHTML:'',showModal(){this.open=true;},close(){this.open=false;this.onclose?.();}};}},
+    fetch:async(path,init)=>{calls.push([path,init]);return {ok:true,status:200,text:async()=>'<h1>學員補課名單</h1>',json:async()=>path.endsWith('/courses')?[{id:2,number:1,title:'導論',status:'published'}]:path.endsWith('/catalog')?catalog:{terms:[],instructors:[]}};},showToast:message=>errors.push(message)});
+  vm.runInContext(source,context);
+  await context.window.NSP.admin('nsp_courses');
+  assert.match(elements.adminSubPane_nsp_courses.innerHTML,/data-nsp="preview"[\s\S]*>補課<\/button>[\s\S]*>修改<\/button>/);
+  const click=action=>listeners.click({target:{closest:()=>({dataset:{nsp:action,id:'2'}})}});
+  await click('makeup');
+  assert.equal(calls.at(-1)[0],'/api/attendance-admin/courses/17/makeup/view');
+  assert.equal(calls.at(-1)[1].headers.Authorization,'Bearer test');
+  assert.equal(elements.nspMakeupDialog.open,true);
+  assert.match(elements.nspMakeupFrame.srcdoc,/學員補課名單/);
+  assert.equal(elements.nspMakeupFrame.hidden,false);
+  await click('makeup-close');
+  assert.equal(elements.nspMakeupDialog.open,false);
+  assert.equal(elements.nspMakeupDialog.innerHTML,'');
+  for(const rows of [[],[{id:17,title:'導論'},{id:18,title:'導論'}]]){
+    catalog=rows;await context.window.NSP.admin('nsp_courses');const before=calls.length;
+    await click('makeup');assert.equal(calls.length,before);
+  }
+  assert.match(errors[0],/找不到對應/);assert.match(errors[1],/多筆同名課程/);
+});

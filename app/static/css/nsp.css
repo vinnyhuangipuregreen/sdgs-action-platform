@@ -68,3 +68,10 @@
 
 .nsp-editor-number { display:block; color:#1d4ed8; font-size:16px; font-weight:700; line-height:1.5; margin-bottom:8px; }
 .nsp-edit-lesson>.nsp-editor-number,.nsp-edit-material>.nsp-editor-number { grid-column:1 / -1; margin-bottom:-6px; }
+
+#nspMakeupDialog { width:min(1320px,calc(100% - 24px)); max-width:none; height:90dvh; max-height:90dvh; padding:0; border:1px solid #dbe4ec; border-radius:22px; color:#123b36; background:#f1f5f9; box-shadow:0 24px 80px #0003; }
+#nspMakeupDialog[open] { display:flex; flex-direction:column; }
+#nspMakeupDialog::backdrop { background:#0f172a99; backdrop-filter:blur(3px); }
+#nspMakeupDialog .nsp-preview-header { flex-shrink:0; }
+#nspMakeupStatus { padding:0 16px; }
+#nspMakeupFrame { width:100%; flex:1; min-height:0; border:0; border-radius:0 0 22px 22px; }

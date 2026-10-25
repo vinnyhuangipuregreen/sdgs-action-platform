@@ -54,7 +54,7 @@ def install_attendance_admin(app, require_admin, get_current_user):
         token = request.headers.get("authorization", "").removeprefix("Bearer ")
         response = proxy_course_request(request, path, b"", token)
         if response.status_code == 404:
-            raise HTTPException(404, "此學年度查無此學員")
+            raise HTTPException(404, "此學年度查無此學員" if path.startswith("admin/students/") else "此學年度查無此課程")
         if response.status_code != 200 or "text/html" not in response.headers.get("content-type", ""):
             raise HTTPException(503, "原課程後台暫時無法載入，請稍後重試")
         response.set_cookie(COOKIE, token, path=PREFIX, httponly=True,
@@ -70,6 +70,13 @@ def install_attendance_admin(app, require_admin, get_current_user):
     @app.get("/api/attendance-admin/students/{student_id}/view")
     def student_view(student_id: int, request: Request, user=Depends(require_admin)):
         return open_view(request, user, f"admin/students/{student_id}/dashboard")
+
+    @app.get("/api/attendance-admin/courses/{course_id}/makeup/view")
+    def makeup_view(course_id: int, request: Request, user=Depends(require_admin)):
+        response = open_view(request, user, f"admin/courses/{course_id}/pathdemy")
+        response.body = response.body.replace(b'onclick="history.back()"', b"onclick=\"parent.postMessage({type:'nsp-makeup-close'},location.origin)\"")
+        response.headers["content-length"] = str(len(response.body))
+        return response
 
     @app.api_route(PREFIX + "/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
     async def course_admin(request: Request, path: str):

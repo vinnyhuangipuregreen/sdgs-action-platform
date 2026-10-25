@@ -144,3 +144,26 @@ class AttendanceBridgeTests(unittest.TestCase):
         self.assertEqual(result.content, b"makeup-xlsx-data")
         self.assertEqual(result.headers["content-disposition"], disposition)
         self.assertEqual(upstream.call_args.kwargs["params"], [("name", "Test"), ("email", "makeup"), ("phone", "0912"), ("start_date", "2026-09-01"), ("end_date", "2026-09-30")])
+
+
+    def test_course_makeup_view_requires_staff_and_opens_the_selected_attendance_course(self):
+        path = "/api/attendance-admin/courses/17/makeup/view"
+        self.assertEqual(self.client.get(path).status_code, 401)
+        student = create_access_token({"id": 1, "name": "Student", "email": "student", "role": "student"})
+        self.assertEqual(self.client.get(path, headers={"Authorization": "Bearer " + student}).status_code, 403)
+        response = SimpleNamespace(status_code=200, content=b'<a onclick="history.back()">Back</a><script>fetch("/api/admin/courses/17/pathdemy/import")</script>', headers={"Content-Type": "text/html"})
+        with patch("app.attendance_bridge.requests.request", return_value=response) as upstream:
+            result = self.client.get(path, headers=self.headers)
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(upstream.call_args.args[1], "https://sdgs-attendance-record.vercel.app/admin/courses/17/pathdemy")
+        self.assertEqual(upstream.call_args.kwargs["headers"]["Authorization"], "Bearer " + self.token)
+        self.assertIn("HttpOnly", result.headers["set-cookie"])
+        self.assertIn('/attendance-admin/api/admin/courses/17/pathdemy/import', result.text)
+        self.assertIn("nsp-makeup-close", result.text)
+        self.assertNotIn("history.back()", result.text)
+        self.assertNotIn(self.token, result.text)
+        response.status_code = 404
+        with patch("app.attendance_bridge.requests.request", return_value=response):
+            result = self.client.get(path, headers=self.headers)
+        self.assertEqual(result.status_code, 404)
+        self.assertIn("此學年度查無此課程", result.text)
