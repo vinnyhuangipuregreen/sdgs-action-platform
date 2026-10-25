@@ -262,6 +262,14 @@ test('last lesson saves and stops with a finished message instead of leaving the
   }
 });
 
+test('course completion reports makeup sync success or a retry without losing completion',async()=>{
+  for(const synced of [true,false]){
+    const {context,p,c,status}=endingContext();p.l=c.sections[1].lessons[0];c.makeup_synced=synced;
+    await context.finish(p);
+    assert.match(status.textContent,synced?/已同步課程登錄的已補課紀錄/:/學習進度已儲存.*重新開啟課程清單重試/);
+  }
+});
+
 test('failed progress save does not advance, and manual navigation or logout cancels delayed advancement',async()=>{
   const failed=endingContext();failed.context.flush=async()=>false;
   await failed.context.finish(failed.p);assert.equal(failed.p.ending,false);assert.deepEqual(failed.calls,[]);

@@ -242,6 +242,26 @@ def add_makeup_counts(rows, request):
     return rows
 
 
+def completion_record(conn, course, user):
+    ids = {l["id"] for s in course["sections"] for l in s["lessons"]}
+    records = conn.cursor().execute("SELECT lesson_id,completed,updated_at FROM nsp_progress WHERE year_id=? AND account_type=? AND user_id=? AND course_id=?", (*identity(user), course["id"])).fetchall()
+    done = {r["lesson_id"] for r in records if r["completed"]}
+    complete = bool(ids) and ids <= done
+    return {"id": course["id"], "title": course["title"], "completed": complete,
+            "completed_at": max((r["updated_at"] for r in records if r["lesson_id"] in ids), default="") if complete else ""}
+
+
+def sync_makeup(request, course_id):
+    try:
+        response = requests.post("https://sdgs-attendance-record.vercel.app/api/nsp/complete",
+            headers={"Authorization": request.headers.get("authorization", ""), "X-Academic-Year": str(current_year_id.get())},
+            json={"course_id": course_id}, timeout=(5, 20))
+        response.raise_for_status()
+        return True
+    except requests.RequestException:
+        return False
+
+
 def install_nsp(app, require_user, require_admin):
     @app.get("/api/nsp/admin/options")
     def options(user=Depends(require_admin)):
@@ -395,10 +415,21 @@ def install_nsp(app, require_user, require_admin):
                 course["bookmarked"] = course["id"] in bookmarks
                 course["material_categories"] = terms
                 result.append(course)
+        if get_account_type(user) == "student":
+            for course in result:
+                if course["total"] and course["completed"] == course["total"]:
+                    course["makeup_synced"] = sync_makeup(request, course["id"])
         return add_makeup_counts(result, request)
 
+    @app.get("/api/nsp/courses/{course_id}/completion")
+    def completion(course_id: int, user=Depends(require_user)):
+        if get_account_type(user) != "student":
+            raise HTTPException(403, "僅學員可同步補課紀錄")
+        with database() as conn:
+            return completion_record(conn, get_course(conn, course_id, user), user)
+
     @app.put("/api/nsp/courses/{course_id}/progress/{lesson_id}")
-    def progress(course_id: int, lesson_id: str, req: ProgressWrite, user=Depends(require_user)):
+    def progress(course_id: int, lesson_id: str, req: ProgressWrite, request: Request, user=Depends(require_user)):
         with database() as conn:
             course = get_course(conn, course_id, user)
             lesson = next((l for s in course["sections"] for l in s["lessons"] if l["id"] == lesson_id), None)
@@ -410,7 +441,11 @@ def install_nsp(app, require_user, require_admin):
             conn.cursor().execute("INSERT INTO nsp_progress VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(year_id,account_type,user_id,course_id,lesson_id) DO UPDATE SET position=excluded.position,watched=MIN(?,nsp_progress.watched+excluded.watched),completed=MAX(nsp_progress.completed,CASE WHEN ?>0 AND nsp_progress.watched+excluded.watched>=?*.9 THEN 1 ELSE 0 END),updated_at=excluded.updated_at", (*key, min(req.position, duration), delta, int(duration > 0 and delta >= duration*.9), now(), duration, duration, duration))
             saved = conn.cursor().execute("SELECT watched,completed FROM nsp_progress WHERE year_id=? AND account_type=? AND user_id=? AND course_id=? AND lesson_id=?", key).fetchone()
             watched, completed = saved[0], saved[1]
-        return {"success": True, "watched": watched, "completed": completed}
+            all_done = get_account_type(user) == "student" and completion_record(conn, course, user)["completed"]
+        result = {"success": True, "watched": watched, "completed": completed}
+        if all_done:
+            result["makeup_synced"] = sync_makeup(request, course_id)
+        return result
 
     @app.put("/api/nsp/courses/{course_id}/bookmark")
     def bookmark(course_id: int, user=Depends(require_user)):

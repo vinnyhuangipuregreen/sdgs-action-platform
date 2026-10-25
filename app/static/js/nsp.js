@@ -72,7 +72,7 @@ window.NSP = (() => {
   function renderCards() {
     const search=document.getElementById('nspSearch').value.trim().toLowerCase(), favorites=document.getElementById('nspFavorites').checked;
     const selected=courses.filter(c=>(!favorites||c.bookmarked) && [c.title,c.category,...c.instructors].join(' ').toLowerCase().includes(search));
-    document.getElementById('nspCourseGrid').innerHTML=selected.map(c=>`<article class="ds-card nsp-course-card"><div class="nsp-cover"><img src="${esc(coverImage(c.cover_url))}" alt="${esc(c.title)}" loading="lazy"><button type="button" data-nsp="bookmark" data-id="${c.id}" aria-label="${c.bookmarked?'取消收藏':'收藏'}${esc(c.title)}" aria-pressed="${c.bookmarked}">${c.bookmarked?'★':'☆'}</button></div><div class="nsp-card-copy"><h3>${esc(c.title)}</h3><p>👤 ${esc(c.instructors.join('、'))}</p><p>🌿 ${esc(c.category)}</p><p>🌳 ${c.makeup_count ?? '—'}人完成學習</p><div class="nsp-progress"><progress max="100" value="${c.percent}"></progress><span>${c.percent}%</span></div>${button(c.completed?'繼續學習':'開始學習','detail',`data-id="${c.id}"`)}</div></article>`).join('') || empty(courses.length?'沒有符合條件的課程':'本學年度尚無已發布課程，敬請期待。');
+    document.getElementById('nspCourseGrid').innerHTML=selected.map(c=>`<article class="ds-card nsp-course-card"><div class="nsp-cover"><img src="${esc(coverImage(c.cover_url))}" alt="${esc(c.title)}" loading="lazy"><button type="button" data-nsp="bookmark" data-id="${c.id}" aria-label="${c.bookmarked?'取消收藏':'收藏'}${esc(c.title)}" aria-pressed="${c.bookmarked}">${c.bookmarked?'★':'☆'}</button></div><div class="nsp-card-copy"><h3>${esc(c.title)}</h3><p>👤 ${esc(c.instructors.join('、'))}</p><p>🌿 ${esc(c.category)}</p><p>🌳 ${c.makeup_count ?? '—'}人完成學習</p>${c.makeup_synced===false?'<p role="status">補課同步未完成，請重新開啟課程清單重試。</p>':''}<div class="nsp-progress"><progress max="100" value="${c.percent}"></progress><span>${c.percent}%</span></div>${button(c.completed?'繼續學習':'開始學習','detail',`data-id="${c.id}"`)}</div></article>`).join('') || empty(courses.length?'沒有符合條件的課程':'本學年度尚無已發布課程，敬請期待。');
   }
   async function preview(id) {
     await stop();
@@ -113,10 +113,10 @@ window.NSP = (() => {
     if(p.sending)return p.savePromise;
     p.sending=true; const delta=Math.min(30,p.pending), position=p.position();
     p.savePromise=(async()=>{try {
-      const saved=await api(`/courses/${p.c.id}/progress/${p.l.id}`,'PUT',{position,watched_delta:delta}); p.pending=Math.max(0,p.pending-delta);
+      const saved=await api(`/courses/${p.c.id}/progress/${p.l.id}`,'PUT',{position,watched_delta:delta}); p.pending=Math.max(0,p.pending-delta); if('makeup_synced' in saved)p.c.makeup_synced=saved.makeup_synced;
       const progress=p.c.progress.find(r=>r.lesson_id===p.l.id);
       if(progress)Object.assign(progress,saved,{position});else { if(!p.c.progress.length)p.c.learners++; p.c.progress.push({lesson_id:p.l.id,...saved,position}); }
-      if(player===p) { updateProgress(p.c); document.getElementById('nspSaveStatus').textContent='進度已儲存'; }
+      if(player===p) { updateProgress(p.c); document.getElementById('nspSaveStatus').textContent=p.c.makeup_synced===true?'已完成學習，已同步課程登錄的已補課紀錄。':p.c.makeup_synced===false?'學習進度已儲存；補課同步未完成，請重新開啟課程清單重試。':'進度已儲存'; }
       return true;
     }catch(error){ if(player===p)document.getElementById('nspSaveStatus').textContent='進度尚未儲存：'+error.message; return false; }finally{p.sending=false;}})();
     return p.savePromise;
@@ -137,7 +137,7 @@ window.NSP = (() => {
     clearInterval(p.timer);
     const ordered=lessons(p.c),next=ordered[ordered.findIndex(l=>l.id===p.l.id)+1];
     if(next)await play(p.c.id,next.id,true);
-    else document.getElementById('nspSaveStatus').textContent=p.preview?'本課程影片已全部預覽完畢。':'影片觀看紀錄已儲存，本課程影片已全部播放完畢。';
+    else document.getElementById('nspSaveStatus').textContent=p.preview?'本課程影片已全部預覽完畢。':p.c.makeup_synced===true?'已完成學習，已同步課程登錄的已補課紀錄。':p.c.makeup_synced===false?'學習進度已儲存；補課同步未完成，請重新開啟課程清單重試。':'影片觀看紀錄已儲存，本課程影片已全部播放完畢。';
   }
   function tick(p) {
     const time=Date.now();

@@ -14,6 +14,9 @@ class NspTests(unittest.TestCase):
         counts_patch = patch('app.nsp.requests.get', return_value=response)
         counts_patch.start()
         self.addCleanup(counts_patch.stop)
+        sync_patch = patch('app.nsp.requests.post', return_value=response)
+        self.sync_mock = sync_patch.start()
+        self.addCleanup(sync_patch.stop)
     tearDown = fixtures.AcademicYearTests.tearDown
     headers = fixtures.AcademicYearTests.headers
     create_year = fixtures.AcademicYearTests.create_year
@@ -276,3 +279,34 @@ class NspTests(unittest.TestCase):
         import requests
         with patch('app.nsp.requests.get', side_effect=requests.RequestException):
             self.assertIsNone(self.request('GET','/courses',headers=self.student)[0]['makeup_count'])
+
+    def test_makeup_sync_requires_all_current_lessons_and_student_identity(self):
+        req = self.prepare()
+        req['sections'].append({'title':'第二章','lessons':[{'id':'lesson_2','title':'第二支','url':'https://example.invalid/two.mp4','duration':10}]})
+        cid = self.request('POST','/admin/courses',req)['id']
+        path = f'/courses/{cid}/completion'
+        self.assertFalse(self.request('GET',path,headers=self.student)['completed'])
+        self.request('GET',path,status=403)
+        self.request('PUT',f'/courses/{cid}/progress/lesson_2',{'position':10,'watched_delta':10},headers=self.student)
+        self.sync_mock.assert_not_called()
+        for _ in range(3):
+            result = self.request('PUT',f'/courses/{cid}/progress/lesson_1',{'position':100,'watched_delta':30},headers=self.student)
+        self.assertTrue(result['makeup_synced'])
+        verified = self.request('GET',path,headers=self.student)
+        self.assertTrue(verified['completed'])
+        self.assertEqual(verified['title'],req['title'])
+        self.assertTrue(verified['completed_at'].endswith('+08:00'))
+        self.assertEqual(self.sync_mock.call_args.kwargs['headers']['Authorization'],self.student['Authorization'])
+        self.assertEqual(self.sync_mock.call_args.kwargs['headers']['X-Academic-Year'],'1')
+        self.assertEqual(self.sync_mock.call_args.kwargs['json'],{'course_id':cid})
+        self.sync_mock.reset_mock()
+        for _ in range(3):
+            self.request('PUT',f'/courses/{cid}/progress/lesson_1',{'position':100,'watched_delta':30})
+        self.sync_mock.assert_not_called()
+        import requests
+        self.sync_mock.side_effect = requests.RequestException('offline')
+        saved = self.request('PUT',f'/courses/{cid}/progress/lesson_2',{'position':10},headers=self.student)
+        self.assertEqual(saved['completed'],1)
+        self.assertFalse(saved['makeup_synced'])
+        self.sync_mock.side_effect = None
+        self.assertTrue(self.request('GET','/courses',headers=self.student)[0]['makeup_synced'])
