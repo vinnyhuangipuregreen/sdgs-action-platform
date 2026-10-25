@@ -43,6 +43,7 @@ class NspTests(unittest.TestCase):
         self.assertEqual(public['percent'],100)
         self.assertEqual(public['progress'][0]['position'],95)
         self.assertEqual(public['learners'],1)
+        self.assertEqual(self.request('GET','/admin/courses')[0]['learners'],1)
         self.assertEqual(self.request('GET','/courses')[0]['percent'],0) # staff id=student id
         self.assertTrue(self.request('PUT',f'/courses/{course_id}/bookmark',headers=self.student)['bookmarked'])
         self.assertTrue(self.request('GET','/courses',headers=self.student)[0]['bookmarked'])
@@ -63,6 +64,7 @@ class NspTests(unittest.TestCase):
         self.assertEqual(self.request('GET','/courses',headers=self.student),[])
         row=self.request('GET','/admin/courses')[0]
         self.assertEqual(row['created_by'],'test@example.invalid')
+        self.assertEqual(row['learners'],0)
         self.assertTrue(row['created_at'].endswith('+08:00'))
         self.request('PUT',f'/admin/courses/{course_id}',{**draft,'version':row['version'],'status':'published'},status=422)
         self.request('PUT',f'/admin/courses/{course_id}',{**req,'version':row['version']})

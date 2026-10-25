@@ -300,6 +300,9 @@ def install_nsp(app, require_user, require_admin):
     def admin_courses(user=Depends(require_admin)):
         with database() as conn:
             rows = [course_data(row) for row in conn.cursor().execute("SELECT c.*,n.number FROM nsp_courses c JOIN nsp_course_numbers n ON n.course_id=c.id WHERE c.year_id=? ORDER BY c.id DESC", (current_year_id.get(),)).fetchall()]
+            learners = {r[0]: r[1] for r in conn.cursor().execute("SELECT course_id,COUNT(*) FROM (SELECT DISTINCT course_id,account_type,user_id FROM nsp_progress WHERE year_id=?) GROUP BY course_id", (current_year_id.get(),)).fetchall()}
+            for row in rows:
+                row["learners"] = learners.get(row["id"], 0)
         return add_audit_names(rows)
 
     @app.post("/api/nsp/admin/courses")

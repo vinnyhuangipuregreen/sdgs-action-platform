@@ -1,4 +1,11 @@
 /* NSP learning center */
+#nspPreviewDialog { width:min(1280px,calc(100% - 24px)); max-width:none; max-height:92dvh; padding:0; border:1px solid #dbe4ec; border-radius:22px; color:#123b36; background:#f1f5f9; box-shadow:0 24px 80px #0003; overflow:auto; }
+#nspPreviewDialog::backdrop { background:#0f172a99; backdrop-filter:blur(3px); }
+.nsp-preview-header { position:sticky; top:0; z-index:2; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 20px; background:#fff; border-bottom:1px solid #dbe4ec; }
+.nsp-preview-header h2 { font-size:20px; font-weight:800; }
+#nspPreviewContent { display:grid; gap:18px; padding:18px; }
+#nspPreviewContent .nsp-back { margin:0; }
+@media(max-width:500px){#nspPreviewContent { padding:10px; gap:12px; }.nsp-preview-header { padding:10px 14px; }}
 .nsp-home-entry { position:relative; overflow:hidden; align-items:center; justify-content:flex-start; gap:8px; padding:14px 18px 16px; text-align:center; background:linear-gradient(155deg,#ffffff,#f0faf3); border:1px solid #d6eadc; box-shadow:0 5px 20px #17643c09; }
 .nsp-home-art { display:block; width:148px; height:148px; object-fit:contain; border-radius:50%; mix-blend-mode:multiply; }
 .nsp-home-entry h3 { margin:0; color:#137a3f; font-size:23px; line-height:1.4; font-weight:800; letter-spacing:-.03em; }

@@ -37,12 +37,12 @@ window.NSP = (() => {
   const field = (label, control) => `<label class="nsp-field"><span>${label}</span>${control}</label>`;
   const input = (name, value='', type='text', extra='') => `<input name="${name}" type="${type}" value="${esc(value)}" ${extra}>`;
   const options = (rows, selected, value='id', text='name') => '<option value="">請選擇</option>'+rows.map(r=>`<option value="${esc(r[value])}" ${String(r[value])===String(selected)?'selected':''}>${esc(r[text])}</option>`).join('');
-  let courses=[], meta={terms:[],instructors:[]}, adminRows=[], catalog=[], activeAdmin='', edit=null, player=null, generation=0;
-  const root = () => document.getElementById('nspApp');
+  let courses=[], meta={terms:[],instructors:[]}, adminRows=[], catalog=[], activeAdmin='', edit=null, player=null, previewCourse=null, generation=0;
+  const root = () => document.getElementById(previewCourse?'nspPreviewContent':'nspApp');
   const dialog = () => document.getElementById('nspDialog');
   const minutes = seconds => { const total=Math.round(seconds||0); return `${Math.floor(total/60)}:${String(total%60).padStart(2,'0')}`; };
   const lessons = c => c.sections.flatMap(s=>s.lessons);
-  const course = id => courses.find(c=>c.id===Number(id));
+  const course = id => previewCourse?.id===Number(id)?previewCourse:courses.find(c=>c.id===Number(id));
 
   async function load() {
     await stop();
@@ -74,11 +74,21 @@ window.NSP = (() => {
     const selected=courses.filter(c=>(!favorites||c.bookmarked) && [c.title,c.category,...c.instructors].join(' ').toLowerCase().includes(search));
     document.getElementById('nspCourseGrid').innerHTML=selected.map(c=>`<article class="ds-card nsp-course-card"><div class="nsp-cover"><img src="${esc(coverImage(c.cover_url))}" alt="${esc(c.title)}" loading="lazy"><button type="button" data-nsp="bookmark" data-id="${c.id}" aria-label="${c.bookmarked?'取消收藏':'收藏'}${esc(c.title)}" aria-pressed="${c.bookmarked}">${c.bookmarked?'★':'☆'}</button></div><div class="nsp-card-copy"><h3>${esc(c.title)}</h3><p>👤 ${esc(c.instructors.join('、'))}</p><p>🌿 ${esc(c.category)}</p><p>🌳 ${c.learners} 人開始學習</p><div class="nsp-progress"><progress max="100" value="${c.percent}"></progress><span>${c.percent}%</span></div>${button(c.completed?'繼續學習':'開始學習','detail',`data-id="${c.id}"`)}</div></article>`).join('') || empty(courses.length?'沒有符合條件的課程':'本學年度尚無已發布課程，敬請期待。');
   }
+  async function preview(id) {
+    await stop();
+    const row=adminRows.find(c=>c.id===Number(id)); if(!row)return;
+    previewCourse={...structuredClone(row),category:meta.terms.find(t=>t.id===row.category_id)?.name||'',instructors:meta.instructors.filter(i=>row.instructor_ids.includes(i.id)).map(i=>i.name),material_categories:Object.fromEntries(meta.terms.map(t=>[t.id,t.name])),progress:[],completed:0,total:lessons(row).length,percent:0};
+    const modal=document.getElementById('nspPreviewDialog');
+    modal.innerHTML=`<header class="nsp-preview-header"><h2>課程預覽</h2>${button('關閉預覽','preview-close','',true)}</header><div id="nspPreviewContent"></div>`;
+    modal.onclose=()=>{stop(false);previewCourse=null;modal.innerHTML='';};
+    modal.showModal();
+    await detail(id);
+  }
   async function detail(id) {
     await stop();
-    window.scrollTo(0,0);
+    if(previewCourse)document.getElementById('nspPreviewDialog').scrollTop=0;else window.scrollTo(0,0);
     const c=course(id); if(!c) return;
-    root().innerHTML=`<div class="nsp-back">${button('← 返回課程清單','catalog','',true)}</div><section class="ds-card nsp-course-detail"><img src="${esc(coverImage(c.cover_url))}" alt="${esc(c.title)}"><div><span class="eyebrow">${esc(c.category)}</span><h2>${esc(c.title)}</h2><p>授課講師：${esc(c.instructors.join('、'))}</p><p>修課人數：${c.learners}</p><p>學習進度：${c.completed}/${c.total}（${c.percent}%）</p><progress max="100" value="${c.percent}"></progress></div></section><section class="ds-card nsp-content"><h3>課程資訊</h3><div class="nsp-rich-text">${c.info_html}</div></section><section class="ds-card nsp-content"><h3>課程內容</h3>${c.sections.map(s=>`<div class="nsp-section"><h4>${esc(s.title)}</h4>${s.lessons.map(l=>`<button type="button" class="nsp-lesson" data-nsp="play" data-id="${c.id}" data-lesson="${l.id}"><span>${c.progress.find(p=>p.lesson_id===l.id)?.completed?'✅':'▷'} ${esc(l.title)}</span><time>${minutes(l.duration)}</time></button>`).join('')}</div>`).join('')}</section><section class="ds-card nsp-content"><h3>教材內容</h3>${c.materials.map(m=>`<div class="nsp-material"><span class="nsp-tag">${esc(c.material_categories[m.category_id])}</span><a href="${esc(m.url)}" target="_blank" rel="noopener noreferrer">⇩ ${esc(m.title)}</a><small>${esc(m.note)}</small></div>`).join('')||empty('尚無教材')}</section>`;
+    root().innerHTML=`<div class="nsp-back">${button(previewCourse?'← 返回課程管理':'← 返回課程清單',previewCourse?'preview-close':'catalog','',true)}</div><section class="ds-card nsp-course-detail"><img src="${esc(coverImage(c.cover_url))}" alt="${esc(c.title)}"><div><span class="eyebrow">${esc(c.category)}</span><h2>${esc(c.title)}</h2><p>授課講師：${esc(c.instructors.join('、'))}</p><p>修課人數：${c.learners}</p>${previewCourse?'<p class="nsp-help">預覽模式，不記錄學習進度。</p>':`<p>學習進度：${c.completed}/${c.total}（${c.percent}%）</p><progress max="100" value="${c.percent}"></progress>`}</div></section><section class="ds-card nsp-content"><h3>課程資訊</h3><div class="nsp-rich-text">${c.info_html}</div></section><section class="ds-card nsp-content"><h3>課程內容</h3>${c.sections.map(s=>`<div class="nsp-section"><h4>${esc(s.title)}</h4>${s.lessons.map(l=>`<button type="button" class="nsp-lesson" data-nsp="play" data-id="${c.id}" data-lesson="${l.id}"><span>${c.progress.find(p=>p.lesson_id===l.id)?.completed?'✅':'▷'} ${esc(l.title)}</span><time>${minutes(l.duration)}</time></button>`).join('')}</div>`).join('')}</section><section class="ds-card nsp-content"><h3>教材內容</h3>${c.materials.map(m=>`<div class="nsp-material"><span class="nsp-tag">${esc(c.material_categories[m.category_id])}</span><a href="${esc(m.url)}" target="_blank" rel="noopener noreferrer">⇩ ${esc(m.title)}</a><small>${esc(m.note)}</small></div>`).join('')||empty('尚無教材')}</section>`;
   }
   let ytPromise;
   function youtube() {
@@ -95,11 +105,11 @@ window.NSP = (() => {
   function updateProgress(c) {
     c.completed=c.progress.filter(p=>p.completed && lessons(c).some(l=>l.id===p.lesson_id)).length;
     c.percent=c.total?Math.round(c.completed/c.total*100):0;
-    const label=document.getElementById('nspPlayerProgress'); if(label)label.textContent=`你的進度：${c.completed}/${c.total}（${c.percent}%）`;
+    const label=document.getElementById('nspPlayerProgress'); if(label)label.textContent=previewCourse?'課程預覽':`你的進度：${c.completed}/${c.total}（${c.percent}%）`;
     for(const l of lessons(c)) { const mark=document.querySelector(`[data-nsp-marker="${l.id}"]`); if(mark)mark.textContent=c.progress.find(p=>p.lesson_id===l.id)?.completed?'✓':'○'; }
   }
   async function flush(p=player) {
-    if(!p || p.sending || state.token!==p.token || !p.position) return;
+    if(!p || p.preview || p.sending || state.token!==p.token || !p.position) return;
     p.sending=true; const delta=Math.min(30,p.pending), position=p.position();
     try {
       const saved=await api(`/courses/${p.c.id}/progress/${p.l.id}`,'PUT',{position,watched_delta:delta}); p.pending=Math.max(0,p.pending-delta);
@@ -134,20 +144,20 @@ window.NSP = (() => {
   }
   async function play(id,lessonId) {
     await stop(); const c=course(id),l=lessons(c).find(l=>l.id===lessonId); if(!l)return;
-    window.scrollTo(0,0);
+    if(previewCourse)document.getElementById('nspPreviewDialog').scrollTop=0;else window.scrollTo(0,0);
     const saved=c.progress.find(p=>p.lesson_id===lessonId);
-    root().innerHTML=`<div class="nsp-learning"><aside class="nsp-outline"><h3>課程內容［學習區］</h3>${c.sections.map(s=>`<details open><summary>${esc(s.title)}</summary>${s.lessons.map(item=>`<button type="button" data-nsp="play" data-id="${id}" data-lesson="${item.id}" ${item.id===lessonId?'aria-current="true"':''}><span data-nsp-marker="${item.id}">${c.progress.find(p=>p.lesson_id===item.id)?.completed?'✓':'○'}</span><span>${esc(item.title)}</span><time>${minutes(item.duration)}</time></button>`).join('')}</details>`).join('')}</aside><section class="nsp-screen"><div class="nsp-player-header">${button('←','detail',`data-id="${id}"`,true)}<strong>${esc(c.title)}｜${esc(l.title)}</strong><span id="nspPlayerProgress"></span>${button('✕','detail',`data-id="${id}" aria-label="關閉學習區"`,true)}</div><div class="nsp-video-wrap" id="nspVideo"></div><div class="nsp-player-footer"><span id="nspSaveStatus" role="status">觀看進度每 10 秒自動儲存，觀看達影片 90% 後計為完成。</span>${button('返回課程','detail',`data-id="${id}"`,true)}</div></section></div>`;
-    const p={c,l,token:state.token,pending:0,sending:false,clock:Date.now(),lastSave:Date.now()}; player=p; updateProgress(c);
+    root().innerHTML=`<div class="nsp-learning"><aside class="nsp-outline"><h3>課程內容［學習區］</h3>${c.sections.map(s=>`<details open><summary>${esc(s.title)}</summary>${s.lessons.map(item=>`<button type="button" data-nsp="play" data-id="${id}" data-lesson="${item.id}" ${item.id===lessonId?'aria-current="true"':''}><span data-nsp-marker="${item.id}">${c.progress.find(p=>p.lesson_id===item.id)?.completed?'✓':'○'}</span><span>${esc(item.title)}</span><time>${minutes(item.duration)}</time></button>`).join('')}</details>`).join('')}</aside><section class="nsp-screen"><div class="nsp-player-header">${button('←','detail',`data-id="${id}"`,true)}<strong>${esc(c.title)}｜${esc(l.title)}</strong><span id="nspPlayerProgress"></span>${button('✕','detail',`data-id="${id}" aria-label="關閉學習區"`,true)}</div><div class="nsp-video-wrap" id="nspVideo"></div><div class="nsp-player-footer"><span id="nspSaveStatus" role="status">${previewCourse?'預覽模式，不記錄學習進度。':'觀看進度每 10 秒自動儲存，觀看達影片 90% 後計為完成。'}</span>${button('返回課程','detail',`data-id="${id}"`,true)}</div></section></div>`;
+    const p={c,l,preview:!!previewCourse,token:state.token,pending:0,sending:false,clock:Date.now(),lastSave:Date.now()}; player=p; updateProgress(c);
     const videoId=youtubeId(l.url);
     if(videoId){
       const frame=youtubeFrame(videoId,l.title,Math.floor(saved?.position||0));
       document.getElementById('nspVideo').appendChild(frame);
-      try{const YT=await youtube();if(player!==p)return;p.yt=new YT.Player(frame,{events:{onReady:()=>{p.position=()=>p.yt.getCurrentTime();p.playing=()=>p.yt.getPlayerState()===1;p.rate=()=>p.yt.getPlaybackRate();},onStateChange:event=>{if([0,2].includes(event.data))flush(p);},onError:()=>{document.getElementById('nspSaveStatus').textContent='影片無法播放，請確認連結及嵌入權限';}}});}catch(error){document.getElementById('nspSaveStatus').textContent=error.message;}
+      try{const YT=await youtube();if(player!==p)return;p.yt=new YT.Player(frame,{events:{onReady:()=>{p.position=()=>p.yt.getCurrentTime();p.playing=()=>p.yt.getPlayerState()===1;p.rate=()=>p.yt.getPlaybackRate();},onStateChange:event=>{if([0,2].includes(event.data))flush(p);},onError:()=>{if(player===p)document.getElementById('nspSaveStatus').textContent='影片無法播放，請確認連結及嵌入權限';}}});}catch(error){if(player===p)document.getElementById('nspSaveStatus').textContent=error.message;}
     }else{
       const v=document.createElement('video');v.controls=true;v.preload='metadata';v.src=l.url;v.poster=coverImage(c.cover_url);v.playsInline=true;document.getElementById('nspVideo').appendChild(v);p.video=v;p.position=()=>v.currentTime;p.playing=()=>!v.paused&&!v.ended;p.rate=()=>v.playbackRate;
       v.addEventListener('loadedmetadata',()=>{v.currentTime=Math.min(saved?.position||0,v.duration||0);});v.addEventListener('pause',()=>{if(player===p)flush(p);});v.addEventListener('ended',()=>{if(player===p)flush(p);});v.addEventListener('error',()=>{if(player===p)document.getElementById('nspSaveStatus').textContent='影片無法播放，請使用可公開存取的影片檔案或 YouTube 網址';});
     }
-    p.timer=setInterval(()=>tick(p),1000);
+    if(!p.preview)p.timer=setInterval(()=>tick(p),1000);
   }
 
   async function admin(type) {
@@ -163,7 +173,7 @@ window.NSP = (() => {
       }
       if(activeAdmin!==type)return;
       const instructor=type==='nsp_instructors', isCourse=type==='nsp_courses';
-      mount.innerHTML=`<div class="ds-card nsp-admin"><div class="nsp-admin-heading"><div><span class="eyebrow">NSP 數位學習</span><h3>${labels[type]}</h3></div>${button('＋ 新增'+(isCourse?'課程':instructor?'講師':'分類'),'new',`data-type="${type}"`)}</div>${catalogError?empty(catalogError):''}<div class="nsp-table-wrap"><table><thead><tr><th>編號</th>${isCourse?'<th>課程日期</th>':''}<th>${isCourse?'課程名稱':instructor?'講師名稱':'分類名稱'}</th>${instructor?'<th>電子郵件</th>':''}${isCourse?'<th>狀態</th>':''}<th>建立資訊</th><th>修改資訊</th><th>操作</th></tr></thead><tbody>${adminRows.map(row=>`<tr><td>#${row.number}</td>${isCourse?`<td>${esc([...new Set(catalog.filter(c=>c.title===row.title).map(c=>c.course_date?.replaceAll('-','/')).filter(Boolean))].join('、')||'—')}</td>`:''}<td>${esc(row.name||row.title)}</td>${instructor?`<td>${esc(row.email)}</td>`:''}${isCourse?`<td><span class="nsp-tag">${row.status==='published'?'已發布':'草稿'}</span></td>`:''}<td>${audit(row)}</td><td>${button('修改','edit',`data-id="${row.id}" data-type="${type}"`,true)} ${button('刪除','delete',`data-id="${row.id}" data-type="${type}"`,true)}</td></tr>`).join('')||'<tr><td colspan="7">尚無資料，請新增。</td></tr>'}</tbody></table></div></div>`;
+      mount.innerHTML=`<div class="ds-card nsp-admin"><div class="nsp-admin-heading"><div><span class="eyebrow">NSP 數位學習</span><h3>${labels[type]}</h3></div>${button('＋ 新增'+(isCourse?'課程':instructor?'講師':'分類'),'new',`data-type="${type}"`)}</div>${catalogError?empty(catalogError):''}<div class="nsp-table-wrap"><table><thead><tr><th>編號</th>${isCourse?'<th>課程日期</th>':''}<th>${isCourse?'課程名稱':instructor?'講師名稱':'分類名稱'}</th>${instructor?'<th>電子郵件</th>':''}${isCourse?'<th>狀態</th>':''}<th>建立資訊</th><th>修改資訊</th><th>操作</th></tr></thead><tbody>${adminRows.map(row=>`<tr><td>#${row.number}</td>${isCourse?`<td>${esc([...new Set(catalog.filter(c=>c.title===row.title).map(c=>c.course_date?.replaceAll('-','/')).filter(Boolean))].join('、')||'—')}</td>`:''}<td>${esc(row.name||row.title)}</td>${instructor?`<td>${esc(row.email)}</td>`:''}${isCourse?`<td><span class="nsp-tag">${row.status==='published'?'已發布':'草稿'}</span></td>`:''}<td>${audit(row)}</td><td>${isCourse?button('預覽','preview',`data-id="${row.id}"`,true)+' ':''}${button('修改','edit',`data-id="${row.id}" data-type="${type}"`,true)} ${button('刪除','delete',`data-id="${row.id}" data-type="${type}"`,true)}</td></tr>`).join('')||'<tr><td colspan="7">尚無資料，請新增。</td></tr>'}</tbody></table></div></div>`;
     }catch(error){mount.innerHTML=empty(error.message);}
   }
   function openDialog(title,body) {
@@ -241,7 +251,9 @@ window.NSP = (() => {
     try{
       if(action==='login'){state.studentDestination='nsp';showLoginModal(true);}
       else if(action==='catalog')await load();
-      else if(action==='detail')detail(id);
+      else if(action==='preview')await preview(id);
+      else if(action==='preview-close')document.getElementById('nspPreviewDialog').close();
+      else if(action==='detail')await detail(id);
       else if(action==='play')await play(id,el.dataset.lesson);
       else if(action==='bookmark'){const saved=await api(`/courses/${id}/bookmark`,'PUT');course(id).bookmarked=saved.bookmarked;renderCards();}
       else if(action==='new'||action==='edit')await editItem(type,action==='edit'?id:null);
