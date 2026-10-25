@@ -224,3 +224,60 @@ test('preview player flush never submits learning progress',async()=>{
   await context.flush({preview:true,token:'test',position:()=>20,pending:20});
   assert.equal(called,false);
 });
+
+
+const finishSource=source.slice(source.indexOf('  async function finish('),source.indexOf('  function tick('));
+function endingContext(preview=false){
+  const first={id:'a'},second={id:'b'},c={id:7,sections:[{lessons:[first]},{lessons:[second]}],progress:[]};
+  const p={c,l:first,preview,token:'test'},status={textContent:''},calls=[];
+  const context=vm.createContext({player:p,state:{token:'test'},lessons:c=>c.sections.flatMap(s=>s.lessons),flush:async()=>{calls.push('saved');return true;},play:async(...args)=>calls.push(args),updateProgress(){calls.push('marked');},clearInterval(){},document:{getElementById:()=>status}});
+  vm.runInContext(finishSource,context);
+  return {context,p,c,calls,status};
+}
+
+test('ended waits for in-flight progress then saves before auto-playing across chapters once',async()=>{
+  const {context,p,calls}=endingContext();let resolve;
+  p.savePromise=new Promise(r=>resolve=r);
+  const ended=context.finish(p);
+  await context.finish(p);
+  assert.deepEqual(calls,[]);
+  resolve();await ended;
+  assert.deepEqual(calls,['saved',[7,'b',true]]);
+});
+
+test('preview completion marks this session and advances without writing progress',async()=>{
+  const {context,p,c,calls}=endingContext(true);
+  await context.finish(p);
+  assert.equal(c.progress[0].lesson_id,'a');
+  assert.equal(c.progress[0].completed,1);
+  assert.deepEqual(calls,['marked',[7,'b',true]]);
+});
+
+test('last lesson saves and stops with a finished message instead of leaving the course',async()=>{
+  for(const preview of [false,true]){
+    const {context,p,c,calls,status}=endingContext(preview);p.l=c.sections[1].lessons[0];
+    await context.finish(p);
+    assert.equal(calls.some(Array.isArray),false);
+    assert.match(status.textContent,preview?/全部預覽完畢/:/觀看紀錄已儲存.*全部播放完畢/);
+  }
+});
+
+test('failed progress save does not advance, and manual navigation or logout cancels delayed advancement',async()=>{
+  const failed=endingContext();failed.context.flush=async()=>false;
+  await failed.context.finish(failed.p);assert.equal(failed.p.ending,false);assert.deepEqual(failed.calls,[]);
+  for(const action of ['navigate','logout']){
+    const {context,p,calls}=endingContext();let resolve;p.savePromise=new Promise(r=>resolve=r);
+    const ended=context.finish(p);
+    if(action==='navigate')context.player=null;else context.state.token='other';
+    resolve();await ended;assert.deepEqual(calls,[]);
+  }
+});
+
+test('YouTube auto-next requests autoplay while normal opening retains the saved start',()=>{
+  let frame;
+  const helper=source.slice(source.indexOf('  function youtubeFrame('),source.indexOf('  async function play('));
+  const context=vm.createContext({URL,location:{origin:'https://example.invalid'},document:{createElement(){return frame={setAttribute(){}};}}});
+  vm.runInContext(helper,context);
+  context.youtubeFrame('M7lc1UVf-VE','影片',12);assert.equal(new URL(frame.src).searchParams.get('start'),'12');assert.equal(new URL(frame.src).searchParams.has('autoplay'),false);
+  context.youtubeFrame('M7lc1UVf-VE','影片',0,true);assert.equal(new URL(frame.src).searchParams.get('autoplay'),'1');
+});
