@@ -53,6 +53,7 @@ test('Google Drive cover sharing URLs become image URLs without changing other i
     assert.equal(context.imageURL(url),`https://drive.google.com/thumbnail?id=${id}&sz=w1200`);
   }
   assert.match(context.imageURL(`https://drive.google.com/file/d/${id}/view?resourcekey=test-key`),/resourcekey=test-key/);
+  assert.equal(context.imageURL('https://drive.google.com/file/d/1SNLAR3QUoHbnMTL-2Gv5bx8uGhoogt06/view?usp=drive_link'),'/static/images/courses/esg-report-reading.png');
   for(const url of ['', 'https://example.invalid/cover.png',`https://drive.google.com.example.invalid/file/d/${id}/view`,'https://drive.google.com/drive/folders/test'])assert.equal(context.imageURL(url),url);
 });
 

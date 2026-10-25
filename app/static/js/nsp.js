@@ -7,6 +7,7 @@ window.NSP = (() => {
       if (url.hostname !== 'drive.google.com') return value;
       const id = url.pathname.match(/^\/file\/d\/([A-Za-z0-9_-]+)(?:\/|$)/)?.[1] || url.searchParams.get('id');
       if (!id || !/^[A-Za-z0-9_-]+$/.test(id)) return value;
+      if (id === '1SNLAR3QUoHbnMTL-2Gv5bx8uGhoogt06') return '/static/images/courses/esg-report-reading.png';
       const image = new URL('https://drive.google.com/thumbnail');
       image.searchParams.set('id', id);
       image.searchParams.set('sz', 'w1200');
