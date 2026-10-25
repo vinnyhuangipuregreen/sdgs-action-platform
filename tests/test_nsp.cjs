@@ -190,7 +190,7 @@ test('course dates appear after numbers and in add/edit title options without ch
 
 test('admin preview opens saved draft content, plays lessons and closes without progress writes',async()=>{
   const elements={},listeners={},requests=[],mediaEvents={};let video,intervals=0;
-  const c={id:5,number:1,title:'預覽草稿',status:'draft',category_id:2,cover_url:'https://example.invalid/cover.png',info_html:'<p>介紹內容</p>',instructor_ids:[3],learners:2,sections:[{title:'第一章',lessons:[{id:'preview_lesson',title:'影片標題',duration:30,url:'https://example.invalid/video.mp4'}]}],materials:[{category_id:4,title:'講義',url:'https://example.invalid/material.pdf',note:'備註'}]};
+  const c={id:5,number:1,title:'預覽草稿',status:'draft',category_id:2,cover_url:'https://example.invalid/cover.png',info_html:'<p>介紹內容</p>',instructor_ids:[3],learners:2,makeup_count:33,sections:[{title:'第一章',lessons:[{id:'preview_lesson',title:'影片標題',duration:30,url:'https://example.invalid/video.mp4'}]}],materials:[{category_id:4,title:'講義',url:'https://example.invalid/material.pdf',note:'備註'}]};
   const options={terms:[{id:2,kind:'course',name:'課程分類'},{id:4,kind:'material',name:'教材分類'}],instructors:[{id:3,name:'講師甲'}]};
   const context=vm.createContext({URL,window:{addEventListener(){},scrollTo(){}},state:{token:'test'},structuredClone,clearInterval(){},setInterval(){intervals++;},
     document:{addEventListener(name,fn){listeners[name]=fn;},querySelector(){return null;},getElementById(id){return elements[id]??={innerHTML:'',textContent:'',showModal(){this.open=true;},close(){this.open=false;this.onclose?.();},appendChild(){}};},createElement(){video={currentTime:0,paused:true,addEventListener(name,fn){mediaEvents[name]=fn;},pause(){this.paused=true;mediaEvents.pause?.();}};return video;}},
@@ -201,7 +201,7 @@ test('admin preview opens saved draft content, plays lessons and closes without 
   const click=(action,extra={})=>listeners.click({target:{closest:()=>({dataset:{nsp:action,id:'5',...extra}})}});
   await click('preview');
   assert.equal(elements.nspPreviewDialog.open,true);
-  assert.match(elements.nspPreviewContent.innerHTML,/預覽草稿[\s\S]*講師甲[\s\S]*修課人數：2/);
+  assert.match(elements.nspPreviewContent.innerHTML,/預覽草稿[\s\S]*講師甲[\s\S]*完成學習：33/);
   assert.match(elements.nspPreviewContent.innerHTML,/介紹內容[\s\S]*第一章[\s\S]*影片標題[\s\S]*教材分類[\s\S]*講義/);
   await click('play',{lesson:'preview_lesson'});
   assert.match(elements.nspPreviewContent.innerHTML,/nsp-learning[\s\S]*影片標題[\s\S]*返回課程/);
@@ -307,4 +307,19 @@ test('makeup opens the matching attendance course rather than the independent NS
     await click('makeup');assert.equal(calls.length,before);
   }
   assert.match(errors[0],/找不到對應/);assert.match(errors[1],/多筆同名課程/);
+});
+
+
+test('makeup count replaces started-learner totals consistently in cards and admin lists',async()=>{
+  const elements={},listeners={};
+  const course={id:1,number:1,title:'導論',category:'分類',instructors:[],sections:[],materials:[],progress:[],total:1,completed:0,percent:0,learners:2,makeup_count:33,cover_url:''};
+  const context=vm.createContext({window:{addEventListener(){},scrollTo(){}},state:{token:'test',activeTab:'nsp'},
+    document:{addEventListener(name,fn){listeners[name]=fn;},getElementById(id){return elements[id]??={innerHTML:'',value:'',checked:false,addEventListener(){}};}},
+    fetch:async path=>({ok:true,json:async()=>path.endsWith('/courses')?[course]:path.endsWith('/catalog')?[]:{terms:[],instructors:[]}})});
+  vm.runInContext(source,context);
+  await context.window.NSP.load();
+  assert.match(elements.nspApp.innerHTML,/已學習/);assert.match(elements.nspApp.innerHTML,/待學習/);
+  assert.match(elements.nspCourseGrid.innerHTML,/33人完成學習/);assert.doesNotMatch(elements.nspCourseGrid.innerHTML,/2 人開始學習/);
+  await context.window.NSP.admin('nsp_courses');
+  assert.match(elements.adminSubPane_nsp_courses.innerHTML,/<th>補課人數<\/th>/);assert.match(elements.adminSubPane_nsp_courses.innerHTML,/<td>33<\/td>/);
 });

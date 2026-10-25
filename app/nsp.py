@@ -227,6 +227,21 @@ def add_audit_names(rows):
     return rows
 
 
+def add_makeup_counts(rows, request):
+    if not rows:
+        return rows
+    try:
+        response = requests.get("https://sdgs-attendance-record.vercel.app/api/nsp/course-completions", headers={"Authorization": request.headers.get("authorization", "")}, timeout=(5, 20))
+        response.raise_for_status()
+        catalog = response.json()
+    except (requests.RequestException, ValueError):
+        catalog = None
+    for row in rows:
+        matches = [c for c in catalog or [] if c["title"] == row["title"]]
+        row["makeup_count"] = matches[0]["makeup_count"] if len(matches) == 1 else (0 if catalog is not None and not matches else None)
+    return rows
+
+
 def install_nsp(app, require_user, require_admin):
     @app.get("/api/nsp/admin/options")
     def options(user=Depends(require_admin)):
@@ -297,13 +312,13 @@ def install_nsp(app, require_user, require_admin):
         return {"success": True}
 
     @app.get("/api/nsp/admin/courses")
-    def admin_courses(user=Depends(require_admin)):
+    def admin_courses(request: Request, user=Depends(require_admin)):
         with database() as conn:
             rows = [course_data(row) for row in conn.cursor().execute("SELECT c.*,n.number FROM nsp_courses c JOIN nsp_course_numbers n ON n.course_id=c.id WHERE c.year_id=? ORDER BY c.id DESC", (current_year_id.get(),)).fetchall()]
             learners = {r[0]: r[1] for r in conn.cursor().execute("SELECT course_id,COUNT(*) FROM (SELECT DISTINCT course_id,account_type,user_id FROM nsp_progress WHERE year_id=?) GROUP BY course_id", (current_year_id.get(),)).fetchall()}
             for row in rows:
                 row["learners"] = learners.get(row["id"], 0)
-        return add_audit_names(rows)
+        return add_makeup_counts(add_audit_names(rows), request)
 
     @app.post("/api/nsp/admin/courses")
     def add_course(req: CourseWrite, user=Depends(require_admin)):
@@ -362,7 +377,7 @@ def install_nsp(app, require_user, require_admin):
         return {"success": True}
 
     @app.get("/api/nsp/courses")
-    def courses(user=Depends(require_user)):
+    def courses(request: Request, user=Depends(require_user)):
         with database() as conn:
             result = []
             terms = {r[0]: r[1] for r in conn.cursor().execute("SELECT id,name FROM nsp_terms WHERE year_id=?", (current_year_id.get(),)).fetchall()}
@@ -380,7 +395,7 @@ def install_nsp(app, require_user, require_admin):
                 course["bookmarked"] = course["id"] in bookmarks
                 course["material_categories"] = terms
                 result.append(course)
-            return result
+        return add_makeup_counts(result, request)
 
     @app.put("/api/nsp/courses/{course_id}/progress/{lesson_id}")
     def progress(course_id: int, lesson_id: str, req: ProgressWrite, user=Depends(require_user)):

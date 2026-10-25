@@ -8,7 +8,12 @@ from tests import test_academic_years as fixtures
 
 
 class NspTests(unittest.TestCase):
-    setUp = fixtures.AcademicYearTests.setUp
+    def setUp(self):
+        fixtures.AcademicYearTests.setUp(self)
+        response = SimpleNamespace(raise_for_status=lambda:None, json=lambda:[])
+        counts_patch = patch('app.nsp.requests.get', return_value=response)
+        counts_patch.start()
+        self.addCleanup(counts_patch.stop)
     tearDown = fixtures.AcademicYearTests.tearDown
     headers = fixtures.AcademicYearTests.headers
     create_year = fixtures.AcademicYearTests.create_year
@@ -257,3 +262,17 @@ class NspTests(unittest.TestCase):
         for kind in ('course', 'material'):
             self.request('POST', '/admin/terms/'+kind, {'name':'新年度分類'}, headers=other)
         self.assertEqual([t['number'] for t in self.request('GET', '/admin/options', headers=other)['terms']], [1,1])
+
+
+    def test_makeup_counts_share_attendance_source_without_changing_learning_progress(self):
+        req = self.prepare()
+        self.request('POST','/admin/courses',req)
+        response = SimpleNamespace(raise_for_status=lambda:None, json=lambda:[{'title':req['title'],'makeup_count':33}])
+        with patch('app.nsp.requests.get', return_value=response):
+            self.assertEqual(self.request('GET','/admin/courses')[0]['makeup_count'],33)
+            public = self.request('GET','/courses',headers=self.student)[0]
+            self.assertEqual(public['makeup_count'],33)
+            self.assertEqual(public['percent'],0)
+        import requests
+        with patch('app.nsp.requests.get', side_effect=requests.RequestException):
+            self.assertIsNone(self.request('GET','/courses',headers=self.student)[0]['makeup_count'])
