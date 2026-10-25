@@ -159,7 +159,7 @@ class AttendanceBridgeTests(unittest.TestCase):
         self.assertEqual(upstream.call_args.kwargs["headers"]["Authorization"], "Bearer " + self.token)
         self.assertIn("HttpOnly", result.headers["set-cookie"])
         self.assertIn('/attendance-admin/api/admin/courses/17/pathdemy/import', result.text)
-        self.assertIn("nsp-makeup-close", result.text)
+        self.assertIn("parent.postMessage({type:'nsp-makeup-close'},parent.location.origin)", result.text)
         self.assertNotIn("history.back()", result.text)
         self.assertNotIn(self.token, result.text)
         response.status_code = 404
