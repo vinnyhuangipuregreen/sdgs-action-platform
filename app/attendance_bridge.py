@@ -10,8 +10,8 @@ ORIGIN = "https://sdgs-attendance-record.vercel.app"
 PREFIX = "/attendance-admin"
 COOKIE = "attendance_admin_session"
 ROUTES = {
-    "GET": r"(?:admin(?:/courses/\d+/(?:attendance|leaves|pathdemy)|/students/\d+/dashboard)?|api/admin/(?:courses|pathdemy)/sample-excel|api/admin/courses/\d+/pathdemy/sample-excel|api/admin/courses/\d+/(?:attendance|leaves|pathdemy)/export|static/css/(?:design-system|attendance)\.css)",
-    "POST": r"api/admin/courses(?:/import|/\d+/pathdemy/import)?",
+    "GET": r"(?:admin(?:/courses/\d+/(?:attendance|leaves|pathdemy)|/students/\d+/dashboard)?|api/admin/(?:courses|pathdemy)/sample-excel|api/admin/courses/\d+/pathdemy/sample-excel|api/admin/courses/\d+/(?:attendance|leaves|pathdemy)/export|static/css/(?:design-system|attendance)\.css|static/js/attendance-dashboard\.js)",
+    "POST": r"api/admin/(?:courses(?:/import|/\d+/pathdemy/import)?|attendance/students/\d+/(?:checkin|leave|makeup))",
     "PUT": r"api/admin/courses/\d+",
     "DELETE": r"api/admin/courses/\d+(?:/(?:leaves|pathdemy)/\d+)?",
 }
@@ -41,7 +41,7 @@ def proxy_course_request(request, path, body, token):
     if "text/html" in upstream.headers.get("Content-Type", ""):
         html = content.decode("utf-8")
         # Both navigation links and the original inline fetch calls stay in this gateway.
-        html = re.sub(r'''(["'`])(/(?:admin|api/admin|static/css)(?=[/"'`?]))''',
+        html = re.sub(r'''(["'`])(/(?:admin|api/admin|static/(?:css|js))(?=[/"'`?]))''',
                       lambda match: match[1] + PREFIX + match[2], html)
         if path == "admin":
             html = html.replace("location.reload()", "location.replace('/attendance-admin/admin')")

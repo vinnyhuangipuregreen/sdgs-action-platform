@@ -74,6 +74,24 @@ class AttendanceBridgeTests(unittest.TestCase):
         with patch("app.attendance_bridge.requests.request", return_value=response):
             self.assertEqual(self.client.get(path, headers=self.headers).status_code, 404)
 
+    def test_selected_student_actions_and_script_stay_in_authenticated_gateway(self):
+        self.start()
+        response=SimpleNamespace(status_code=200,content=b'<body data-attendance-api="/api/admin/attendance/students/433/" data-attendance-reload="/admin/students/433/dashboard"><script src="/static/js/attendance-dashboard.js"></script>',headers={"Content-Type":"text/html"})
+        with patch("app.attendance_bridge.requests.request",return_value=response):
+            page=self.client.get('/api/attendance-admin/students/433/view',headers=self.headers)
+        self.assertIn('data-attendance-api="/attendance-admin/api/admin/attendance/students/433/"',page.text)
+        self.assertIn('data-attendance-reload="/attendance-admin/admin/students/433/dashboard"',page.text)
+        self.assertIn('src="/attendance-admin/static/js/attendance-dashboard.js"',page.text)
+        response.content=b'{"success":true}';response.headers={"Content-Type":"application/json"}
+        for action in ('checkin','leave','makeup'):
+            path=f'/attendance-admin/api/admin/attendance/students/433/{action}'
+            with patch("app.attendance_bridge.requests.request",return_value=response) as upstream:
+                self.assertEqual(self.client.post(path,headers={"Origin":"http://testserver"},json={"course_id":1}).status_code,200)
+                self.assertIn(f'/attendance/students/433/{action}',upstream.call_args.args[1])
+            with patch("app.attendance_bridge.requests.request") as upstream:
+                self.assertEqual(self.client.post(path,headers={"Origin":"https://other.invalid"},json={"course_id":1}).status_code,403)
+                upstream.assert_not_called()
+
     def test_dashboard_styles_keep_the_original_public_course_illustration(self):
         response = SimpleNamespace(status_code=200, content=b'.hero { background: url("/static/images/course-registration.png"); }', headers={"Content-Type": "text/css"})
         with patch("app.attendance_bridge.requests.request", return_value=response):
