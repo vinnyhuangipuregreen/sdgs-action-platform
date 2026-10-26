@@ -74,7 +74,7 @@ def install_attendance_admin(app, require_admin, get_current_user):
     @app.get("/api/attendance-admin/courses/{course_id}/makeup/view")
     def makeup_view(course_id: int, request: Request, user=Depends(require_admin)):
         response = open_view(request, user, f"admin/courses/{course_id}/pathdemy")
-        response.body = response.body.replace(b'onclick="history.back()"', b"onclick=\"parent.postMessage({type:'nsp-makeup-close'},parent.location.origin)\"")
+        response.body = response.body.replace(b'data-makeup-back', b"onclick=\"parent.postMessage({type:'nsp-makeup-close'},parent.location.origin);return false;\"")
         response.headers["content-length"] = str(len(response.body))
         return response
 

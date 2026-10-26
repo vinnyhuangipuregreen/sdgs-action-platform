@@ -169,7 +169,7 @@ class AttendanceBridgeTests(unittest.TestCase):
         self.assertEqual(self.client.get(path).status_code, 401)
         student = create_access_token({"id": 1, "name": "Student", "email": "student", "role": "student"})
         self.assertEqual(self.client.get(path, headers={"Authorization": "Bearer " + student}).status_code, 403)
-        response = SimpleNamespace(status_code=200, content=b'<a onclick="history.back()">Back</a><script>fetch("/api/admin/courses/17/pathdemy/import")</script>', headers={"Content-Type": "text/html"})
+        response = SimpleNamespace(status_code=200, content=b'<a href="/admin" data-makeup-back>Back</a><script>fetch("/api/admin/courses/17/pathdemy/import")</script>', headers={"Content-Type": "text/html"})
         with patch("app.attendance_bridge.requests.request", return_value=response) as upstream:
             result = self.client.get(path, headers=self.headers)
         self.assertEqual(result.status_code, 200)
