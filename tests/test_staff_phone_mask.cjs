@@ -71,6 +71,32 @@ test('a replacement phone masks on blur and saves its complete content', async (
   assert.equal(JSON.parse(env.requests[0].options.body).phone, 'abc1234567');
 });
 
+test('explicitly entering a staff password sends it for login hashing even when the stored field matches', async () => {
+  for (const value of ['0966027621','new-password']) {
+    for (const blur of [true,false]) {
+      const env=setup();
+      open(env);
+      env.fields.editStudentPhone.value=value;
+      env.fields.editStudentPhone.oninput?.();
+      if(blur)env.fields.editStudentPhone.onblur();
+      await env.context.window.saveStudentEdit();
+      const body=JSON.parse(env.requests[0].options.body);
+      assert.equal(body.phone,value);
+      assert.equal(body.password,value);
+    }
+  }
+});
+
+test('opening another staff account clears the explicit password change flag',async()=>{
+  const env=setup();
+  open(env);
+  env.fields.editStudentPhone.value='replacement';
+  env.fields.editStudentPhone.oninput?.();
+  open(env);
+  await env.context.window.saveStudentEdit();
+  assert.equal(JSON.parse(env.requests[0].options.body).password,'');
+});
+
 test('partially edited masks cannot be written to the account', async () => {
   const env = setup();
   open(env);

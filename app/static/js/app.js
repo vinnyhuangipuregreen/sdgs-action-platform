@@ -2659,6 +2659,8 @@ window.openEditStudentModal = function(id, name, email, email_backup, phone, uni
   document.getElementById("editStudentEmailBackup").value = email_backup || "";
   const phoneInput = document.getElementById("editStudentPhone");
   state.editingPhone = String(phone || "");
+  state.editingPasswordChanged = false;
+  phoneInput.oninput = isStaff ? () => { state.editingPasswordChanged = true; } : null;
   phoneInput.value = accountType === "staff" ? maskStaffPhone(state.editingPhone) : state.editingPhone;
   phoneInput.onblur = accountType === "staff" ? () => {
     if (!phoneInput.value.includes("*")) {
@@ -2690,7 +2692,7 @@ window.saveStudentEdit = async function() {
     ? state.editingPhone : displayedPhone;
   const unit_code = document.getElementById("editStudentUnitCode").value.trim();
   const unit_name = document.getElementById("editStudentUnitName").value.trim();
-  const password = state.editingAccountType === "staff" ? "" : document.getElementById("editStudentPassword").value.trim();
+  const password = state.editingAccountType === "staff" ? (state.editingPasswordChanged ? phone : "") : document.getElementById("editStudentPassword").value.trim();
   const role = document.getElementById("editStudentRole")?.value || "student";
 
   if (!name || !email || !phone) {
