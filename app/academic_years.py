@@ -63,6 +63,17 @@ def enrolled(year_id, student_id):
         return conn.cursor().execute("SELECT 1 FROM academic_enrollments WHERE year_id=? AND student_id=?", (year_id, student_id)).fetchone() is not None
 
 
+def enrollment_profiles(year_id, ids):
+    """Read enrollment and annual profiles together for login/authentication."""
+    if not ids:
+        return {}
+    with get_db(unscoped=True) as conn:
+        rows = conn.cursor().execute(
+            "SELECT student_id,profile_json FROM academic_enrollments WHERE year_id=? AND student_id IN (" +
+            ",".join("?" for _ in ids) + ")", (year_id, *ids)).fetchall()
+    return {row[0]: json.loads(row[1]) for row in rows}
+
+
 def enroll(year_id, student_id, profile=None):
     with get_db(unscoped=True) as conn:
         snapshot = json.dumps({field:profile.get(field,"") for field in ROSTER_FIELDS},ensure_ascii=False) if profile else '{}'

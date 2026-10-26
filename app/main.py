@@ -26,7 +26,7 @@ from app.matching_bridge import proxy_matching_request
 from app.accounts import get_accounts_db, enrich_worksheets
 from app.sso import install_sso
 from app.attendance_bridge import install_attendance_admin
-from app.academic_years import install_years, get_year, enrolled, enroll, student_ids, enrollment_filter, annual_profile, annual_profiles
+from app.academic_years import install_years, get_year, enrolled, enroll, student_ids, enrollment_filter, annual_profile, annual_profiles, enrollment_profiles
 from app.year_scope import current_year_id
 from app.student_roster import read_roster, export_roster
 from app.student_roster import validate_staff_rows
@@ -96,11 +96,12 @@ def require_user(current_user: Optional[dict] = Depends(get_current_user)) -> di
     if not current_user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="請先登入系統")
     year_id = int(current_user.get("academic_year_id", 1))
-    get_year(year_id)
-    if current_user["role"] == "student" and not enrolled(year_id, current_user["user_id"]):
-        raise HTTPException(403, "您尚未報名此學年度，請聯絡管理員")
+    current_user["academic_year"] = get_year(year_id)
     if current_user["role"] == "student":
-        current_user["profile"] = annual_profile(current_user["profile"],year_id)
+        snapshots = enrollment_profiles(year_id, [current_user["user_id"]])
+        if current_user["user_id"] not in snapshots:
+            raise HTTPException(403, "您尚未報名此學年度，請聯絡管理員")
+        current_user["profile"] = {**current_user["profile"], **snapshots[current_user["user_id"]]}
         current_user["name"] = current_user["profile"]["name"]
         current_user["unit_name"] = current_user["profile"]["unit_name"]
     return current_user
@@ -244,13 +245,14 @@ def login(req: LoginRequest):
         conn.commit()
         year = get_year(req.academic_year_id)
         if account_type == "student":
-            matches = [annual_profile(row,year["id"]) for row in matches]
-        valid = [row for row in matches if verify_password(pwd, row["password_hash"]) or
-                 (account_type == "student" and pwd == row["phone"])]
+            snapshots = enrollment_profiles(year["id"], [row["id"] for row in matches])
+            matches = [{**row, **snapshots.get(row["id"], {})} for row in matches]
+        valid = [row for row in matches if (account_type == "student" and pwd == row["phone"]) or
+                 verify_password(pwd, row["password_hash"])]
         if not valid:
             raise HTTPException(status_code=400, detail="帳號或密碼錯誤，請重新輸入")
         if account_type == "student":
-            valid = [row for row in valid if enrolled(year["id"], row["id"])]
+            valid = [row for row in valid if row["id"] in snapshots]
             if not valid:
                 raise HTTPException(403, "您尚未報名此學年度，請聯絡管理員")
         if len(valid) > 1:
@@ -266,7 +268,7 @@ def login(req: LoginRequest):
 
 @app.get("/api/auth/me")
 def get_me(user: dict = Depends(require_user)):
-    return {**user["profile"], "account_type": get_account_type(user), "academic_year": get_year(user.get("academic_year_id", 1))}
+    return {**user["profile"], "account_type": get_account_type(user), "academic_year": user["academic_year"]}
 
 # ==============================================================================
 # 3. SDGs Reference APIs

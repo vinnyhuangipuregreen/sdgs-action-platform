@@ -87,6 +87,29 @@ class IdentitySsoTests(unittest.TestCase):
         with get_accounts_db() as conn:
             self.assertEqual(conn.execute("SELECT COUNT(*) FROM student").fetchone()[0],2)
 
+    def test_phone_login_skips_hash_but_password_login_still_verifies_it(self):
+        from app import main
+        with patch.object(main, "verify_password", wraps=main.verify_password) as verify:
+            response = self.client.post('/api/auth/login', json={'account':'student@test.invalid','password':'0900'})
+            self.assertEqual(response.status_code, 200)
+            verify.assert_not_called()
+            response = self.client.post('/api/auth/login', json={'account':'student@test.invalid','password':'wrong'})
+            self.assertEqual(response.status_code, 400)
+            verify.assert_called_once()
+        with patch.object(main, "verify_password", wraps=main.verify_password) as verify:
+            self.assertEqual(self.client.post('/api/auth/login', json={'account':'student@test.invalid','password':'pw'}).status_code, 200)
+            verify.assert_called_once()
+
+    def test_me_reads_year_once_and_enrollment_changes_apply_immediately(self):
+        from app import main
+        with patch.object(main, 'get_year', wraps=main.get_year) as year:
+            self.assertEqual(self.client.get('/api/auth/me', headers=self.headers).status_code, 200)
+            year.assert_called_once_with(1)
+        with database.get_db(unscoped=True) as conn:
+            conn.execute('DELETE FROM academic_enrollments WHERE year_id=1 AND student_id=7')
+        self.assertEqual(self.client.get('/api/auth/me', headers=self.headers).status_code, 403)
+        self.assertEqual(self.client.post('/api/auth/login', json={'account':'student@test.invalid','password':'0900'}).status_code, 403)
+
     def test_pkce_codes_are_single_use_and_preserve_the_account_identity(self):
         code=self.ticket()
         self.assertEqual(self.exchange(code,"b"*64).status_code,401)

@@ -3,6 +3,8 @@ import hashlib
 import base64
 import secrets
 import time
+import os
+from threading import Lock
 from pathlib import Path
 from typing import Literal, Optional
 from fastapi import Depends, HTTPException
@@ -12,6 +14,14 @@ from app.accounts import get_accounts_db
 from app.auth import create_access_token, get_account_type
 
 CALLBACK = "https://sdgs-attendance-record.vercel.app/auth/sso/callback"
+_SCHEMA_READY = set()
+_SCHEMA_LOCK = Lock()
+
+
+def schema_key(name):
+    from app import database
+    return (name, str(database.DB_PATH), *(os.getenv(key) for key in
+            ("ROLE_DATABASE_PATH", "ROLE_DATABASE_URL", "TURSO_DATABASE_URL")))
 
 
 class TicketRequest(BaseModel):
@@ -111,27 +121,38 @@ def install_sso(app, require_user):
             raise HTTPException(401, "帳號已變更，請重新登入")
         if ticket["session_expires"] <= int(time.time()) or session_revoked(ticket["session_id"]):
             raise HTTPException(401, "系統已登出，請重新登入")
-        from app.academic_years import get_year, enrolled, annual_profile
+        from app.academic_years import get_year, enrollment_profiles
         year = get_year(ticket["academic_year_id"])
-        if ticket["account_type"] == "student" and not enrolled(year["id"], account["id"]):
-            raise HTTPException(403, "您尚未報名此學年度")
         if ticket['account_type']=='student':
-            account=annual_profile(account,year['id'])
+            snapshots = enrollment_profiles(year["id"], [account["id"]])
+            if account["id"] not in snapshots:
+                raise HTTPException(403, "您尚未報名此學年度")
+            account = {**account, **snapshots[account["id"]]}
         return {"access_token": create_access_token({**account, "session_id": ticket["session_id"], "academic_year_id": year["id"]}, expires_in=ticket["session_expires"] - int(time.time())), "user": {**account, "account_type": ticket["account_type"], "academic_year": year}}
 
 
 def session_revoked(session_id):
     with get_accounts_db() as connection:
         cursor = connection.cursor()
-        cursor.execute("CREATE TABLE IF NOT EXISTS sso_revoked_sessions (session_id TEXT PRIMARY KEY, expires_at INTEGER NOT NULL)")
+        key = schema_key("revocations")
+        with _SCHEMA_LOCK:
+            if key not in _SCHEMA_READY:
+                cursor.execute("CREATE TABLE IF NOT EXISTS sso_revoked_sessions (session_id TEXT PRIMARY KEY, expires_at INTEGER NOT NULL)")
+                connection.commit()
+                _SCHEMA_READY.add(key)
         cursor.execute("SELECT 1 FROM sso_revoked_sessions WHERE session_id=? AND expires_at>?", (session_id, int(time.time())))
         return cursor.fetchone() is not None
 
 
 def ensure_ticket_table(cursor):
-    cursor.execute("""CREATE TABLE IF NOT EXISTS sso_tickets (
-        code_hash TEXT PRIMARY KEY, challenge TEXT NOT NULL, user_id INTEGER NOT NULL,
-        account_type TEXT NOT NULL, email TEXT NOT NULL, expires_at INTEGER NOT NULL, session_id TEXT NOT NULL, session_expires INTEGER NOT NULL)""")
-    cursor.execute("PRAGMA table_info(sso_tickets)")
-    if "academic_year_id" not in {row["name"] for row in cursor.fetchall()}:
-        cursor.execute("ALTER TABLE sso_tickets ADD COLUMN academic_year_id INTEGER NOT NULL DEFAULT 1")
+    key = schema_key("tickets")
+    with _SCHEMA_LOCK:
+        if key in _SCHEMA_READY:
+            return
+        cursor.execute("""CREATE TABLE IF NOT EXISTS sso_tickets (
+            code_hash TEXT PRIMARY KEY, challenge TEXT NOT NULL, user_id INTEGER NOT NULL,
+            account_type TEXT NOT NULL, email TEXT NOT NULL, expires_at INTEGER NOT NULL, session_id TEXT NOT NULL, session_expires INTEGER NOT NULL)""")
+        cursor.execute("PRAGMA table_info(sso_tickets)")
+        if "academic_year_id" not in {row["name"] for row in cursor.fetchall()}:
+            cursor.execute("ALTER TABLE sso_tickets ADD COLUMN academic_year_id INTEGER NOT NULL DEFAULT 1")
+        _SCHEMA_READY.add(key)
