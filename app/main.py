@@ -233,13 +233,13 @@ def login(req: LoginRequest):
         cursor = conn.cursor()
         acc = req.account.strip()
         pwd = req.password.strip()
-        account_type = req.account_type or ("staff" if acc in ("admin", "admin@fgu.edu.tw") else "student")
+        account_type = req.account_type or ("staff" if acc == "admin" or acc.lower() == "admin@fgu.edu.tw" else "student")
         table = "admin" if account_type == "staff" else "student"
-        email_match = "email = ? COLLATE NOCASE" if account_type == "student" else "email = ?"
+        email_match = "email = ? COLLATE NOCASE" if account_type == "student" or "@" in acc else "email = ?"
         if req.student_id:
             cursor.execute(f"SELECT * FROM {table} WHERE id = ? AND ({email_match} OR phone = ?)", (req.student_id, acc, acc))
         else:
-            if account_type == "staff" and acc == "admin@fgu.edu.tw":
+            if account_type == "staff" and acc.lower() == "admin@fgu.edu.tw":
                 acc = "admin"
             cursor.execute(f"SELECT * FROM {table} WHERE {email_match} OR phone = ?", (acc, acc))
         matches = [dict(row) for row in cursor.fetchall()]

@@ -118,6 +118,35 @@ class IdentitySsoTests(unittest.TestCase):
         self.assertEqual(self.client.post('/api/auth/login', json={
             'account': '0900', 'password': '0900', 'account_type': 'student'}).status_code, 200)
 
+    def test_staff_email_login_ignores_case_without_changing_password_or_role(self):
+        for role in ('admin', 'teacher'):
+            for stored in ('admin@test.invalid', 'Admin@Test.Invalid'):
+                with get_accounts_db() as conn:
+                    conn.execute('UPDATE admin SET email=?, role=? WHERE id=3', (stored, role))
+                for account in ('admin@test.invalid', 'ADMIN@TEST.INVALID', ' Admin@Test.Invalid '):
+                    with self.subTest(role=role, stored=stored, account=account):
+                        response = self.client.post('/api/auth/login', json={
+                            'account': account, 'password': 'pw', 'account_type': 'staff'})
+                        self.assertEqual(response.status_code, 200, response.text)
+                        self.assertEqual(response.json()['user']['id'], 3)
+                        self.assertEqual(response.json()['user']['role'], role)
+                        self.assertEqual(response.json()['user']['email'], stored)
+        self.assertEqual(self.client.post('/api/auth/login', json={
+            'account': 'ADMIN@TEST.INVALID', 'password': 'PW', 'account_type': 'staff'}).status_code, 400)
+        self.assertEqual(self.client.post('/api/auth/login', json={
+            'account': 'ADMIN@TEST.INVALID', 'password': 'pw', 'account_type': 'student'}).status_code, 400)
+
+    def test_default_admin_email_alias_ignores_case(self):
+        with get_accounts_db() as conn:
+            conn.execute("UPDATE admin SET email='admin' WHERE id=3")
+        for selected in ({}, {'account_type': 'staff'}):
+            response = self.client.post('/api/auth/login', json={
+                'account': 'ADMIN@FGU.EDU.TW', 'password': 'pw', **selected})
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertEqual(response.json()['user']['id'], 3)
+        self.assertEqual(self.client.post('/api/auth/login', json={
+            'account': 'admin', 'password': 'pw', 'account_type': 'staff'}).status_code, 200)
+
     def test_me_reads_year_once_and_enrollment_changes_apply_immediately(self):
         from app import main
         with patch.object(main, 'get_year', wraps=main.get_year) as year:
