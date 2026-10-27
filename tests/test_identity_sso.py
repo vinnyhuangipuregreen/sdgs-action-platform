@@ -100,6 +100,24 @@ class IdentitySsoTests(unittest.TestCase):
             self.assertEqual(self.client.post('/api/auth/login', json={'account':'student@test.invalid','password':'pw'}).status_code, 200)
             verify.assert_called_once()
 
+    def test_student_email_login_ignores_case_for_existing_and_selected_accounts(self):
+        for stored in ('student@test.invalid', 'Student@Test.Invalid'):
+            with get_accounts_db() as conn:
+                conn.execute('UPDATE student SET email=? WHERE id=7', (stored,))
+            for account in ('student@test.invalid', 'STUDENT@TEST.INVALID', ' Student@Test.Invalid '):
+                for selected in ({}, {'student_id': 7}):
+                    with self.subTest(stored=stored, account=account, selected=selected):
+                        response = self.client.post('/api/auth/login', json={
+                            'account': account, 'password': '0900', 'account_type': 'student', **selected})
+                        self.assertEqual(response.status_code, 200, response.text)
+                        self.assertEqual(response.json()['user']['id'], 7)
+                        self.assertEqual(response.json()['user']['email'], stored)
+        response = self.client.post('/api/auth/login', json={
+            'account': 'STUDENT@TEST.INVALID', 'password': 'PW', 'account_type': 'student'})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(self.client.post('/api/auth/login', json={
+            'account': '0900', 'password': '0900', 'account_type': 'student'}).status_code, 200)
+
     def test_me_reads_year_once_and_enrollment_changes_apply_immediately(self):
         from app import main
         with patch.object(main, 'get_year', wraps=main.get_year) as year:

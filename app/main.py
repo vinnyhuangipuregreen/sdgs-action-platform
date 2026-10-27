@@ -235,12 +235,13 @@ def login(req: LoginRequest):
         pwd = req.password.strip()
         account_type = req.account_type or ("staff" if acc in ("admin", "admin@fgu.edu.tw") else "student")
         table = "admin" if account_type == "staff" else "student"
+        email_match = "email = ? COLLATE NOCASE" if account_type == "student" else "email = ?"
         if req.student_id:
-            cursor.execute(f"SELECT * FROM {table} WHERE id = ? AND (email = ? OR phone = ?)", (req.student_id, acc, acc))
+            cursor.execute(f"SELECT * FROM {table} WHERE id = ? AND ({email_match} OR phone = ?)", (req.student_id, acc, acc))
         else:
             if account_type == "staff" and acc == "admin@fgu.edu.tw":
                 acc = "admin"
-            cursor.execute(f"SELECT * FROM {table} WHERE email = ? OR phone = ?", (acc, acc))
+            cursor.execute(f"SELECT * FROM {table} WHERE {email_match} OR phone = ?", (acc, acc))
         matches = [dict(row) for row in cursor.fetchall()]
         conn.commit()
         year = get_year(req.academic_year_id)
