@@ -406,7 +406,7 @@ function handleLogout() {
 
   showLoginModal(true);
   updateUserUI();
-  state.studentDestination = "worksheet";
+  state.studentDestination = null;
   switchTab("home");
 }
 

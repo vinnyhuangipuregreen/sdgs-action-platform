@@ -43,6 +43,18 @@ test('explicit student selection follows the same default destination', async ()
   assert.equal(events.some(event => event[0] === 'redirect'), true);
 });
 
+test('the homepage login and account-switch button clears the old destination before student login', async () => {
+  const {context, events} = setup({destination: 'worksheet'});
+  context.window = {};
+  context.localStorage.removeItem = () => {};
+  context.createNewWorksheet = () => {};
+  vm.runInContext(source.slice(source.indexOf('function handleLogout()'), source.indexOf('function closeStudentLogin()')), context);
+  context.handleLogout();
+  assert.equal(context.state.studentDestination, null);
+  await context.handleLogin();
+  assert.deepEqual(events.find(event => event[0] === 'redirect'), ['redirect', 'https://sdgs-attendance-record.vercel.app/sso/login?academic_year_id=7']);
+});
+
 test('worksheet and NSP login retain the requested destination', async () => {
   for (const destination of ['worksheet', 'nsp']) {
     const {context, events} = setup({destination});
