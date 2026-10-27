@@ -326,6 +326,12 @@ async function handleLogin(e, explicitStudentId = null) {
     updateUserUI();
     showToast(`歡迎回來，${data.user.name}！`, "success");
     if (resumeCourseSignIn()) return;
+    if (!state.studentDestination) {
+      const target = new URL("https://sdgs-attendance-record.vercel.app/sso/login");
+      target.searchParams.set("academic_year_id", payload.academic_year_id);
+      location.replace(target.href);
+      return;
+    }
     await Promise.all([loadCenterActions(), loadSDGsData(), loadGameSettings()]);
     if (state.studentDestination === "worksheet") {
       state.studentDestination = null;
