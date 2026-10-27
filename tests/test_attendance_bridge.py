@@ -41,6 +41,15 @@ class AttendanceBridgeTests(unittest.TestCase):
         student = create_access_token({"id": 1, "name": "Student", "email": "student", "role": "student"})
         self.assertEqual(self.client.get("/api/attendance-admin/view", headers={"Authorization": "Bearer " + student}).status_code, 403)
 
+    def test_responsive_styles_are_available_through_the_authenticated_gateway(self):
+        self.start()
+        response = SimpleNamespace(status_code=200, content=b'.platform-nav-inner {display:grid}', headers={"Content-Type":"text/css"})
+        with patch("app.attendance_bridge.requests.request", return_value=response) as upstream:
+            result = self.client.get('/attendance-admin/static/css/responsive.css?v=20261027_rwd')
+        self.assertEqual(result.status_code, 200)
+        self.assertIn('display:grid', result.text)
+        self.assertEqual(upstream.call_args.args[1], 'https://sdgs-attendance-record.vercel.app/static/css/responsive.css')
+
     def test_embedded_navigation_fetches_and_styles_stay_in_the_authenticated_gateway(self):
         self.start()
         html = b'''<a href="/admin/courses/1/attendance">Attendance</a><link href="/static/css/attendance.css"><script>fetch(`/api/admin/courses/${id}`); location.reload()</script>'''
