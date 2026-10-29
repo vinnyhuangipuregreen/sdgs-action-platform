@@ -7,7 +7,7 @@ const handler = source.slice(source.indexOf('let studentAttendanceRequest ='), s
 
 function setup(fetch) {
   const elements = {};
-  for (const id of ['studentAttendanceModal', 'studentAttendanceFrame', 'studentAttendanceStatus']) {
+  for (const id of ['studentAttendanceModal', 'studentAttendanceFrame', 'studentAttendanceStatus', 'studentBackfillModal', 'studentBackfillFrame', 'studentBackfillStatus']) {
     const classes = new Set(['hidden']);
     elements[id] = { classList: { add: x => classes.add(x), remove: x => classes.delete(x), contains: x => classes.has(x) } };
   }
@@ -57,4 +57,20 @@ test('missing records show a message and expired login closes the student view',
   await context.openStudentAttendance(433);
   assert.equal(state.token, null);
   assert.equal(elements.studentAttendanceModal.classList.contains('hidden'), true);
+});
+
+
+test('backfill opens a separate modal and keeps the original course entry', async () => {
+  const calls=[];
+  const {context,elements}=setup(async url=>{calls.push(url);return {ok:true,text:async()=>'<h1>Backfill</h1>'};});
+  await context.openStudentAttendance(433,true);
+  assert.equal(calls[0],'/api/attendance-admin/students/433/backfill/view');
+  assert.equal(elements.studentBackfillModal.classList.contains('hidden'),false);
+  assert.equal(elements.studentAttendanceModal.classList.contains('hidden'),true);
+  assert.match(elements.studentBackfillFrame.srcdoc,/Backfill/);
+  context.closeStudentAttendance(true);
+  assert.equal(elements.studentBackfillFrame.srcdoc,'');
+  assert.equal(elements.studentBackfillModal.classList.contains('hidden'),true);
+  await context.openStudentAttendance(433);
+  assert.equal(calls.at(-1),'/api/attendance-admin/students/433/view');
 });

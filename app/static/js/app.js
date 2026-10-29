@@ -388,6 +388,8 @@ async function handleAdminLogin(e) {
 
 function handleLogout() {
   window.NSP?.stop(false);
+  window.closeStudentAttendance?.();
+  window.closeStudentAttendance?.(true);
   const attendanceFrame = document.getElementById("attendanceAdminFrame");
   if (attendanceFrame) { attendanceFrame.removeAttribute("srcdoc"); attendanceFrame.src = "about:blank"; attendanceFrame.classList.add("hidden"); }
   state.attendanceAdminSession = null;
@@ -2526,6 +2528,7 @@ async function loadAdminStudents(search = state.studentSearch, page = state.stud
           <td class="p-3 text-right space-x-1 whitespace-nowrap">
             <button type="button" class="px-2 py-1 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded font-semibold text-[11px] whitespace-nowrap"
               onclick="openStudentAttendance(${s.id})">📚 課程登錄</button>
+            <button type="button" class="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded font-semibold text-[11px]" onclick="openStudentAttendance(${s.id}, true)">補登錄</button>
             <button class="px-2 py-1 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 rounded font-semibold text-[11px]"
               onclick="openEditStudentModal(${s.id}, '${(s.name || '').replace(/'/g, "\\'")}', '${(s.email || '').replace(/'/g, "\\'")}', '${(s.email_backup || '').replace(/'/g, "\\'")}', '${(s.phone || '').replace(/'/g, "\\'")}', '${(s.unit_code || '').replace(/'/g, "\\'")}', '${(s.unit_name || '佛光學員').replace(/'/g, "\\'")}', '${s.role || 'student'}')">
               修改
@@ -2552,29 +2555,31 @@ async function loadAdminStudents(search = state.studentSearch, page = state.stud
 
 window.loadAdminStudents = loadAdminStudents;
 let studentAttendanceRequest = 0;
-window.closeStudentAttendance = function() {
+window.closeStudentAttendance = function(backfill = false) {
+  const prefix = backfill ? "studentBackfill" : "studentAttendance";
   studentAttendanceRequest++;
-  document.getElementById("studentAttendanceModal").classList.add("hidden");
-  document.getElementById("studentAttendanceFrame").srcdoc = "";
+  document.getElementById(prefix + "Modal").classList.add("hidden");
+  document.getElementById(prefix + "Frame").srcdoc = "";
 };
 
-window.openStudentAttendance = async function(id) {
+window.openStudentAttendance = async function(id, backfill = false) {
+  const prefix = backfill ? "studentBackfill" : "studentAttendance";
   if (!state.token || !["admin", "teacher"].includes(state.user?.role)) return;
   const requestId = ++studentAttendanceRequest;
   const token = state.token;
-  const frame = document.getElementById("studentAttendanceFrame");
-  const status = document.getElementById("studentAttendanceStatus");
+  const frame = document.getElementById(prefix + "Frame");
+  const status = document.getElementById(prefix + "Status");
   frame.classList.add("hidden");
   frame.srcdoc = "";
   status.classList.remove("hidden");
   status.textContent = "正在載入學員課程登錄…";
-  document.getElementById("studentAttendanceModal").classList.remove("hidden");
+  document.getElementById(prefix + "Modal").classList.remove("hidden");
   try {
-    const response = await fetch(`${API_BASE}/attendance-admin/students/${id}/view`, {
+    const response = await fetch(`${API_BASE}/attendance-admin/students/${id}/${backfill ? "backfill/" : ""}view`, {
       headers: {Authorization: `Bearer ${token}`}, signal: AbortSignal.timeout(45000)
     });
     if (state.token !== token || requestId !== studentAttendanceRequest) return;
-    if (response.status === 401) { closeStudentAttendance(); handleLogout(); return; }
+    if (response.status === 401) { closeStudentAttendance(backfill); handleLogout(); return; }
     if (!response.ok) throw new Error(response.status === 404 ? "此學年度查無此學員。" : "學員課程登錄暫時無法載入，請關閉後重試。");
     const html = await response.text();
     if (state.token !== token || requestId !== studentAttendanceRequest) return;

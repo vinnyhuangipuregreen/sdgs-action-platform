@@ -10,8 +10,8 @@ ORIGIN = "https://sdgs-attendance-record.vercel.app"
 PREFIX = "/attendance-admin"
 COOKIE = "attendance_admin_session"
 ROUTES = {
-    "GET": r"(?:admin(?:/courses/\d+/(?:attendance|leaves|pathdemy)|/students/\d+/dashboard)?|api/admin/(?:courses|pathdemy)/sample-excel|api/admin/courses/\d+/pathdemy/sample-excel|api/admin/courses/\d+/(?:attendance|leaves|pathdemy)/export|static/css/(?:design-system|attendance|responsive)\.css|static/js/attendance-dashboard\.js)",
-    "POST": r"api/admin/(?:courses(?:/import|/\d+/pathdemy/import)?|attendance/students/\d+/(?:checkin|leave|makeup))",
+    "GET": r"(?:admin(?:/courses/\d+/(?:attendance|leaves|pathdemy)|/students/\d+/(?:dashboard|backfill))?|api/admin/(?:courses|pathdemy)/sample-excel|api/admin/courses/\d+/pathdemy/sample-excel|api/admin/courses/\d+/(?:attendance|leaves|pathdemy)/export|static/css/(?:design-system|attendance|responsive)\.css|static/js/attendance-dashboard\.js)",
+    "POST": r"api/admin/(?:courses(?:/import|/\d+/pathdemy/import)?|attendance/students/\d+/(?:(?:backfill-|cancel-)?(?:checkin|leave|makeup)))",
     "PUT": r"api/admin/courses/\d+",
     "DELETE": r"api/admin/courses/\d+(?:/(?:leaves|pathdemy)/\d+)?",
 }
@@ -70,6 +70,10 @@ def install_attendance_admin(app, require_admin, get_current_user):
     @app.get("/api/attendance-admin/students/{student_id}/view")
     def student_view(student_id: int, request: Request, user=Depends(require_admin)):
         return open_view(request, user, f"admin/students/{student_id}/dashboard")
+
+    @app.get("/api/attendance-admin/students/{student_id}/backfill/view")
+    def student_backfill_view(student_id: int, request: Request, user=Depends(require_admin)):
+        return open_view(request, user, f"admin/students/{student_id}/backfill")
 
     @app.get("/api/attendance-admin/courses/{course_id}/makeup/view")
     def makeup_view(course_id: int, request: Request, user=Depends(require_admin)):

@@ -83,6 +83,18 @@ class AttendanceBridgeTests(unittest.TestCase):
         with patch("app.attendance_bridge.requests.request", return_value=response):
             self.assertEqual(self.client.get(path, headers=self.headers).status_code, 404)
 
+    def test_backfill_view_uses_the_authenticated_gateway(self):
+        path = '/api/attendance-admin/students/433/backfill/view'
+        self.assertEqual(self.client.get(path).status_code, 401)
+        response = SimpleNamespace(status_code=200, content=b'<body data-attendance-reload="/admin/students/433/backfill">', headers={"Content-Type":"text/html"})
+        with patch("app.attendance_bridge.requests.request", return_value=response) as upstream:
+            page = self.client.get(path, headers=self.headers)
+            self.assertEqual(page.status_code,200)
+            self.assertIn('/attendance-admin/admin/students/433/backfill',page.text)
+            self.assertEqual(upstream.call_args.args[1], 'https://sdgs-attendance-record.vercel.app/admin/students/433/backfill')
+        with patch("app.attendance_bridge.requests.request", return_value=response):
+            self.assertEqual(self.client.get('/attendance-admin/admin/students/433/backfill').status_code,200)
+
     def test_selected_student_actions_and_script_stay_in_authenticated_gateway(self):
         self.start()
         response=SimpleNamespace(status_code=200,content=b'<body data-attendance-api="/api/admin/attendance/students/433/" data-attendance-reload="/admin/students/433/dashboard"><script src="/static/js/attendance-dashboard.js"></script>',headers={"Content-Type":"text/html"})
@@ -92,7 +104,7 @@ class AttendanceBridgeTests(unittest.TestCase):
         self.assertIn('data-attendance-reload="/attendance-admin/admin/students/433/dashboard"',page.text)
         self.assertIn('src="/attendance-admin/static/js/attendance-dashboard.js"',page.text)
         response.content=b'{"success":true}';response.headers={"Content-Type":"application/json"}
-        for action in ('checkin','leave','makeup'):
+        for action in ('checkin','leave','makeup','backfill-checkin','backfill-leave','backfill-makeup','cancel-checkin','cancel-leave','cancel-makeup'):
             path=f'/attendance-admin/api/admin/attendance/students/433/{action}'
             with patch("app.attendance_bridge.requests.request",return_value=response) as upstream:
                 self.assertEqual(self.client.post(path,headers={"Origin":"http://testserver"},json={"course_id":1}).status_code,200)

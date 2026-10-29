@@ -1104,6 +1104,18 @@
     </div>
   </div>
 
+  <!-- Student Backfill Modal -->
+  <div id="studentBackfillModal" role="dialog" aria-modal="true" aria-labelledby="studentBackfillTitle" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+    <div class="bg-white rounded-3xl shadow-xl w-full max-w-6xl h-[90vh] flex flex-col overflow-hidden">
+      <div class="p-4 border-b flex items-center justify-between gap-4">
+        <h3 id="studentBackfillTitle" class="font-black text-lg text-slate-900">學員課程登錄 <span class="text-red-600">(補登錄)</span></h3>
+        <button type="button" onclick="closeStudentAttendance(true)" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-bold">關閉</button>
+      </div>
+      <p id="studentBackfillStatus" role="status" class="p-4 text-sm text-slate-600"></p>
+      <iframe id="studentBackfillFrame" class="hidden w-full flex-1 border-0" title="學員課程登錄紀錄" src="about:blank"></iframe>
+    </div>
+  </div>
+
   <!-- Add Student Modal -->
   <div id="addStudentModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
     <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-3">
@@ -1338,7 +1350,7 @@
 
   <script src="/static/js/activity-details.js?v=20261020_required_dates"></script>
   <script src="/static/js/academic-years.js?v=20261020_required_markers"></script>
-  <script src="/static/js/app.js?v=20261029_student_roster_retry"></script>
+  <script src="/static/js/app.js?v=20261030_student_backfill"></script>
   <script src="/static/js/nsp.js?v=20261026_completion_alert"></script>
   <script src="/static/js/category-admin.js?v=20261020_required_markers"></script>
 </body>
