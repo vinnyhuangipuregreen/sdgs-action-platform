@@ -17,7 +17,7 @@ function setup(fetchPage) {
     fetch: async url => {
       requests.push(url);
       const data = await fetchPage(new URL(url, 'https://example.invalid').searchParams);
-      return { ok: true, json: async () => data };
+      return data.response || { ok: true, json: async () => data };
     },
   });
   vm.runInContext(pagination, context);
@@ -91,4 +91,49 @@ test('a slower earlier search cannot overwrite newer results', async () => {
   await old;
   assert.match(elements.studentPageInfo.textContent, /共 1 筆/);
   assert.equal(elements.adminStudentsTableBody.children.length, 1);
+});
+
+
+test('a temporary network failure retries the same roster request once', async () => {
+  let attempts = 0;
+  const { context, elements, requests } = setup(() => {
+    if (++attempts === 1) throw new TypeError('Failed to fetch');
+    return page(437, 0);
+  });
+  await context.loadAdminStudents();
+  assert.equal(requests.length, 2);
+  assert.equal(requests[0], requests[1]);
+  assert.equal(elements.adminStudentsTableBody.children.length, 100);
+});
+
+test('gateway failures retry once and leave a working manual retry action', async () => {
+  for (const status of [502, 503, 504]) {
+    let available = false;
+    const { context, elements, requests } = setup(() => available ? page(437, 0) : { response: { ok: false, status } });
+    await context.loadAdminStudents();
+    assert.equal(requests.length, 2);
+    assert.match(elements.studentPageInfo.textContent, /暫時載入失敗/);
+    assert.match(elements.adminStudentsTableBody.html, /onclick="loadAdminStudents\(\)"/);
+    available = true;
+    await context.loadAdminStudents();
+    assert.equal(elements.adminStudentsTableBody.children.length, 100);
+  }
+});
+
+test('authentication and permission failures do not retry or appear as empty lists', async () => {
+  for (const [status, message] of [[401, /登入已失效/], [403, /權限與學年度/]]) {
+    const { context, elements, requests } = setup(() => ({ response: { ok: false, status } }));
+    await context.loadAdminStudents();
+    assert.equal(requests.length, 1);
+    assert.match(elements.studentPageInfo.textContent, message);
+    assert.equal(elements.studentPrevPage.disabled, true);
+    assert.equal(elements.studentNextPage.disabled, true);
+  }
+});
+
+test('permanent network failure stops after two attempts', async () => {
+  const { context, elements, requests } = setup(() => { throw new TypeError('Failed to fetch'); });
+  await context.loadAdminStudents();
+  assert.equal(requests.length, 2);
+  assert.match(elements.adminStudentsTableBody.html, /重新載入名單/);
 });

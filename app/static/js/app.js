@@ -2477,10 +2477,23 @@ async function loadAdminStudents(search = state.studentSearch, page = state.stud
 
   try {
     const url = `${API_BASE}/admin/students?search=${encodeURIComponent(search)}&limit=100&offset=${(state.studentPage - 1) * 100}`;
-    const res = await fetch(url, {
-      headers: { "Authorization": `Bearer ${state.token}` }
-    });
-    if (!res.ok) throw new Error("無法讀取名單");
+    let res;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        res = await fetch(url, {
+          headers: { "Authorization": `Bearer ${state.token}` }
+        });
+      } catch (err) {
+        if (attempt === 1) throw err;
+      }
+      if (requestId !== state.studentRequestId) return;
+      if (res && ![502, 503, 504].includes(res.status)) break;
+    }
+    if (!res.ok) {
+      const error = new Error("無法讀取名單");
+      error.status = res.status;
+      throw error;
+    }
     if (res.ok) {
       const data = await res.json();
       if (requestId !== state.studentRequestId) return;
@@ -2528,8 +2541,12 @@ async function loadAdminStudents(search = state.studentSearch, page = state.stud
     }
   } catch (err) {
     if (requestId !== state.studentRequestId) return;
-    document.getElementById("studentPageInfo").textContent = "名單載入失敗，請重新整理數據";
-    container.innerHTML = '<tr><td colspan="9" class="p-6 text-center text-red-400">無法讀取名單</td></tr>';
+    document.getElementById("studentPageInfo").textContent = err.status === 401
+      ? "登入已失效，請重新登入管理員帳號"
+      : err.status === 403
+        ? "無法存取名單，請確認管理員權限與學年度，或重新登入"
+        : "名單暫時載入失敗，請重新載入名單";
+    container.innerHTML = '<tr><td colspan="9" class="p-6 text-center text-red-400">無法讀取名單 <button type="button" onclick="loadAdminStudents()" class="ml-2 px-3 py-2 bg-slate-100 text-slate-700 rounded-lg">重新載入名單</button></td></tr>';
   }
 }
 
