@@ -155,19 +155,60 @@ window.NSP = (() => {
   }
   function stop(save=true) {
     const p=player; if(!p)return;
-    clearInterval(p.timer); const saved=save && !p.ending?flush(p):Promise.resolve();
+    clearInterval(p.timer); clearInterval(p.controlsTimer); const saved=save && !p.ending?flush(p):Promise.resolve();
     player=null; p.yt?.destroy(); p.video?.pause();
     return saved;
   }
+  function youtubeControls(p,host) {
+    host.classList.add('nsp-custom-youtube');
+    const center=document.createElement('button');center.type='button';center.className='nsp-video-toggle';center.setAttribute('aria-label','播放影片');center.innerHTML='<span>▶</span>';center.disabled=true;host.appendChild(center);
+    const controls=document.createElement('div');controls.className='nsp-media-controls';
+    controls.innerHTML=`<button type="button" data-media="play" aria-label="播放" disabled>▶</button><input data-media="seek" type="range" min="0" max="1000" step="1" value="0" aria-label="播放進度" disabled><time data-media="time">0:00 / 0:00</time><button type="button" data-media="mute" aria-label="靜音" disabled>🔊</button><input data-media="volume" type="range" min="0" max="100" value="100" aria-label="音量" disabled><button type="button" data-media="settings" aria-label="播放設定" aria-expanded="false" disabled>⚙</button><button type="button" data-media="fullscreen" aria-label="全螢幕">⛶</button><div class="nsp-speed-menu" data-media="menu" hidden><button type="button" data-media="speed">Speed <span data-media="speed-label">Normal ›</span></button><div data-media="rates" hidden><button type="button" data-media="back">‹ Speed</button><div data-media="rate-list" role="menu" aria-label="播放倍速"></div></div></div>`;
+    host.appendChild(controls);
+    const control=name=>controls.querySelector(`[data-media="${name}"]`);
+    const menu=control('menu'),ratesPanel=control('rates'),speedRow=control('speed'),gear=control('settings');
+    const format=value=>{const seconds=Math.max(0,Math.floor(Number(value)||0));return `${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')}`;};
+    let seeking=false,lastRates='';
+    const closeMenu=()=>{menu.hidden=true;gear.setAttribute('aria-expanded','false');};
+    const toggle=()=>{if(!p.ready)return;closeMenu();p.yt.getPlayerState()===1?p.yt.pauseVideo():p.yt.playVideo();};
+    center.addEventListener('click',toggle);control('play').addEventListener('click',toggle);
+    control('seek').addEventListener('input',()=>{seeking=true;});
+    control('seek').addEventListener('change',()=>{if(p.ready){p.yt.seekTo(Number(control('seek').value)/1000*p.yt.getDuration(),true);}seeking=false;update();});
+    control('volume').addEventListener('input',()=>{if(p.ready){const value=Number(control('volume').value);if(value>0)p.yt.unMute();p.yt.setVolume(value);if(value===0)p.yt.mute();}});
+    control('mute').addEventListener('click',()=>{if(p.ready){p.yt.isMuted()?p.yt.unMute():p.yt.mute();update();}});
+    gear.addEventListener('click',()=>{menu.hidden=!menu.hidden;gear.setAttribute('aria-expanded',String(!menu.hidden));ratesPanel.hidden=true;speedRow.hidden=false;});
+    speedRow.addEventListener('click',()=>{speedRow.hidden=true;ratesPanel.hidden=false;});
+    control('back').addEventListener('click',()=>{ratesPanel.hidden=true;speedRow.hidden=false;});
+    controls.addEventListener('keydown',event=>{if(event.key==='Escape'){closeMenu();gear.focus();event.stopPropagation();}});
+    control('rate-list').addEventListener('click',event=>{const option=event.target.closest('[data-rate]');if(!option||!p.ready)return;if(!p.preview)tick(p);p.yt.setPlaybackRate(Number(option.dataset.rate));closeMenu();update();});
+    control('fullscreen').addEventListener('click',async()=>{try{if(document.fullscreenElement===host)await document.exitFullscreen();else await host.requestFullscreen();}catch{playerElement('nspSaveStatus').textContent='瀏覽器未允許全螢幕播放。';}});
+    host.addEventListener('fullscreenchange',()=>{control('fullscreen').setAttribute('aria-label',document.fullscreenElement===host?'離開全螢幕':'全螢幕');});
+    function update(){
+      if(player!==p||!p.ready)return;
+      const yt=p.yt,duration=yt.getDuration()||0,position=yt.getCurrentTime()||0,playing=yt.getPlayerState()===1,rate=yt.getPlaybackRate();
+      center.disabled=false;center.classList.toggle('is-playing',playing);center.setAttribute('aria-label',playing?'暫停影片':'播放影片');
+      for(const name of ['play','mute','volume','settings'])control(name).disabled=false;
+      control('play').textContent=playing?'❚❚':'▶';control('play').setAttribute('aria-label',playing?'暫停':'播放');
+      control('seek').disabled=duration<=0;if(!seeking)control('seek').value=duration?String(Math.round(position/duration*1000)):'0';
+      control('time').textContent=`${format(position)} / ${format(duration)}`;
+      control('volume').value=String(yt.isMuted()?0:yt.getVolume());control('mute').textContent=yt.isMuted()?'🔇':'🔊';control('mute').setAttribute('aria-label',yt.isMuted()?'取消靜音':'靜音');
+      control('speed-label').textContent=(rate===1?'Normal':rate+'×')+' ›';
+      const available=yt.getAvailablePlaybackRates().filter(value=>value>=0.5&&value<=2),key=available.join(',');
+      if(key!==lastRates){control('rate-list').innerHTML=available.map(value=>`<button type="button" role="menuitemradio" data-rate="${value}" aria-checked="false"><span aria-hidden="true">○</span>${value===1?'Normal':value+'×'}</button>`).join('');lastRates=key;}
+      for(const option of control('rate-list').querySelectorAll('[data-rate]')){const selected=Number(option.dataset.rate)===rate;option.setAttribute('aria-checked',String(selected));option.firstElementChild.textContent=selected?'●':'○';}
+    }
+    p.controlsTimer=setInterval(update,500);
+    return update;
+  }
   function youtubeFrame(id,title,start=0,autoplay=false) {
     const frame=document.createElement('iframe');
-    frame.id='nspYouTube'; frame.title=title;
+    frame.id='nspYouTube'; frame.title=title; frame.tabIndex=-1;
     frame.setAttribute('sandbox','allow-scripts allow-same-origin allow-presentation');
     frame.allow='autoplay; encrypted-media; picture-in-picture; fullscreen';
     frame.allowFullscreen=true; frame.frameBorder='0';
     frame.referrerPolicy='strict-origin-when-cross-origin';
     const url=new URL(`https://www.youtube.com/embed/${id}`);
-    for(const [key,value] of Object.entries({enablejsapi:1,origin:location.origin,start,rel:0,playsinline:1}))url.searchParams.set(key,value);
+    for(const [key,value] of Object.entries({enablejsapi:1,origin:location.origin,start,rel:0,playsinline:1,controls:0,disablekb:1,fs:0}))url.searchParams.set(key,value);
     if(autoplay)url.searchParams.set('autoplay','1');
     frame.src=url.href;
     return frame;
@@ -186,11 +227,8 @@ window.NSP = (() => {
     if(videoId){
       const frame=youtubeFrame(videoId,l.title,Math.floor(saved?.position||0),autoplay);
       playerElement('nspVideo').appendChild(frame);
-      const linkGuard=document.createElement('div');linkGuard.className='nsp-youtube-link-guard';linkGuard.setAttribute('aria-hidden','true');linkGuard.hidden=false;
-      playerElement('nspVideo').appendChild(linkGuard);
-      const logoMask=document.createElement('div');logoMask.className='nsp-youtube-logo-mask';logoMask.setAttribute('aria-hidden','true');
-      playerElement('nspVideo').appendChild(logoMask);
-      try{const YT=await youtube();if(player!==p)return;p.yt=new YT.Player(frame,{events:{onReady:()=>{p.position=()=>p.yt.getCurrentTime();p.playing=()=>p.yt.getPlayerState()===1;p.rate=()=>p.yt.getPlaybackRate();p.mediaDuration=()=>p.yt.getDuration();if(autoplay)p.yt.playVideo();},onStateChange:event=>{if(event.data===0)finish(p);else if(event.data===2 && !p.ending)flush(p);},onAutoplayBlocked:()=>{if(player===p)playerElement('nspSaveStatus').textContent='已切換下一支影片，請點選播放以繼續。';},onError:()=>{if(player===p)playerElement('nspSaveStatus').textContent='影片無法播放，請確認連結及嵌入權限';}}});}catch(error){if(player===p)playerElement('nspSaveStatus').textContent=error.message;}
+      p.updateControls=youtubeControls(p,playerElement('nspVideo'));
+      try{const YT=await youtube();if(player!==p)return;p.yt=new YT.Player(frame,{events:{onReady:()=>{p.position=()=>p.yt.getCurrentTime();p.playing=()=>p.yt.getPlayerState()===1;p.rate=()=>p.yt.getPlaybackRate();p.mediaDuration=()=>p.yt.getDuration();p.ready=true;p.updateControls();if(autoplay)p.yt.playVideo();},onPlaybackRateChange:()=>p.updateControls(),onStateChange:event=>{p.updateControls();if(event.data===0)finish(p);else if(event.data===2 && !p.ending)flush(p);},onAutoplayBlocked:()=>{if(player===p)playerElement('nspSaveStatus').textContent='已切換下一支影片，請點選播放以繼續。';},onError:()=>{if(player===p)playerElement('nspSaveStatus').textContent='影片無法播放，請確認連結及嵌入權限';}}});}catch(error){if(player===p)playerElement('nspSaveStatus').textContent=error.message;}
     }else{
       const v=document.createElement('video');v.controls=true;v.preload='metadata';v.src=l.url;v.poster=coverImage(c.cover_url);v.playsInline=true;playerElement('nspVideo').appendChild(v);p.video=v;p.position=()=>v.currentTime;p.playing=()=>!v.paused&&!v.ended;p.rate=()=>v.playbackRate;p.mediaDuration=()=>v.duration;
       v.addEventListener('loadedmetadata',()=>{v.currentTime=Math.min(saved?.position||0,v.duration||0);if(autoplay)v.play().catch(()=>{if(player===p)playerElement('nspSaveStatus').textContent='已切換下一支影片，請點選播放以繼續。';});});v.addEventListener('pause',()=>{if(player===p && !p.ending)flush(p);});v.addEventListener('ended',()=>finish(p));v.addEventListener('error',()=>{if(player===p)playerElement('nspSaveStatus').textContent='影片無法播放，請使用可公開存取的影片檔案或 YouTube 網址';});

@@ -44,6 +44,8 @@ test('YouTube iframe blocks popups and top navigation before loading while retai
   assert.equal(url.searchParams.get('enablejsapi'),'1');
   assert.equal(url.searchParams.get('origin'),'https://example.invalid');
   assert.equal(url.searchParams.get('start'),'12');
+  assert.equal(url.searchParams.get('controls'),'0');
+  assert.equal(url.searchParams.get('disablekb'),'1');
   assert.doesNotMatch(frame.attributes.sandbox,/allow-popups|allow-top-navigation/);
   assert.match(frame.allow,/fullscreen/);
   assert.equal(frame.referrerPolicy,'strict-origin-when-cross-origin');
@@ -395,34 +397,23 @@ test('first completion alerts only after successful makeup sync and preserves it
 });
 
 
-test('public and preview YouTube players transparently block corner links in every playback state',async()=>{
+test('public and preview attach custom controls and keep YouTube links outside pointer interaction',async()=>{
   const start=source.indexOf('    if(videoId){',source.indexOf('  async function play('));
   const block=source.slice(start,source.indexOf('    }else{',start))+'    }';
   for(const preview of [false,true]){
-    const children=[],p={preview,l:{title:'課程影片'}};
-    let events;
+    const children=[],p={preview,l:{title:'課程影片'}};let events,updates=0;
+    const host={appendChild:child=>children.push(child)};
     const context=vm.createContext({p,l:p.l,player:p,videoId:'M7lc1UVf-VE',saved:null,autoplay:false,
-      youtubeFrame:()=>({tag:'iframe'}),youtube:async()=>({Player:function(frame,options){events=options.events;}}),
-      finish(){},flush(){},document:{createElement:()=>({setAttribute(name,value){this[name]=value;}}),getElementById:()=>({appendChild:child=>children.push(child)})}});
+      youtubeFrame:()=>({tag:'iframe'}),youtubeControls:(target,mount)=>{assert.equal(target,p);assert.equal(mount,host);return ()=>updates++;},
+      youtube:async()=>({Player:function(frame,options){events=options.events;}}),finish(){},flush(){},document:{getElementById:()=>host}});
     await runInContext('(async()=>{'+block+'})()',context);
-    const guard=children.find(c=>c.className==='nsp-youtube-link-guard');
-    assert.ok(guard,'both public and preview need the click guard');
-    assert.equal(guard['aria-hidden'],'true');
-    const logoMask=children.find(c=>c.className==='nsp-youtube-logo-mask');
-    assert.ok(logoMask,'the lower-right logo needs a transparent non-link cover in both views');
-    assert.equal(logoMask['aria-hidden'],'true');
-    assert.equal(guard.hidden,false);
-    events.onStateChange({data:1});assert.equal(guard.hidden,false);assert.notEqual(logoMask.hidden,true);
-    events.onStateChange({data:2});assert.equal(guard.hidden,false);assert.notEqual(logoMask.hidden,true);
-    events.onStateChange({data:0});assert.equal(guard.hidden,false);
+    assert.equal(children.length,1);
+    events.onStateChange({data:1});events.onPlaybackRateChange();assert.equal(updates,2);
   }
   const css=fs.readFileSync(require('node:path').join(__dirname,'../app/static/css/nsp.css'),'utf8');
-  assert.match(css,/\.nsp-youtube-link-guard\s*\{[^}]*left:0[^}]*bottom:0/);
-  assert.match(css,/\.nsp-youtube-link-guard\s*\{[^}]*pointer-events:auto/);
-  assert.match(css,/\.nsp-youtube-logo-mask\s*\{[^}]*right:0[^}]*bottom:0/);
-  assert.match(css,/\.nsp-youtube-logo-mask\s*\{[^}]*background:transparent[^}]*pointer-events:auto/);
+  assert.match(css,/\.nsp-custom-youtube iframe\s*\{[^}]*pointer-events:none/);
+  assert.doesNotMatch(css,/nsp-youtube-logo-mask/);
 });
-
 
 test('preview media and status selectors ignore identically named elements behind the dialog',()=>{
   const selectors=source.slice(source.indexOf('  const root ='),source.indexOf('  const dialog ='));
@@ -433,4 +424,35 @@ test('preview media and status selectors ignore identically named elements behin
   for(const id of ['nspVideo','nspSaveStatus','nspPlayerProgress']) assert.equal(context.findPlayerElement(id).mount,'preview');
   context.previewCourse=null;
   for(const id of ['nspVideo','nspSaveStatus','nspPlayerProgress']) assert.equal(context.findPlayerElement(id).mount,'front');
+});
+
+
+test('custom settings, supported rates, seek, volume, mute and fullscreen call the active player',async()=>{
+  const elements={},calls=[];
+  function element(){return {hidden:false,value:0,attributes:{},events:{},classList:{add(){},toggle(){}},setAttribute(k,v){this.attributes[k]=v;},addEventListener(k,f){this.events[k]=f;},appendChild(){},querySelector(selector){const key=selector.match(/data-media="([^"]+)"/)[1];return elements[key]??=element();},querySelectorAll(){return this.options||[];},focus(){}};}
+  const rateList=element();Object.defineProperty(rateList,'innerHTML',{set(html){this.options=[...html.matchAll(/data-rate="([^"]+)"/g)].map(m=>({...element(),dataset:{rate:m[1]},firstElementChild:{}}));}});elements['rate-list']=rateList;
+  const host=element();host.requestFullscreen=async()=>calls.push('fullscreen');
+  let rate=1,position=10,volume=100,muted=false,playing=false;
+  const p={preview:false,ready:true,yt:{getDuration:()=>100,getCurrentTime:()=>position,getPlayerState:()=>playing?1:2,getPlaybackRate:()=>rate,getAvailablePlaybackRates:()=>[0.5,1,1.5,2],getVolume:()=>volume,isMuted:()=>muted,playVideo(){playing=true;},pauseVideo(){playing=false;},setPlaybackRate(value){rate=value;calls.push(['rate',value]);},seekTo(value){position=value;calls.push(['seek',value]);},setVolume(value){volume=value;},mute(){muted=true;},unMute(){muted=false;}}};
+  const context=vm.createContext({p,player:p,document:{createElement:element},setInterval:()=>42,tick:()=>calls.push('tick'),playerElement:()=>({})});
+  const code=source.slice(source.indexOf('  function youtubeControls('),source.indexOf('  function youtubeFrame('));
+  runInContext(code,context);const update=context.youtubeControls(p,host);update();elements.menu.hidden=true;elements.rates.hidden=true;
+  elements.settings.events.click();assert.equal(elements.menu.hidden,false);assert.equal(elements.settings.attributes['aria-expanded'],'true');
+  elements.speed.events.click();assert.equal(elements.rates.hidden,false);
+  assert.deepEqual(rateList.options.map(o=>Number(o.dataset.rate)),[0.5,1,1.5,2]);
+  rateList.events.click({target:{closest:()=>rateList.options[2]}});assert.equal(rate,1.5);assert.equal(elements.menu.hidden,true);assert.equal(elements['speed-label'].textContent,'1.5× ›');assert.ok(calls.includes('tick'));
+  elements.seek.value=600;elements.seek.events.input();elements.seek.events.change();assert.equal(position,60);
+  elements.volume.value=0;elements.volume.events.input();assert.equal(volume,0);assert.equal(muted,true);
+  elements.volume.value=35;elements.volume.events.input();assert.equal(volume,35);assert.equal(muted,false);
+  elements.mute.events.click();assert.equal(muted,true);elements.mute.events.click();assert.equal(muted,false);
+  elements.play.events.click();assert.equal(playing,true);elements.play.events.click();assert.equal(playing,false);
+  await elements.fullscreen.events.click();assert.ok(calls.includes('fullscreen'));
+  assert.equal(p.controlsTimer,42);
+});
+
+test('leaving a player clears both progress and custom control refresh timers',async()=>{
+  const cleared=[],p={timer:11,controlsTimer:22,preview:true};
+  const context=vm.createContext({player:p,clearInterval:id=>cleared.push(id),flush:()=>Promise.resolve()});
+  runInContext(source.slice(source.indexOf('  function stop('),source.indexOf('  function youtubeControls(')),context);
+  await context.stop(false);assert.deepEqual(cleared,[11,22]);assert.equal(context.player,null);
 });
