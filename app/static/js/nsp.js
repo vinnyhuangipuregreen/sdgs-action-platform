@@ -187,6 +187,8 @@ window.NSP = (() => {
       document.getElementById('nspVideo').appendChild(frame);
       const linkGuard=document.createElement('div');linkGuard.className='nsp-youtube-link-guard';linkGuard.setAttribute('aria-hidden','true');linkGuard.hidden=false;
       document.getElementById('nspVideo').appendChild(linkGuard);
+      const logoMask=document.createElement('div');logoMask.className='nsp-youtube-logo-mask';logoMask.setAttribute('aria-hidden','true');
+      document.getElementById('nspVideo').appendChild(logoMask);
       try{const YT=await youtube();if(player!==p)return;p.yt=new YT.Player(frame,{events:{onReady:()=>{p.position=()=>p.yt.getCurrentTime();p.playing=()=>p.yt.getPlayerState()===1;p.rate=()=>p.yt.getPlaybackRate();p.mediaDuration=()=>p.yt.getDuration();if(autoplay)p.yt.playVideo();},onStateChange:event=>{linkGuard.hidden=event.data===1 || event.data===3;if(event.data===0)finish(p);else if(event.data===2 && !p.ending)flush(p);},onAutoplayBlocked:()=>{if(player===p)document.getElementById('nspSaveStatus').textContent='已切換下一支影片，請點選播放以繼續。';},onError:()=>{if(player===p)document.getElementById('nspSaveStatus').textContent='影片無法播放，請確認連結及嵌入權限';}}});}catch(error){if(player===p)document.getElementById('nspSaveStatus').textContent=error.message;}
     }else{
       const v=document.createElement('video');v.controls=true;v.preload='metadata';v.src=l.url;v.poster=coverImage(c.cover_url);v.playsInline=true;document.getElementById('nspVideo').appendChild(v);p.video=v;p.position=()=>v.currentTime;p.playing=()=>!v.paused&&!v.ended;p.rate=()=>v.playbackRate;p.mediaDuration=()=>v.duration;

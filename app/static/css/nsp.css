@@ -79,3 +79,5 @@
 .nsp-completion-notice { padding: 16px 18px 0; }
 
 .nsp-youtube-link-guard { position:absolute; left:0; bottom:0; width:180px; max-width:45%; height:88px; max-height:28%; z-index:2; pointer-events:auto; cursor:default; }
+
+.nsp-youtube-logo-mask { position:absolute; right:0; bottom:0; width:220px; max-width:40%; height:76px; max-height:28%; z-index:2; background:#0f172a; pointer-events:auto; cursor:default; }

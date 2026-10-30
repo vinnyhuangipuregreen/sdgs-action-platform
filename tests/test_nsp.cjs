@@ -403,12 +403,17 @@ test('public and preview YouTube players block lower-left links while keeping ac
     const guard=children.find(c=>c.className==='nsp-youtube-link-guard');
     assert.ok(guard,'both public and preview need the click guard');
     assert.equal(guard['aria-hidden'],'true');
+    const logoMask=children.find(c=>c.className==='nsp-youtube-logo-mask');
+    assert.ok(logoMask,'the lower-right logo needs an opaque non-link cover in both views');
+    assert.equal(logoMask['aria-hidden'],'true');
     assert.equal(guard.hidden,false);
-    events.onStateChange({data:1});assert.equal(guard.hidden,true);
-    events.onStateChange({data:2});assert.equal(guard.hidden,false);
+    events.onStateChange({data:1});assert.equal(guard.hidden,true);assert.notEqual(logoMask.hidden,true);
+    events.onStateChange({data:2});assert.equal(guard.hidden,false);assert.notEqual(logoMask.hidden,true);
     events.onStateChange({data:0});assert.equal(guard.hidden,false);
   }
   const css=fs.readFileSync(require('node:path').join(__dirname,'../app/static/css/nsp.css'),'utf8');
   assert.match(css,/\.nsp-youtube-link-guard\s*\{[^}]*left:0[^}]*bottom:0/);
   assert.match(css,/\.nsp-youtube-link-guard\s*\{[^}]*pointer-events:auto/);
+  assert.match(css,/\.nsp-youtube-logo-mask\s*\{[^}]*right:0[^}]*bottom:0/);
+  assert.match(css,/\.nsp-youtube-logo-mask\s*\{[^}]*background:#0f172a[^}]*pointer-events:auto/);
 });
