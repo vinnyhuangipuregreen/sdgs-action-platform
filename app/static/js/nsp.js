@@ -41,6 +41,7 @@ window.NSP = (() => {
   const options = (rows, selected, value='id', text='name') => '<option value="">請選擇</option>'+rows.map(r=>`<option value="${esc(r[value])}" ${String(r[value])===String(selected)?'selected':''}>${esc(r[text])}</option>`).join('');
   let courses=[], meta={terms:[],instructors:[]}, adminRows=[], catalog=[], activeAdmin='', edit=null, player=null, previewCourse=null, generation=0, makeupRequest=0;
   const root = () => document.getElementById(previewCourse?'nspPreviewContent':'nspApp');
+  const playerElement = id => root().querySelector('#'+id);
   const dialog = () => document.getElementById('nspDialog');
   const minutes = seconds => { const total=Math.round(seconds||0); return `${Math.floor(total/60)}:${String(total%60).padStart(2,'0')}`; };
   const lessons = c => c.sections.flatMap(s=>s.lessons);
@@ -107,8 +108,8 @@ window.NSP = (() => {
   function updateProgress(c) {
     c.completed=c.makeup_completed?c.total:c.progress.filter(p=>p.completed && lessons(c).some(l=>l.id===p.lesson_id)).length;
     c.percent=c.total?Math.round(c.completed/c.total*100):0;
-    const label=document.getElementById('nspPlayerProgress'); if(label)label.textContent=previewCourse?'課程預覽':`你的進度：${c.completed}/${c.total}（${c.percent}%）`;
-    for(const l of lessons(c)) { const mark=document.querySelector(`[data-nsp-marker="${l.id}"]`); if(mark)mark.textContent=(c.makeup_completed || c.progress.find(p=>p.lesson_id===l.id)?.completed)?'✓':'○'; }
+    const label=playerElement('nspPlayerProgress'); if(label)label.textContent=previewCourse?'課程預覽':`你的進度：${c.completed}/${c.total}（${c.percent}%）`;
+    for(const l of lessons(c)) { const mark=root().querySelector(`[data-nsp-marker="${l.id}"]`); if(mark)mark.textContent=(c.makeup_completed || c.progress.find(p=>p.lesson_id===l.id)?.completed)?'✓':'○'; }
   }
   async function flush(p=player) {
     if(!p || p.preview || state.token!==p.token || !p.position) return;
@@ -122,9 +123,9 @@ window.NSP = (() => {
         p.c.makeup_completed=true; p.c.makeup_completed_at=saved.makeup_completed_at;
         window.alert(`${state.user?.name} 學員 您好！恭喜您已於 ${saved.makeup_completed_at.replaceAll('-','/').replace('T',' ').slice(0,19)} 完成學習，歡迎您再次學習！`);
       }
-      if(player===p) { updateProgress(p.c); document.getElementById('nspSaveStatus').textContent=p.c.makeup_synced===true?'已完成學習，已同步課程登錄的已補課紀錄。':p.c.makeup_synced===false?'學習進度已儲存；補課同步未完成，請重新開啟課程清單重試。':'進度已儲存'; }
+      if(player===p) { updateProgress(p.c); playerElement('nspSaveStatus').textContent=p.c.makeup_synced===true?'已完成學習，已同步課程登錄的已補課紀錄。':p.c.makeup_synced===false?'學習進度已儲存；補課同步未完成，請重新開啟課程清單重試。':'進度已儲存'; }
       return true;
-    }catch(error){ if(player===p)document.getElementById('nspSaveStatus').textContent='進度尚未儲存：'+error.message; return false; }finally{p.sending=false;}})();
+    }catch(error){ if(player===p)playerElement('nspSaveStatus').textContent='進度尚未儲存：'+error.message; return false; }finally{p.sending=false;}})();
     return p.savePromise;
   }
   async function finish(p) {
@@ -144,7 +145,7 @@ window.NSP = (() => {
     clearInterval(p.timer);
     const ordered=lessons(p.c),next=ordered[ordered.findIndex(l=>l.id===p.l.id)+1];
     if(next)await play(p.c.id,next.id,true);
-    else document.getElementById('nspSaveStatus').textContent=p.preview?'本課程影片已全部預覽完畢。':p.c.makeup_synced===true?'已完成學習，已同步課程登錄的已補課紀錄。':p.c.makeup_synced===false?'學習進度已儲存；補課同步未完成，請重新開啟課程清單重試。':'影片觀看紀錄已儲存，本課程影片已全部播放完畢。';
+    else playerElement('nspSaveStatus').textContent=p.preview?'本課程影片已全部預覽完畢。':p.c.makeup_synced===true?'已完成學習，已同步課程登錄的已補課紀錄。':p.c.makeup_synced===false?'學習進度已儲存；補課同步未完成，請重新開啟課程清單重試。':'影片觀看紀錄已儲存，本課程影片已全部播放完畢。';
   }
   function tick(p,ended=false) {
     const time=Date.now();
@@ -184,15 +185,15 @@ window.NSP = (() => {
     const videoId=youtubeId(l.url);
     if(videoId){
       const frame=youtubeFrame(videoId,l.title,Math.floor(saved?.position||0),autoplay);
-      document.getElementById('nspVideo').appendChild(frame);
+      playerElement('nspVideo').appendChild(frame);
       const linkGuard=document.createElement('div');linkGuard.className='nsp-youtube-link-guard';linkGuard.setAttribute('aria-hidden','true');linkGuard.hidden=false;
-      document.getElementById('nspVideo').appendChild(linkGuard);
+      playerElement('nspVideo').appendChild(linkGuard);
       const logoMask=document.createElement('div');logoMask.className='nsp-youtube-logo-mask';logoMask.setAttribute('aria-hidden','true');
-      document.getElementById('nspVideo').appendChild(logoMask);
-      try{const YT=await youtube();if(player!==p)return;p.yt=new YT.Player(frame,{events:{onReady:()=>{p.position=()=>p.yt.getCurrentTime();p.playing=()=>p.yt.getPlayerState()===1;p.rate=()=>p.yt.getPlaybackRate();p.mediaDuration=()=>p.yt.getDuration();if(autoplay)p.yt.playVideo();},onStateChange:event=>{linkGuard.hidden=event.data===1 || event.data===3;if(event.data===0)finish(p);else if(event.data===2 && !p.ending)flush(p);},onAutoplayBlocked:()=>{if(player===p)document.getElementById('nspSaveStatus').textContent='已切換下一支影片，請點選播放以繼續。';},onError:()=>{if(player===p)document.getElementById('nspSaveStatus').textContent='影片無法播放，請確認連結及嵌入權限';}}});}catch(error){if(player===p)document.getElementById('nspSaveStatus').textContent=error.message;}
+      playerElement('nspVideo').appendChild(logoMask);
+      try{const YT=await youtube();if(player!==p)return;p.yt=new YT.Player(frame,{events:{onReady:()=>{p.position=()=>p.yt.getCurrentTime();p.playing=()=>p.yt.getPlayerState()===1;p.rate=()=>p.yt.getPlaybackRate();p.mediaDuration=()=>p.yt.getDuration();if(autoplay)p.yt.playVideo();},onStateChange:event=>{linkGuard.hidden=event.data===1 || event.data===3;if(event.data===0)finish(p);else if(event.data===2 && !p.ending)flush(p);},onAutoplayBlocked:()=>{if(player===p)playerElement('nspSaveStatus').textContent='已切換下一支影片，請點選播放以繼續。';},onError:()=>{if(player===p)playerElement('nspSaveStatus').textContent='影片無法播放，請確認連結及嵌入權限';}}});}catch(error){if(player===p)playerElement('nspSaveStatus').textContent=error.message;}
     }else{
-      const v=document.createElement('video');v.controls=true;v.preload='metadata';v.src=l.url;v.poster=coverImage(c.cover_url);v.playsInline=true;document.getElementById('nspVideo').appendChild(v);p.video=v;p.position=()=>v.currentTime;p.playing=()=>!v.paused&&!v.ended;p.rate=()=>v.playbackRate;p.mediaDuration=()=>v.duration;
-      v.addEventListener('loadedmetadata',()=>{v.currentTime=Math.min(saved?.position||0,v.duration||0);if(autoplay)v.play().catch(()=>{if(player===p)document.getElementById('nspSaveStatus').textContent='已切換下一支影片，請點選播放以繼續。';});});v.addEventListener('pause',()=>{if(player===p && !p.ending)flush(p);});v.addEventListener('ended',()=>finish(p));v.addEventListener('error',()=>{if(player===p)document.getElementById('nspSaveStatus').textContent='影片無法播放，請使用可公開存取的影片檔案或 YouTube 網址';});
+      const v=document.createElement('video');v.controls=true;v.preload='metadata';v.src=l.url;v.poster=coverImage(c.cover_url);v.playsInline=true;playerElement('nspVideo').appendChild(v);p.video=v;p.position=()=>v.currentTime;p.playing=()=>!v.paused&&!v.ended;p.rate=()=>v.playbackRate;p.mediaDuration=()=>v.duration;
+      v.addEventListener('loadedmetadata',()=>{v.currentTime=Math.min(saved?.position||0,v.duration||0);if(autoplay)v.play().catch(()=>{if(player===p)playerElement('nspSaveStatus').textContent='已切換下一支影片，請點選播放以繼續。';});});v.addEventListener('pause',()=>{if(player===p && !p.ending)flush(p);});v.addEventListener('ended',()=>finish(p));v.addEventListener('error',()=>{if(player===p)playerElement('nspSaveStatus').textContent='影片無法播放，請使用可公開存取的影片檔案或 YouTube 網址';});
     }
     if(!p.preview)p.timer=setInterval(()=>tick(p),1000);
   }

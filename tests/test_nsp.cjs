@@ -2,6 +2,11 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
 const {test}=require('node:test');
+function runInContext(code,context){
+  context.playerElement ??= id=>context.document?.getElementById?.(id);
+  return vm.runInContext(code,context);
+}
+
 const source=fs.readFileSync(require('node:path').join(__dirname,'../app/static/js/nsp.js'),'utf8');
 const durationSource=source.slice(source.indexOf('  async function duration('),source.indexOf('  async function saveEditor('));
 const flushSource=source.slice(source.indexOf('  async function flush('),source.indexOf('  function tick('));
@@ -13,13 +18,13 @@ test('editor section, lesson and material numbers follow their current order wit
   const context=vm.createContext({edit,meta:{terms:[]},document:{getElementById:id=>elements[id]},esc:v=>v??'',field:(label,value)=>value,button:()=>'',options:()=>'',empty:()=>''});
   const renderSource=source.slice(source.indexOf('  function renderSections('),source.indexOf('  async function duration('));
   const moveSource=source.slice(source.indexOf('  function move('),source.indexOf("  document.addEventListener('click'"));
-  vm.runInContext(renderSource+moveSource+'\nrenderSections();renderMaterials();',context);
+  runInContext(renderSource+moveSource+'\nrenderSections();renderMaterials();',context);
   assert.match(elements.nspSectionEditor.innerHTML,/#章節1[\s\S]*章節甲[\s\S]*#影片1-1[\s\S]*#影片1-2[\s\S]*#章節2[\s\S]*#影片2-1/);
   assert.match(elements.nspMaterialEditor.innerHTML,/#教材1[\s\S]*教材甲[\s\S]*#教材2[\s\S]*教材乙/);
-  vm.runInContext('move(edit.sections,1,-1);move(edit.materials,1,-1);renderSections();renderMaterials();',context);
+  runInContext('move(edit.sections,1,-1);move(edit.materials,1,-1);renderSections();renderMaterials();',context);
   assert.match(elements.nspSectionEditor.innerHTML,/#章節1[\s\S]*章節乙[\s\S]*data-lesson-id="c"[\s\S]*#影片1-1/);
   assert.match(elements.nspMaterialEditor.innerHTML,/#教材1[\s\S]*教材乙/);
-  vm.runInContext('edit.sections.splice(0,1);edit.sections[0].lessons.splice(0,1);edit.materials.splice(0,1);renderSections();renderMaterials();',context);
+  runInContext('edit.sections.splice(0,1);edit.sections[0].lessons.splice(0,1);edit.materials.splice(0,1);renderSections();renderMaterials();',context);
   assert.match(elements.nspSectionEditor.innerHTML,/data-lesson-id="b"[\s\S]*#影片1-1/);
   assert.doesNotMatch(elements.nspSectionEditor.innerHTML,/#章節2|#影片1-2/);
   assert.doesNotMatch(elements.nspMaterialEditor.innerHTML,/#教材2/);
@@ -33,7 +38,7 @@ test('YouTube iframe blocks popups and top navigation before loading while retai
   }});
   const helper=source.slice(source.indexOf('  function youtubeFrame('),source.indexOf('  async function play('));
   const context=vm.createContext({URL,location:{origin:'https://example.invalid'},document:{createElement(tag){assert.equal(tag,'iframe');return frame;}}});
-  vm.runInContext(helper+'\nthis.makeFrame=youtubeFrame;',context);
+  runInContext(helper+'\nthis.makeFrame=youtubeFrame;',context);
   context.makeFrame('M7lc1UVf-VE','課程影片',12);
   const url=new URL(frame.source);
   assert.equal(url.searchParams.get('enablejsapi'),'1');
@@ -47,7 +52,7 @@ test('YouTube iframe blocks popups and top navigation before loading while retai
 test('Google Drive cover sharing URLs become image URLs without changing other image hosts',()=>{
   const coverSource=source.slice(source.indexOf('  const coverImage ='),source.indexOf('  const uid ='));
   const context=vm.createContext({URL});
-  vm.runInContext(coverSource+'\nthis.imageURL=coverImage;',context);
+  runInContext(coverSource+'\nthis.imageURL=coverImage;',context);
   const id='1OL4vP6591syyBq2asr2v3-t6lQb7YAPz';
   for(const url of [`https://drive.google.com/file/d/${id}/view?usp=sharing`,`https://drive.google.com/open?id=${id}`,`https://drive.google.com/uc?export=view&id=${id}`]){
     assert.equal(context.imageURL(url),`https://drive.google.com/thumbnail?id=${id}&sz=w1200`);
@@ -63,7 +68,7 @@ test('category lists and editors display independent numbers while actions keep 
   const context=vm.createContext({window:{addEventListener(){}},state:{token:'test'},structuredClone,
     document:{addEventListener(name,fn){listeners[name]=fn;},getElementById(id){return elements[id]??=( {innerHTML:'',showModal(){},addEventListener(){}} );}},
     fetch:async()=>({ok:true,json:async()=>options}),showToast(message){assert.fail(message);}});
-  vm.runInContext(source,context);
+  runInContext(source,context);
   for(const [type,id] of [['nsp_categories',3],['nsp_material_categories',7]]){
     await context.window.NSP.admin(type);
     assert.match(elements['adminSubPane_'+type].innerHTML,/<td>#1<\/td>/);
@@ -79,7 +84,7 @@ test('instructor editors use an independent email input and require the biograph
   const context=vm.createContext({window:{addEventListener(){}},state:{token:'test'},structuredClone,
     document:{addEventListener(name,fn){listeners[name]=fn;},getElementById(id){return elements[id]??={innerHTML:'',showModal(){},addEventListener(){}};}},
     fetch:async()=>({ok:true,json:async()=>options}),showToast(message){assert.fail(message);}});
-  vm.runInContext(source,context);
+  runInContext(source,context);
   await context.window.NSP.admin('nsp_instructors');
   assert.match(elements.adminSubPane_nsp_instructors.innerHTML,/external@example.invalid/);
   assert.match(elements.adminSubPane_nsp_instructors.innerHTML,/<td>#1<\/td>/);
@@ -104,7 +109,7 @@ test('all four admin lists show administrator names and Taipei timestamps',async
   const context=vm.createContext({window:{addEventListener(){}},state:{token:'test'},
     document:{addEventListener(){},getElementById(id){return elements[id]??={innerHTML:''};}},
     fetch:async path=>({ok:true,json:async()=>path.endsWith('/courses')?[row]:path.endsWith('/catalog')?[]:options})});
-  vm.runInContext(source,context);
+  runInContext(source,context);
   for(const type of ['nsp_courses','nsp_categories','nsp_material_categories','nsp_instructors']){
     await context.window.NSP.admin(type);
     const html=elements['adminSubPane_'+type].innerHTML;
@@ -124,7 +129,7 @@ test('course list and editor display number one but keep the original course ID 
   const context=vm.createContext({window:{addEventListener(){}},state:{token:'test'},structuredClone,
     document:{addEventListener(name,fn){listeners[name]=fn;},getElementById(id){return elements[id]??={innerHTML:'',value:'',open:true,classList:{add(){}},showModal(){},addEventListener(){}};}},
     fetch:async path=>({ok:true,json:async()=>path.endsWith('/courses')?[course]:path.endsWith('/catalog')?[]:{terms:[],instructors:[]}}),showToast(message){assert.fail(message);}});
-  vm.runInContext(source,context);
+  runInContext(source,context);
   await context.window.NSP.admin('nsp_courses');
   assert.match(elements.adminSubPane_nsp_courses.innerHTML,/<td>#1<\/td>/);
   assert.match(elements.adminSubPane_nsp_courses.innerHTML,/data-id="2"/);
@@ -136,7 +141,7 @@ test('video metadata updates the current lesson row after an editor rerender',as
   function row(){const fields={'[data-lesson-url]':{value:'https://example.invalid/video.mp4'},'[data-lesson-duration]':{value:0},'.nsp-detect-status':{textContent:''}};return {dataset:{lessonId:'stable_id'},fields,querySelector:s=>fields[s]};}
   const old=row(),replacement=row();let current=old,video;
   const context=vm.createContext({Number,Math,setTimeout:()=>1,clearTimeout(){},youtubeId:()=>null,minutes:()=> '0:05',document:{querySelectorAll:s=>s==='.nsp-edit-section'?[{querySelectorAll:()=>[old]}]:[current],createElement(){video={duration:5.055,removeAttribute(){}};return video;}}});
-  vm.runInContext(durationSource,context);
+  runInContext(durationSource,context);
   await context.duration(0,0);
   current=replacement;
   video.onloadedmetadata();
@@ -149,7 +154,7 @@ test('progress persists its captured position even after the player is destroyed
   let resolve,destroyed=false;
   const p={token:'token',pending:5,sending:false,l:{id:'video'},c:{id:1,progress:[],learners:0},position(){if(destroyed)throw Error('destroyed');return 5;}};
   const context=vm.createContext({state:{token:'token'},player:p,Math,api:()=>new Promise(r=>resolve=r),updateProgress(){},document:{getElementById:()=>({textContent:''})}});
-  vm.runInContext(flushSource,context);
+  runInContext(flushSource,context);
   const saved=context.flush(p);destroyed=true;context.player=null;resolve({watched:5,completed:1});await saved;
   assert.equal(p.c.progress[0].position,5);
   assert.equal(p.c.progress[0].completed,1);
@@ -160,7 +165,7 @@ test('progress persists its captured position even after the player is destroyed
 test('an account switch prevents progress from being sent with the next user token',async()=>{
   let called=false;
   const context=vm.createContext({state:{token:'new'},player:null,api:()=>{called=true;}});
-  vm.runInContext(flushSource,context);
+  runInContext(flushSource,context);
   await context.flush({token:'old',position:()=>10});
   assert.equal(called,false);
 });
@@ -174,7 +179,7 @@ test('course dates appear after numbers and in add/edit title options without ch
   const context=vm.createContext({window:{addEventListener(){}},state:{token:'test'},structuredClone,
     document:{addEventListener(name,fn){listeners[name]=fn;},getElementById(id){return elements[id]??={innerHTML:'',value:'',open:true,classList:{add(){}},showModal(){},addEventListener(){}};}},
     fetch:async path=>({ok:true,json:async()=>path.endsWith('/courses')?[course,{id:3,number:2,title:'自訂課程',status:'draft'}]:path.endsWith('/catalog')?catalog:{terms:[],instructors:[]}}),showToast(message){assert.fail(message);}});
-  vm.runInContext(source,context);
+  runInContext(source,context);
   await context.window.NSP.admin('nsp_courses');
   assert.match(elements.adminSubPane_nsp_courses.innerHTML,/<th>編號<\/th><th>課程日期<\/th><th>課程名稱<\/th>/);
   assert.match(elements.adminSubPane_nsp_courses.innerHTML,/<td>#1<\/td><td>2026\/09\/15<\/td>/);
@@ -194,9 +199,9 @@ test('admin preview opens saved draft content, plays lessons and closes without 
   const c={id:5,number:1,title:'預覽草稿',status:'draft',category_id:2,cover_url:'https://example.invalid/cover.png',info_html:'<p>介紹內容</p>',instructor_ids:[3],learners:2,makeup_count:33,sections:[{title:'第一章',lessons:[{id:'preview_lesson',title:'影片標題',duration:30,url:'https://example.invalid/video.mp4'}]}],materials:[{category_id:4,title:'講義',url:'https://example.invalid/material.pdf',note:'備註'}]};
   const options={terms:[{id:2,kind:'course',name:'課程分類'},{id:4,kind:'material',name:'教材分類'}],instructors:[{id:3,name:'講師甲'}]};
   const context=vm.createContext({URL,window:{addEventListener(){},scrollTo(){}},state:{token:'test'},structuredClone,clearInterval(){},setInterval(){intervals++;},
-    document:{addEventListener(name,fn){listeners[name]=fn;},querySelector(){return null;},getElementById(id){return elements[id]??={innerHTML:'',textContent:'',showModal(){this.open=true;},close(){this.open=false;this.onclose?.();},appendChild(){}};},createElement(){video={currentTime:0,paused:true,addEventListener(name,fn){mediaEvents[name]=fn;},pause(){this.paused=true;mediaEvents.pause?.();}};return video;}},
+    document:{addEventListener(name,fn){listeners[name]=fn;},querySelector(){return null;},getElementById(id){return elements[id]??={querySelector(selector){return elements[selector.slice(1)]??={textContent:'',appendChild(){}};},innerHTML:'',textContent:'',showModal(){this.open=true;},close(){this.open=false;this.onclose?.();},appendChild(){}};},createElement(){video={currentTime:0,paused:true,addEventListener(name,fn){mediaEvents[name]=fn;},pause(){this.paused=true;mediaEvents.pause?.();}};return video;}},
     fetch:async(path,init)=>{requests.push([path,init.method]);return {ok:true,json:async()=>path.endsWith('/courses')?[c]:path.endsWith('/catalog')?[]:options};},showToast(message){assert.fail(message);}});
-  vm.runInContext(source,context);
+  runInContext(source,context);
   await context.window.NSP.admin('nsp_courses');
   assert.match(elements.adminSubPane_nsp_courses.innerHTML,/data-nsp="preview"[^>]*data-id="5"/);
   const click=(action,extra={})=>listeners.click({target:{closest:()=>({dataset:{nsp:action,id:'5',...extra}})}});
@@ -221,7 +226,7 @@ test('admin preview opens saved draft content, plays lessons and closes without 
 test('preview player flush never submits learning progress',async()=>{
   let called=false;
   const context=vm.createContext({state:{token:'test'},api:()=>{called=true;},player:null});
-  vm.runInContext(flushSource,context);
+  runInContext(flushSource,context);
   await context.flush({preview:true,token:'test',position:()=>20,pending:20});
   assert.equal(called,false);
 });
@@ -232,7 +237,7 @@ function endingContext(preview=false){
   const first={id:'a'},second={id:'b'},c={id:7,sections:[{lessons:[first]},{lessons:[second]}],progress:[]};
   const p={c,l:first,preview,token:'test'},status={textContent:''},calls=[];
   const context=vm.createContext({player:p,state:{token:'test'},lessons:c=>c.sections.flatMap(s=>s.lessons),flush:async()=>{calls.push('saved');return true;},play:async(...args)=>calls.push(args),updateProgress(){calls.push('marked');},clearInterval(){},document:{getElementById:()=>status}});
-  vm.runInContext(finishSource,context);
+  runInContext(finishSource,context);
   return {context,p,c,calls,status};
 }
 
@@ -286,7 +291,7 @@ test('YouTube auto-next requests autoplay while normal opening retains the saved
   let frame;
   const helper=source.slice(source.indexOf('  function youtubeFrame('),source.indexOf('  async function play('));
   const context=vm.createContext({URL,location:{origin:'https://example.invalid'},document:{createElement(){return frame={setAttribute(){}};}}});
-  vm.runInContext(helper,context);
+  runInContext(helper,context);
   context.youtubeFrame('M7lc1UVf-VE','影片',12);assert.equal(new URL(frame.src).searchParams.get('start'),'12');assert.equal(new URL(frame.src).searchParams.has('autoplay'),false);
   context.youtubeFrame('M7lc1UVf-VE','影片',0,true);assert.equal(new URL(frame.src).searchParams.get('autoplay'),'1');
 });
@@ -298,7 +303,7 @@ test('makeup opens the matching attendance course rather than the independent NS
   const context=vm.createContext({AbortSignal,window:{addEventListener(){}},state:{token:'test'},
     document:{addEventListener(name,fn){listeners[name]=fn;},getElementById(id){return elements[id]??={innerHTML:'',showModal(){this.open=true;},close(){this.open=false;this.onclose?.();}};}},
     fetch:async(path,init)=>{calls.push([path,init]);return {ok:true,status:200,text:async()=>'<h1>學員補課名單</h1>',json:async()=>path.endsWith('/courses')?[{id:2,number:1,title:'導論',status:'published'}]:path.endsWith('/catalog')?catalog:{terms:[],instructors:[]}};},showToast:message=>errors.push(message)});
-  vm.runInContext(source,context);
+  runInContext(source,context);
   await context.window.NSP.admin('nsp_courses');
   assert.match(elements.adminSubPane_nsp_courses.innerHTML,/data-nsp="preview"[\s\S]*>補課<\/button>[\s\S]*>修改<\/button>/);
   const click=action=>listeners.click({target:{closest:()=>({dataset:{nsp:action,id:'2'}})}});
@@ -325,7 +330,7 @@ test('makeup count replaces started-learner totals consistently in cards and adm
   const context=vm.createContext({window:{addEventListener(){},scrollTo(){}},state:{token:'test',activeTab:'nsp'},
     document:{addEventListener(name,fn){listeners[name]=fn;},getElementById(id){return elements[id]??={innerHTML:'',value:'',checked:false,addEventListener(){}};}},
     fetch:async path=>({ok:true,json:async()=>path.endsWith('/courses')?[course]:path.endsWith('/catalog')?[]:{terms:[],instructors:[]}})});
-  vm.runInContext(source,context);
+  runInContext(source,context);
   await context.window.NSP.load();
   assert.match(elements.nspApp.innerHTML,/已學習/);assert.match(elements.nspApp.innerHTML,/待學習/);
   assert.match(elements.nspCourseGrid.innerHTML,/33人完成學習/);assert.doesNotMatch(elements.nspCourseGrid.innerHTML,/2 人開始學習/);
@@ -338,7 +343,7 @@ test('course cards and detail show date icons and completed makeup lessons',asyn
   const c={id:1,title:'測試課程',category:'分類',instructors:['講師'],course_date:'2026-10-20',makeup_count:12,makeup_completed:true,sections:[{title:'第一章',lessons:[{id:'a',title:'第一支',duration:7},{id:'b',title:'第二支',duration:7}]}],materials:[],progress:[],total:2,completed:2,percent:100,cover_url:'',info_html:'介紹',material_categories:{}};
   const context=vm.createContext({window:{addEventListener(){},scrollTo(){}},state:{token:'test',activeTab:'nsp'},
     document:{addEventListener(n,f){listeners[n]=f;},getElementById(id){return elements[id]??={innerHTML:'',value:'',checked:false,addEventListener(){}};}},fetch:async()=>({ok:true,json:async()=>[c]})});
-  vm.runInContext(source,context);await context.window.NSP.load();
+  runInContext(source,context);await context.window.NSP.load();
   assert.match(elements.nspCourseGrid.innerHTML,/🕒 2026\/10\/20/);
   assert.match(elements.nspCourseGrid.innerHTML,/value="100"/);
   await listeners.click({target:{closest:()=>({dataset:{nsp:'detail',id:'1'}})}});
@@ -353,8 +358,8 @@ test('returning makeup students see their completion timestamp and the 100 perce
   const elements={},listeners={},alerts=[];
   const c={id:1,title:'測試',category:'分類',instructors:[],sections:[{title:'章節',lessons:[{id:'a',title:'影片',url:'https://example.invalid/a.mp4',duration:7}]}],materials:[],progress:[],total:1,completed:1,percent:100,makeup_completed:true,makeup_completed_at:'2026-10-25 19:12:59'};
   const context=vm.createContext({URL,window:{addEventListener(){},scrollTo(){},alert(message){alerts.push(message);}},state:{token:'test',activeTab:'nsp',user:{name:'黃雅筠'}},setInterval(){},clearInterval(){},
-    document:{addEventListener(n,f){listeners[n]=f;},querySelector(){return null;},getElementById(id){return elements[id]??={innerHTML:'',value:'',checked:false,addEventListener(){},appendChild(){}};},createElement(){return {addEventListener(){},pause(){}};}},fetch:async()=>({ok:true,json:async()=>[c]})});
-  vm.runInContext(source,context);await context.window.NSP.load();
+    document:{addEventListener(n,f){listeners[n]=f;},querySelector(){return null;},getElementById(id){return elements[id]??={querySelector(selector){return elements[selector.slice(1)]??={textContent:'',appendChild(){}};},innerHTML:'',value:'',checked:false,addEventListener(){},appendChild(){}};},createElement(){return {addEventListener(){},pause(){}};}},fetch:async()=>({ok:true,json:async()=>[c]})});
+  runInContext(source,context);await context.window.NSP.load();
   await listeners.click({target:{closest:()=>({dataset:{nsp:'play',id:'1',lesson:'a'}})}});
   assert.match(elements.nspApp.innerHTML,/黃雅筠 學員 您好！您已於 2026\/10\/25 19:12:59 完成學習。/);
   assert.match(elements.nspApp.innerHTML,/每 10 秒自動儲存，觀看達影片 100% 後計為完成；播完自動播放下一支/);
@@ -371,7 +376,7 @@ test('returning makeup students see their completion timestamp and the 100 perce
 test('the final playback fraction is saved even after the ended state stops playing',()=>{
   const tickSource=source.slice(source.indexOf('  function tick('),source.indexOf('  function stop('));
   const context=vm.createContext({Date:{now:()=>100000},flush(){assert.fail('not ten seconds yet');}});
-  vm.runInContext(tickSource,context);
+  runInContext(tickSource,context);
   const p={pending:0,clock:99320,lastSave:100000,l:{duration:7},mediaDuration:()=>6.8,playing:()=>false,rate:()=>1};
   context.tick(p,true);assert.ok(Math.abs(p.pending-0.7)<1e-9);
 });
@@ -382,7 +387,7 @@ test('first completion alerts only after successful makeup sync and preserves it
     const alerts=[],c={id:1,progress:[],learners:0},p={c,l:{id:'a'},token:'test',pending:7,position:()=>7};
     const saved={completed:1,makeup_synced:synced,...(synced?{makeup_completed_at:'2026-10-26 19:12:59'}:{})};
     const context=vm.createContext({player:p,state:{token:'test',user:{name:'學員甲'}},window:{alert:message=>alerts.push(message)},api:async()=>saved,updateProgress(){},document:{getElementById:()=>({})}});
-    vm.runInContext(flushSource,context);
+    runInContext(flushSource,context);
     await context.flush(p);await context.flush(p);
     assert.deepEqual(alerts,synced?['學員甲 學員 您好！恭喜您已於 2026/10/26 19:12:59 完成學習，歡迎您再次學習！']:[]);
     if(synced){assert.equal(c.makeup_completed_at,'2026-10-26 19:12:59');assert.equal(c.makeup_completed,true);}
@@ -399,7 +404,7 @@ test('public and preview YouTube players block lower-left links while keeping ac
     const context=vm.createContext({p,l:p.l,player:p,videoId:'M7lc1UVf-VE',saved:null,autoplay:false,
       youtubeFrame:()=>({tag:'iframe'}),youtube:async()=>({Player:function(frame,options){events=options.events;}}),
       finish(){},flush(){},document:{createElement:()=>({setAttribute(name,value){this[name]=value;}}),getElementById:()=>({appendChild:child=>children.push(child)})}});
-    await vm.runInContext('(async()=>{'+block+'})()',context);
+    await runInContext('(async()=>{'+block+'})()',context);
     const guard=children.find(c=>c.className==='nsp-youtube-link-guard');
     assert.ok(guard,'both public and preview need the click guard');
     assert.equal(guard['aria-hidden'],'true');
@@ -416,4 +421,16 @@ test('public and preview YouTube players block lower-left links while keeping ac
   assert.match(css,/\.nsp-youtube-link-guard\s*\{[^}]*pointer-events:auto/);
   assert.match(css,/\.nsp-youtube-logo-mask\s*\{[^}]*right:0[^}]*bottom:0/);
   assert.match(css,/\.nsp-youtube-logo-mask\s*\{[^}]*background:#0f172a[^}]*pointer-events:auto/);
+});
+
+
+test('preview media and status selectors ignore identically named elements behind the dialog',()=>{
+  const selectors=source.slice(source.indexOf('  const root ='),source.indexOf('  const dialog ='));
+  const front={},preview={};
+  for(const id of ['nspVideo','nspSaveStatus','nspPlayerProgress']){front['#'+id]={mount:'front',id};preview['#'+id]={mount:'preview',id};}
+  const context=vm.createContext({previewCourse:{id:5},document:{getElementById:id=>({querySelector:selector=>(id==='nspPreviewContent'?preview:front)[selector]})}});
+  runInContext(selectors+';this.findPlayerElement=playerElement;',context);
+  for(const id of ['nspVideo','nspSaveStatus','nspPlayerProgress']) assert.equal(context.findPlayerElement(id).mount,'preview');
+  context.previewCourse=null;
+  for(const id of ['nspVideo','nspSaveStatus','nspPlayerProgress']) assert.equal(context.findPlayerElement(id).mount,'front');
 });
