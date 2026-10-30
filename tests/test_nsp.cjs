@@ -388,3 +388,27 @@ test('first completion alerts only after successful makeup sync and preserves it
     if(synced){assert.equal(c.makeup_completed_at,'2026-10-26 19:12:59');assert.equal(c.makeup_completed,true);}
   }
 });
+
+
+test('public and preview YouTube players block lower-left links while keeping active playback controls usable',async()=>{
+  const start=source.indexOf('    if(videoId){',source.indexOf('  async function play('));
+  const block=source.slice(start,source.indexOf('    }else{',start))+'    }';
+  for(const preview of [false,true]){
+    const children=[],p={preview,l:{title:'課程影片'}};
+    let events;
+    const context=vm.createContext({p,l:p.l,player:p,videoId:'M7lc1UVf-VE',saved:null,autoplay:false,
+      youtubeFrame:()=>({tag:'iframe'}),youtube:async()=>({Player:function(frame,options){events=options.events;}}),
+      finish(){},flush(){},document:{createElement:()=>({setAttribute(name,value){this[name]=value;}}),getElementById:()=>({appendChild:child=>children.push(child)})}});
+    await vm.runInContext('(async()=>{'+block+'})()',context);
+    const guard=children.find(c=>c.className==='nsp-youtube-link-guard');
+    assert.ok(guard,'both public and preview need the click guard');
+    assert.equal(guard['aria-hidden'],'true');
+    assert.equal(guard.hidden,false);
+    events.onStateChange({data:1});assert.equal(guard.hidden,true);
+    events.onStateChange({data:2});assert.equal(guard.hidden,false);
+    events.onStateChange({data:0});assert.equal(guard.hidden,false);
+  }
+  const css=fs.readFileSync(require('node:path').join(__dirname,'../app/static/css/nsp.css'),'utf8');
+  assert.match(css,/\.nsp-youtube-link-guard\s*\{[^}]*left:0[^}]*bottom:0/);
+  assert.match(css,/\.nsp-youtube-link-guard\s*\{[^}]*pointer-events:auto/);
+});
