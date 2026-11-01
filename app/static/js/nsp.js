@@ -278,7 +278,7 @@ window.NSP = (() => {
     }catch(error){mount.innerHTML=empty(error.message);}
   }
   function openDialog(title,body) {
-    dialog().innerHTML=`<form id="nspEditor"><header><h3>${title}</h3>${button('關閉','close','',true)}</header><div class="nsp-editor-body">${body}</div><p id="nspEditorError" role="alert"></p><footer>${button('取消','close','',true)}<button type="submit" class="ds-button">儲存</button></footer></form>`;
+    dialog().innerHTML=`<form id="nspEditor"><header><h3>${title}</h3>${button('關閉','close','',true)}</header>${activeAdmin==='nsp_courses'?'<p id="nspEditorError" role="alert"></p>':''}<div class="nsp-editor-body">${body}</div>${activeAdmin!=='nsp_courses'?'<p id="nspEditorError" role="alert"></p>':''}<footer>${button('取消','close','',true)}<button type="submit" class="ds-button">儲存</button></footer></form>`;
     dialog().showModal();
     document.getElementById('nspEditor').addEventListener('submit',saveEditor);
   }
@@ -303,8 +303,10 @@ window.NSP = (() => {
   }
   function openCourseEditor() {
     const terms=meta.terms.filter(t=>t.kind==='course');
-    openDialog(edit.id?'修改課程':'新增課程',`<div class="nsp-form-grid">${field('課程編號',input('display_id',edit.number||'系統自動編號','text','readonly'))}${field('發布狀態',`<select name="status"><option value="draft" ${edit.status==='draft'?'selected':''}>草稿</option><option value="published" ${edit.status==='published'?'selected':''}>發布</option></select>`)}${field('課程名稱'+required,`<select id="nspTitleSelect"><option value="__other">其他</option></select><input id="nspCustomTitle" value="${esc(edit.title)}" placeholder="其他課程名稱" maxlength="250"><small id="nspCatalogNotice"></small>`)}${field('課程分類'+required,`<select name="category_id" required>${options(terms,edit.category_id)}</select>`)}${field('課程封面'+required,input('cover_url',edit.cover_url,'url','placeholder="https://… 圖片網址"'))}</div><p class="nsp-help">草稿可先儲存未完成內容；發布前須填妥所有紅色 * 欄位及影片長度。封面與教材先使用網址。</p><div class="nsp-field"><span>課程資訊${required}</span><div class="nsp-html-toolbar">${[['bold','粗體'],['italic','斜體'],['underline','底線'],['insertUnorderedList','項目清單'],['formatBlock','標題']].map(([cmd,text])=>button(text,'format',`data-cmd="${cmd}"`,true)).join('')}${button('加入連結','link','',true)}${button('HTML／視覺','html','',true)}</div><div id="nspRichEditor" contenteditable="true" role="textbox" aria-label="課程資訊 HTML 編輯器" class="nsp-rich-editor">${edit.info_html}</div><textarea id="nspHTMLCode" rows="7" hidden>${esc(edit.info_html)}</textarea></div><div class="nsp-admin-heading"><h4>課程內容</h4>${button('＋ 新增章節','section')}</div><div id="nspSectionEditor"></div><div class="nsp-admin-heading"><h4>教材內容</h4>${button('＋ 新增教材','material')}</div><div id="nspMaterialEditor"></div><fieldset class="nsp-instructors"><legend>課程講師${required}（可複選）</legend>${meta.instructors.map(i=>`<label><input type="checkbox" name="instructor_ids" value="${i.id}" ${edit.instructor_ids.includes(i.id)?'checked':''}>${esc(i.name)} <small>${esc(i.email)}</small></label>`).join('')||'<p>請先至「課程講師管理」建立講師。</p>'}</fieldset><p class="nsp-audit">${auditDetails(edit)}</p>`);
+    openDialog(edit.id?'修改課程':'新增課程',`<div class="nsp-form-grid">${field('課程編號',input('display_id',edit.number||'系統自動編號','text','readonly'))}${field('發布狀態',`<select id="nspPublishStatus" name="status"><option value="draft" ${edit.status==='draft'?'selected':''}>草稿</option><option value="published" ${edit.status==='published'?'selected':''}>發布</option></select>`)}${field('課程名稱'+required,`<select id="nspTitleSelect"><option value="__other">其他</option></select><input id="nspCustomTitle" value="${esc(edit.title)}" placeholder="其他課程名稱" maxlength="250"><small id="nspCatalogNotice"></small>`)}${field('課程分類'+required,`<select name="category_id" required>${options(terms,edit.category_id)}</select>`)}${field('課程封面'+required,input('cover_url',edit.cover_url,'url','placeholder="https://… 圖片網址"'))}</div><p class="nsp-help">草稿可先儲存未完成內容；發布前須填妥所有紅色 * 欄位及影片長度。封面與教材先使用網址。</p><div class="nsp-field"><span>課程資訊${required}</span><div class="nsp-html-toolbar">${[['bold','粗體'],['italic','斜體'],['underline','底線'],['insertUnorderedList','項目清單'],['formatBlock','標題']].map(([cmd,text])=>button(text,'format',`data-cmd="${cmd}"`,true)).join('')}${button('加入連結','link','',true)}${button('HTML／視覺','html','',true)}</div><div id="nspRichEditor" contenteditable="true" role="textbox" aria-label="課程資訊 HTML 編輯器" class="nsp-rich-editor">${edit.info_html}</div><textarea id="nspHTMLCode" rows="7" hidden>${esc(edit.info_html)}</textarea></div><div class="nsp-admin-heading"><h4>課程內容</h4>${button('＋ 新增章節','section')}</div><div id="nspSectionEditor"></div><div class="nsp-admin-heading"><h4>教材內容</h4>${button('＋ 新增教材','material')}</div><div id="nspMaterialEditor"></div><fieldset class="nsp-instructors"><legend>課程講師${required}（可複選）</legend>${meta.instructors.map(i=>`<label><input type="checkbox" name="instructor_ids" value="${i.id}" ${edit.instructor_ids.includes(i.id)?'checked':''}>${esc(i.name)} <small>${esc(i.email)}</small></label>`).join('')||'<p>請先至「課程講師管理」建立講師。</p>'}</fieldset><p class="nsp-audit">${auditDetails(edit)}</p>`);
     dialog().classList.add('nsp-course-dialog');
+    document.getElementById('nspEditor').noValidate=true;
+    document.getElementById('nspPublishStatus').addEventListener('change',event=>{const form=document.getElementById('nspEditor');if(event.target.value==='published')checkCourse(form,coursePayload(form));else{document.getElementById('nspEditorError').textContent='';form.querySelectorAll('[aria-invalid]').forEach(el=>el.removeAttribute('aria-invalid'));}});
     document.getElementById('nspTitleSelect').addEventListener('change',event=>{document.getElementById('nspCustomTitle').hidden=event.target.value!=='__other';});
     document.getElementById('nspRichEditor').addEventListener('paste',event=>{event.preventDefault();document.execCommand('insertText',false,event.clipboardData.getData('text/plain'));});
     renderTitleOptions(); renderSections(); renderMaterials();
@@ -330,11 +332,49 @@ window.NSP = (() => {
     if(id){let yt,tries=0,timer;const host=document.createElement('div');host.className='nsp-metadata-player';document.body.appendChild(host);const target=document.createElement('div');host.appendChild(target);try{const YT=await youtube();yt=new YT.Player(target,{videoId:id,events:{onReady:()=>{timer=setInterval(()=>{if(done(yt.getDuration())||++tries>=8){if(tries>=8)fail();clearInterval(timer);yt.destroy();host.remove();}},1000);},onError:()=>{clearInterval(timer);yt?.destroy();host.remove();fail();}}});}catch{host.remove();fail();}}
     else{const v=document.createElement('video');v.preload='metadata';v.src=url;const timeout=setTimeout(()=>{v.removeAttribute('src');fail();},15000);v.onloadedmetadata=()=>{clearTimeout(timeout);if(!done(v.duration))fail();v.removeAttribute('src');};v.onerror=()=>{clearTimeout(timeout);fail();};}
   }
+  function coursePayload(form) {
+    collectContent();const code=document.getElementById('nspHTMLCode');
+    return {...edit,title:(document.getElementById('nspTitleSelect').value==='__other'?document.getElementById('nspCustomTitle').value:document.getElementById('nspTitleSelect').value).trim(),category_id:Number(form.elements.category_id.value),cover_url:form.elements.cover_url.value.trim(),info_html:code.hidden?document.getElementById('nspRichEditor').innerHTML:code.value,instructor_ids:Array.from(form.querySelectorAll('[name=instructor_ids]:checked')).map(el=>Number(el.value)),status:form.elements.status.value};
+  }
+  function courseErrors(body) {
+    const errors=[];
+    if(!body.title.trim())errors.push(['課程名稱',document.getElementById('nspTitleSelect').value==='__other'?'#nspCustomTitle':'#nspTitleSelect']);
+    if(!body.category_id)errors.push(['課程分類','[name=category_id]']);
+    if(body.status!=='published')return errors;
+    if(!body.cover_url.trim())errors.push(['課程封面','[name=cover_url]']);
+    const text=new DOMParser().parseFromString(sanitizeEditor(body.info_html),'text/html').body.textContent;
+    if(!text.replace(/[\s\u200b\ufeff]/g,''))errors.push(['課程資訊',document.getElementById('nspHTMLCode').hidden?'#nspRichEditor':'#nspHTMLCode']);
+    if(!body.instructor_ids.length)errors.push(['課程講師（至少選擇一位）','.nsp-instructors']);
+    if(!body.sections.some(section=>section.lessons.length))errors.push(['課程影片（至少一部）','#nspSectionEditor']);
+    body.sections.forEach((section,i)=>{
+      const prefix=`第 ${i+1} 章`;
+      if(!section.title.trim())errors.push([prefix+'標題',`.nsp-edit-section[data-section="${i}"] [data-section-title]`]);
+      section.lessons.forEach((lesson,j)=>{
+        const row=`.nsp-edit-section[data-section="${i}"] .nsp-edit-lesson[data-lesson-id="${lesson.id}"]`;
+        if(!lesson.title.trim())errors.push([`${prefix}第 ${j+1} 部影片標題`,row+' [data-lesson-title]']);
+        if(!lesson.url.trim())errors.push([`${prefix}第 ${j+1} 部影片連結`,row+' [data-lesson-url]']);
+        if(lesson.duration<=0)errors.push([`${prefix}第 ${j+1} 部影片長度（須大於 0 秒）`,row+' [data-lesson-duration]']);
+      });
+    });
+    return errors;
+  }
+  function checkCourse(form,body) {
+    const notice=document.getElementById('nspEditorError'),errors=courseErrors(body);
+    form.querySelectorAll('[aria-invalid]').forEach(el=>el.removeAttribute('aria-invalid'));
+    notice.textContent='';
+    if(!errors.length)return true;
+    notice.textContent=(body.status==='published'?'發布前':'儲存前')+'請填妥：'+errors.map(([label])=>label).join('；');
+    errors.forEach(([,selector])=>form.querySelector(selector)?.setAttribute('aria-invalid','true'));
+    const target=form.querySelector(errors[0][1]);
+    if(target){target.tabIndex=0;target.focus();target.scrollIntoView({block:'center'});}
+    showToast(notice.textContent,'error');
+    return false;
+  }
   async function saveEditor(event) {
     event.preventDefault();const form=event.currentTarget,error=document.getElementById('nspEditorError'),submit=form.querySelector('button[type=submit]');let path,body;
     if(activeAdmin==='nsp_courses'){
-      collectContent();const code=document.getElementById('nspHTMLCode');
-      body={...edit,title:document.getElementById('nspTitleSelect').value==='__other'?document.getElementById('nspCustomTitle').value:document.getElementById('nspTitleSelect').value,category_id:Number(form.elements.category_id.value),cover_url:form.elements.cover_url.value.trim(),info_html:code.hidden?document.getElementById('nspRichEditor').innerHTML:code.value,instructor_ids:Array.from(form.querySelectorAll('[name=instructor_ids]:checked')).map(el=>Number(el.value)),status:form.elements.status.value};path='/admin/courses';
+      body=coursePayload(form);path='/admin/courses';
+      if(!checkCourse(form,body)||!form.reportValidity())return;
     }else{body=Object.fromEntries(new FormData(form));if(activeAdmin==='nsp_instructors'){path='/admin/instructors';}else path='/admin/terms/'+(activeAdmin==='nsp_categories'?'course':'material');}
     submit.disabled=true;error.textContent='儲存中…';
     try{await api(path+(edit.id?'/'+edit.id:''),edit.id?'PUT':'POST',body);dialog().close();dialog().classList.remove('nsp-course-dialog');showToast('儲存完成','success');admin(activeAdmin);}catch(e){error.textContent=e.message;}finally{submit.disabled=false;}

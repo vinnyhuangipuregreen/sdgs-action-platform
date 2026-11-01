@@ -88,6 +88,29 @@ class NspTests(unittest.TestCase):
         self.request('POST','/admin/terms/course',{'name':'NSP自然永續培訓'},status=409)
         self.request('POST','/admin/instructors',{'name':'無效','email':'invalid','bio':'簡介','expertise':'永續'},status=422)
 
+    def test_publish_rejects_empty_rich_text_on_create_and_edit(self):
+        req = self.prepare()
+        course_id = self.request('POST', '/admin/courses', {**req, 'status':'draft'})['id']
+        for info in ('<p><br></p>', '<p>&nbsp;</p>', '<p>&#160;\u200b</p>'):
+            for method, path in [('POST', '/admin/courses'), ('PUT', f'/admin/courses/{course_id}')]:
+                with self.subTest(info=info, method=method):
+                    result = self.request(method, path, {**req, 'info_html':info, 'version':1}, status=422)
+                    self.assertIn('課程資訊', str(result))
+        rows = self.request('GET', '/admin/courses')
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['status'], 'draft')
+        self.assertEqual(rows[0]['version'], 1)
+
+    def test_publish_lists_missing_fields_and_draft_remains_editable(self):
+        req = self.prepare()
+        incomplete = {**req, 'cover_url':'', 'info_html':'', 'instructor_ids':[], 'sections':[]}
+        result = self.request('POST', '/admin/courses', incomplete, status=422)
+        for label in ('課程封面', '課程資訊', '課程講師', '課程影片'):
+            self.assertIn(label, str(result))
+        course_id = self.request('POST', '/admin/courses', {**incomplete, 'status':'draft'})['id']
+        self.request('PUT', f'/admin/courses/{course_id}', {**incomplete, 'status':'draft', 'version':1})
+        self.assertEqual(self.request('GET', '/admin/courses')[0]['status'], 'draft')
+
     def test_instructor_email_is_independent_and_bio_is_required(self):
         req = self.prepare()
         cid = self.request('POST', '/admin/courses', req)['id']

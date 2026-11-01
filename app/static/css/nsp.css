@@ -100,3 +100,6 @@
 @media(max-width:600px){.nsp-media-controls { gap:5px; padding:20px 6px 6px; }.nsp-media-controls [data-media=volume] { width:48px; }.nsp-media-controls time { font-size:10px; }.nsp-media-controls button { min-width:28px; }.nsp-speed-menu { bottom:52px; right:32px; max-height:65%; }}
 
 .nsp-speed-menu [hidden] { display:none; }
+
+#nspDialog.nsp-course-dialog #nspEditorError:not(:empty) { position:sticky; top:0; z-index:3; margin:0; padding:12px 24px; background:#fef2f2; border-bottom:1px solid #fecaca; }
+#nspDialog.nsp-course-dialog [aria-invalid="true"] { outline:2px solid #dc2626; outline-offset:2px; }

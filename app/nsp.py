@@ -172,6 +172,7 @@ class CourseWrite(BaseModel):
     @model_validator(mode="after")
     def validate_content(self):
         self.title = self.title.strip()
+        self.cover_url = self.cover_url.strip()
         if not self.title:
             raise ValueError("請填寫課程名稱")
         web_url(self.cover_url)
@@ -189,8 +190,20 @@ class CourseWrite(BaseModel):
             raise ValueError("影片編號重複，請重新載入課程")
         for material in self.materials:
             web_url(material.url)
-        if self.status == "published" and (not self.cover_url or not re.sub(r"<[^>]*>", "", self.info_html).strip() or not self.instructor_ids or not ids or any(lesson.duration <= 0 for section in self.sections for lesson in section.lessons)):
-            raise ValueError("發布前請填妥封面、課程資訊、講師、課程影片及影片長度")
+        if self.status == "published":
+            missing = []
+            if not self.cover_url:
+                missing.append("課程封面")
+            if not html.unescape(re.sub(r"<[^>]*>", "", self.info_html)).replace("\u200b", "").replace("\ufeff", "").strip():
+                missing.append("課程資訊")
+            if not self.instructor_ids:
+                missing.append("課程講師（至少選擇一位）")
+            if not ids:
+                missing.append("課程影片（至少一部）")
+            if any(lesson.duration <= 0 for section in self.sections for lesson in section.lessons):
+                missing.append("影片長度（須大於 0 秒）")
+            if missing:
+                raise ValueError("發布前請填妥：" + "、".join(missing))
         return self
 
 
