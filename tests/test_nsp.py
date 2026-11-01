@@ -34,6 +34,49 @@ class NspTests(unittest.TestCase):
         options = self.request('GET','/admin/options')
         return {'title':'NSP測試課程','category_id':options['terms'][0]['id'], 'cover_url':'https://example.invalid/cover.png','info_html':'<h3>課程資訊</h3><p>內容<script>alert(1)</script><a href="javascript:alert(1)">連結</a></p>', 'instructor_ids':[options['instructors'][0]['id']], 'sections':[{'title':'章節一','lessons':[{'id':'lesson_1','title':'影片一','url':'https://example.invalid/video.mp4','duration':100}]}], 'materials':[{'title':'教材','category_id':options['terms'][1]['id'],'url':'https://example.invalid/file.pdf','note':'課後複習'}], 'status':'published'}
 
+    def test_real_player_save_flow_marks_each_video_and_autoplays_across_sections(self):
+        import json
+        import subprocess
+        import threading
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+        from pathlib import Path
+        req = self.prepare()
+        def lesson(id):
+            return {'id':id, 'title':id, 'url':'https://example.invalid/'+id+'.mp4', 'duration':7}
+        req['sections'] = [{'title':'章節一','lessons':[lesson('a'),lesson('b')]},
+                           {'title':'章節二','lessons':[lesson('c')]}]
+        cid = self.request('POST', '/admin/courses', req)['id']
+        fixture = self
+        class Handler(BaseHTTPRequestHandler):
+            def do_PUT(self):
+                body = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+                response = fixture.client.put(self.path, headers=fixture.student, json=body)
+                self.send_response(response.status_code)
+                self.send_header('Content-Type','application/json')
+                self.send_header('Content-Length',str(len(response.content)))
+                self.end_headers()
+                self.wfile.write(response.content)
+            def log_message(self, *args):
+                pass
+        server = ThreadingHTTPServer(('127.0.0.1',0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            for scenario, expected in [('gap', {'completed':0,'autoplayTransitions':0,'alerts':0}),
+                                       ('normal', {'completed':3,'autoplayTransitions':2,'alerts':1})]:
+                course = self.request('GET', '/courses', headers=self.student)[0]
+                result = subprocess.run(['node', str(Path(__file__).parent/'helpers/nsp-playback-flow.cjs'),
+                    f'http://127.0.0.1:{server.server_port}'], input=json.dumps({'course':course,'scenario':scenario}),
+                    capture_output=True, text=True, encoding='utf-8', timeout=30)
+                self.assertEqual(result.returncode,0,result.stderr)
+                self.assertEqual(json.loads(result.stdout), expected)
+                if scenario == 'gap':
+                    self.sync_mock.assert_not_called()
+            self.assertTrue(self.request('GET',f'/courses/{cid}/completion',headers=self.student)['completed'])
+            self.assertEqual(self.sync_mock.call_count,2)  # Final completion plus idempotent retry only.
+        finally:
+            server.shutdown();server.server_close();thread.join()
+
     def test_authoring_publish_progress_and_account_boundaries(self):
         req=self.prepare()
         course_id=self.request('POST','/admin/courses',req)['id']

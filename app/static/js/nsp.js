@@ -114,12 +114,12 @@ window.NSP = (() => {
     const label=playerElement('nspPlayerProgress'); if(label)label.textContent=previewCourse?'課程預覽':`你的進度：${c.completed}/${c.total}（${c.percent}%）`;
     const notice=playerElement('nspCompletionNotice');
     if(notice){notice.hidden=!!previewCourse || !c.makeup_completed || !c.makeup_completed_at || !c.total || c.completed!==c.total;notice.textContent=notice.hidden?'':completionMessage(c);}
-    for(const l of lessons(c)) { const mark=root().querySelector(`[data-nsp-marker="${l.id}"]`); if(mark)mark.textContent=c.progress.find(p=>p.lesson_id===l.id)?.completed?'✓':'○'; }
+    for(const l of lessons(c)) { const mark=root().querySelector(`[data-nsp-marker="${l.id}"]`); if(mark)mark.textContent=c.progress.find(p=>p.lesson_id===l.id)?.completed?'V':'○'; }
   }
   async function flush(p=player) {
     if(!p || p.preview || state.token!==p.token || !p.position) return;
     if(p.sending)return p.savePromise;
-    p.sending=true; const delta=Math.min(30,p.pending), mediaDuration=p.mediaDuration?.(), position=mediaDuration>0?Math.min(p.l.duration,p.position()/mediaDuration*p.l.duration):p.position();
+    p.sending=true; const delta=Math.min(30,p.pending), mediaDuration=p.mediaDuration?.(), position=p.ending?p.l.duration:mediaDuration>0?Math.min(p.l.duration,p.position()/mediaDuration*p.l.duration):p.position();
     p.savePromise=(async()=>{try {
       const saved=await api(`/courses/${p.c.id}/progress/${p.l.id}`,'PUT',{position,watched_delta:delta,ended:!!p.ending}); p.pending=Math.max(0,p.pending-delta); if('makeup_synced' in saved)p.c.makeup_synced=saved.makeup_synced;
       const progress=p.c.progress.find(r=>r.lesson_id===p.l.id);
@@ -157,7 +157,11 @@ window.NSP = (() => {
   }
   function tick(p,ended=false) {
     const time=Date.now();
-    if(ended || p.playing?.())p.pending+=Math.min(2,(time-p.clock)/1000)*(p.rate?.()||1)*(p.mediaDuration?.()>0?p.l.duration/p.mediaDuration():1);
+    const mediaDuration=p.mediaDuration?.(),scale=mediaDuration>0?p.l.duration/mediaDuration:1;
+    if(ended || p.playing?.())p.pending+=Math.min(2,(time-p.clock)/1000)*(p.rate?.()||1)*scale;
+    // A natural ended event can stop one frame short of the rounded duration.
+    // Credit that final fraction only; seeking over a larger gap still fails on the server.
+    if(ended && mediaDuration>0){const tail=mediaDuration-p.position();if(tail>=0 && tail<=0.25)p.pending+=tail*scale;}
     p.clock=time;
     if(time-p.lastSave>=10000){p.lastSave=time;flush(p);}
   }
@@ -227,7 +231,7 @@ window.NSP = (() => {
     if(previewCourse)document.getElementById('nspPreviewDialog').scrollTop=0;else window.scrollTo(0,0);
     const saved=autoplay?null:c.progress.find(p=>p.lesson_id===lessonId);
     const resume=saved?Math.min(saved.position||0,saved.watched??saved.position??0):0;
-    root().innerHTML=`<div class="nsp-learning"><aside class="nsp-outline"><h3>課程內容［學習區］</h3>${c.sections.map(s=>`<details open><summary>${esc(s.title)}</summary>${s.lessons.map(item=>`<button type="button" data-nsp="play" data-id="${id}" data-lesson="${item.id}" ${item.id===lessonId?'aria-current="true"':''}><span data-nsp-marker="${item.id}">${c.progress.find(p=>p.lesson_id===item.id)?.completed?'✓':'○'}</span><span>${esc(item.title)}</span><time>${minutes(item.duration)}</time></button>`).join('')}</details>`).join('')}</aside><section class="nsp-screen"><div class="nsp-player-header">${button('←','detail',`data-id="${id}"`,true)}<strong>${esc(c.title)}｜${esc(l.title)}</strong><span id="nspPlayerProgress"></span>${button('✕','detail',`data-id="${id}" aria-label="關閉學習區"`,true)}</div><div class="nsp-video-wrap" id="nspVideo"></div><div id="nspCompletionNotice" class="nsp-completion-notice" role="status" hidden></div><div class="nsp-player-footer"><span id="nspSaveStatus" role="status">${previewCourse?'預覽模式，不記錄正式學習進度；播完自動播放下一支。':'觀看進度每 10 秒自動儲存，觀看達影片 100% 後計為完成；播完自動播放下一支。'}</span>${button('返回課程','detail',`data-id="${id}"`,true)}</div></section></div>`;
+    root().innerHTML=`<div class="nsp-learning"><aside class="nsp-outline"><h3>課程內容［學習區］</h3>${c.sections.map(s=>`<details open><summary>${esc(s.title)}</summary>${s.lessons.map(item=>`<button type="button" data-nsp="play" data-id="${id}" data-lesson="${item.id}" ${item.id===lessonId?'aria-current="true"':''}><span data-nsp-marker="${item.id}">${c.progress.find(p=>p.lesson_id===item.id)?.completed?'V':'○'}</span><span>${esc(item.title)}</span><time>${minutes(item.duration)}</time></button>`).join('')}</details>`).join('')}</aside><section class="nsp-screen"><div class="nsp-player-header">${button('←','detail',`data-id="${id}"`,true)}<strong>${esc(c.title)}｜${esc(l.title)}</strong><span id="nspPlayerProgress"></span>${button('✕','detail',`data-id="${id}" aria-label="關閉學習區"`,true)}</div><div class="nsp-video-wrap" id="nspVideo"></div><div id="nspCompletionNotice" class="nsp-completion-notice" role="status" hidden></div><div class="nsp-player-footer"><span id="nspSaveStatus" role="status">${previewCourse?'預覽模式，不記錄正式學習進度；播完自動播放下一支。':'觀看進度每 10 秒自動儲存，觀看達影片 100% 後計為完成；播完自動播放下一支。'}</span>${button('返回課程','detail',`data-id="${id}"`,true)}</div></section></div>`;
     const p={c,l,preview:!!previewCourse,token:state.token,pending:0,sending:false,clock:Date.now(),lastSave:Date.now()}; player=p; updateProgress(c);
     if(!p.preview && !autoplay && !alreadyLearning && c.makeup_completed && c.makeup_completed_at && c.total>0 && c.completed===c.total) {
       window.alert(completionMessage(c));

@@ -408,7 +408,7 @@ test('the final playback fraction is saved even after the ended state stops play
   const tickSource=source.slice(source.indexOf('  function tick('),source.indexOf('  function stop('));
   const context=vm.createContext({Date:{now:()=>100000},flush(){assert.fail('not ten seconds yet');}});
   runInContext(tickSource,context);
-  const p={pending:0,clock:99320,lastSave:100000,l:{duration:7},mediaDuration:()=>6.8,playing:()=>false,rate:()=>1};
+  const p={pending:0,clock:99320,lastSave:100000,l:{duration:7},position:()=>6.8,mediaDuration:()=>6.8,playing:()=>false,rate:()=>1};
   context.tick(p,true);assert.ok(Math.abs(p.pending-0.7)<1e-9);
 });
 
