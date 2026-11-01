@@ -76,7 +76,7 @@
 #nspMakeupStatus { padding:0 16px; }
 #nspMakeupFrame { width:100%; flex:1; min-height:0; border:0; border-radius:0 0 22px 22px; }
 
-.nsp-completion-notice { padding: 16px 18px 0; }
+.nsp-completion-notice { padding: 16px 18px 0; white-space:pre-line; }
 
 .nsp-custom-youtube { overflow:hidden; }
 .nsp-custom-youtube iframe { pointer-events:none; }

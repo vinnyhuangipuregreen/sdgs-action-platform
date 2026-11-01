@@ -4,10 +4,12 @@ const vm=require('node:vm');
 const {test}=require('node:test');
 function runInContext(code,context){
   context.playerElement ??= id=>context.document?.getElementById?.(id);
+  vm.runInContext(completionSource,context);
   return vm.runInContext(code,context);
 }
 
 const source=fs.readFileSync(require('node:path').join(__dirname,'../app/static/js/nsp.js'),'utf8');
+const completionSource=source.slice(source.indexOf('  function completionMessage('),source.indexOf('  function updateProgress('));
 const durationSource=source.slice(source.indexOf('  async function duration('),source.indexOf('  async function saveEditor('));
 const flushSource=source.slice(source.indexOf('  async function flush('),source.indexOf('  function tick('));
 
@@ -363,10 +365,11 @@ test('returning makeup students see their completion timestamp and the 100 perce
     document:{addEventListener(n,f){listeners[n]=f;},querySelector(){return null;},getElementById(id){return elements[id]??={querySelector(selector){return elements[selector.slice(1)]??={textContent:'',appendChild(){}};},innerHTML:'',value:'',checked:false,addEventListener(){},appendChild(){}};},createElement(){return {addEventListener(){},pause(){}};}},fetch:async()=>({ok:true,json:async()=>[c]})});
   runInContext(source,context);await context.window.NSP.load();
   await listeners.click({target:{closest:()=>({dataset:{nsp:'play',id:'1',lesson:'a'}})}});
-  assert.match(elements.nspApp.innerHTML,/黃雅筠 學員 您好！您已於 2026\/10\/25 19:12:59 完成學習。/);
+  assert.equal(elements.nspCompletionNotice.textContent,'黃雅筠 學員 您好！您已於 2026/10/25 19:12:59 完成學習。\n\n已經同步了您的補課紀錄，請至[課程登錄]頁面確認，謝謝。');
+  assert.equal(elements.nspCompletionNotice.hidden,false);
   assert.match(elements.nspApp.innerHTML,/每 10 秒自動儲存，觀看達影片 100% 後計為完成；播完自動播放下一支/);
   assert.doesNotMatch(elements.nspApp.innerHTML,/90%/);
-  assert.deepEqual(alerts,['黃雅筠 學員 您好！歡迎您再次學習，您第一次已於 2026/10/25 19:12:59 完成學習，系統會記錄第一次的學習紀錄。']);
+  assert.deepEqual(alerts,['黃雅筠 學員 您好！您已於 2026/10/25 19:12:59 完成學習。\n\n已經同步了您的補課紀錄，請至[課程登錄]頁面確認，謝謝。']);
   await listeners.click({target:{closest:()=>({dataset:{nsp:'play',id:'1',lesson:'a'}})}});
   assert.equal(alerts.length,1);
   await listeners.click({target:{closest:()=>({dataset:{nsp:'detail',id:'1'}})}});
@@ -391,9 +394,34 @@ test('first completion alerts only after successful makeup sync and preserves it
     const context=vm.createContext({player:p,state:{token:'test',user:{name:'學員甲'}},window:{alert:message=>alerts.push(message)},api:async()=>saved,updateProgress(){},document:{getElementById:()=>({})}});
     runInContext(flushSource,context);
     await context.flush(p);await context.flush(p);
-    assert.deepEqual(alerts,synced?['學員甲 學員 您好！恭喜您已於 2026/10/26 19:12:59 完成學習，歡迎您再次學習！']:[]);
+    assert.deepEqual(alerts,synced?['學員甲 學員 您好！您已於 2026/10/26 19:12:59 完成學習。\n\n已經同步了您的補課紀錄，請至[課程登錄]頁面確認，謝謝。']:[]);
     if(synced){assert.equal(c.makeup_completed_at,'2026-10-26 19:12:59');assert.equal(c.makeup_completed,true);}
   }
+});
+
+test('learning area shows the complete message immediately after sync, but not for partial progress, failed sync or preview',async()=>{
+  const elements={nspCompletionNotice:{hidden:true,textContent:''},nspPlayerProgress:{},nspSaveStatus:{}},alerts=[];
+  const c={id:1,total:2,learners:1,sections:[{lessons:[{id:'a'},{id:'b'}]}],progress:[{lesson_id:'a',completed:1}]};
+  const p={c,l:{id:'b'},token:'test',pending:7,position:()=>7};
+  let saved={completed:1,makeup_synced:false};
+  const context=vm.createContext({player:p,previewCourse:null,state:{token:'test',user:{name:'學員甲'}},window:{alert:message=>alerts.push(message)},
+    playerElement:id=>elements[id],root:()=>({querySelector:()=>null}),lessons:c=>c.sections.flatMap(s=>s.lessons),api:async()=>saved});
+  runInContext(source.slice(source.indexOf('  function updateProgress('),source.indexOf('  async function flush('))+flushSource,context);
+  context.updateProgress(c);
+  assert.equal(c.completed,1);assert.equal(elements.nspCompletionNotice.hidden,true);
+  await context.flush(p);
+  assert.equal(c.completed,2);assert.equal(elements.nspCompletionNotice.hidden,true);assert.equal(alerts.length,0);
+  saved={completed:1,makeup_synced:true,makeup_completed_at:'2026-10-26 19:12:59'};
+  await context.flush(p);
+  const message='學員甲 學員 您好！您已於 2026/10/26 19:12:59 完成學習。\n\n已經同步了您的補課紀錄，請至[課程登錄]頁面確認，謝謝。';
+  assert.equal(elements.nspCompletionNotice.hidden,false);assert.equal(elements.nspCompletionNotice.textContent,message);
+  assert.deepEqual(alerts,[message]);
+  saved.makeup_completed_at='2026-10-27 20:00:00';await context.flush(p);
+  assert.equal(elements.nspCompletionNotice.textContent,message);assert.equal(alerts.length,1);
+  context.previewCourse={};context.updateProgress(c);
+  assert.equal(elements.nspCompletionNotice.hidden,true);assert.equal(elements.nspCompletionNotice.textContent,'');
+  const css=fs.readFileSync(require('node:path').join(__dirname,'../app/static/css/nsp.css'),'utf8');
+  assert.match(css,/\.nsp-completion-notice\s*\{[^}]*white-space:pre-line/);
 });
 
 

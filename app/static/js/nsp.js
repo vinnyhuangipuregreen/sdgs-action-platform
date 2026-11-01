@@ -105,10 +105,15 @@ window.NSP = (() => {
   function youtubeId(url) {
     try { const u=new URL(url); if(['youtube.com','www.youtube.com','m.youtube.com','www.youtube-nocookie.com'].includes(u.hostname)) return u.searchParams.get('v') || u.pathname.match(/\/(?:embed|shorts)\/([\w-]{11})/)?.[1]; if(u.hostname==='youtu.be') return u.pathname.slice(1).split('/')[0]; } catch {} return null;
   }
+  function completionMessage(c) {
+    return `${state.user?.name} 學員 您好！您已於 ${c.makeup_completed_at.replaceAll('-','/').replace('T',' ').slice(0,19)} 完成學習。\n\n已經同步了您的補課紀錄，請至[課程登錄]頁面確認，謝謝。`;
+  }
   function updateProgress(c) {
     c.completed=c.makeup_completed?c.total:c.progress.filter(p=>p.completed && lessons(c).some(l=>l.id===p.lesson_id)).length;
     c.percent=c.total?Math.round(c.completed/c.total*100):0;
     const label=playerElement('nspPlayerProgress'); if(label)label.textContent=previewCourse?'課程預覽':`你的進度：${c.completed}/${c.total}（${c.percent}%）`;
+    const notice=playerElement('nspCompletionNotice');
+    if(notice){notice.hidden=!!previewCourse || !c.makeup_completed || !c.makeup_completed_at;notice.textContent=notice.hidden?'':completionMessage(c);}
     for(const l of lessons(c)) { const mark=root().querySelector(`[data-nsp-marker="${l.id}"]`); if(mark)mark.textContent=(c.makeup_completed || c.progress.find(p=>p.lesson_id===l.id)?.completed)?'✓':'○'; }
   }
   async function flush(p=player) {
@@ -121,7 +126,7 @@ window.NSP = (() => {
       if(progress)Object.assign(progress,saved,{position});else { if(!p.c.progress.length)p.c.learners++; p.c.progress.push({lesson_id:p.l.id,...saved,position}); }
       if(saved.makeup_synced && saved.makeup_completed_at && !p.c.makeup_completed && player===p) {
         p.c.makeup_completed=true; p.c.makeup_completed_at=saved.makeup_completed_at;
-        window.alert(`${state.user?.name} 學員 您好！恭喜您已於 ${saved.makeup_completed_at.replaceAll('-','/').replace('T',' ').slice(0,19)} 完成學習，歡迎您再次學習！`);
+        window.alert(completionMessage(p.c));
       }
       if(player===p) { updateProgress(p.c); playerElement('nspSaveStatus').textContent=p.c.makeup_synced===true?'已完成學習，已同步課程登錄的已補課紀錄。':p.c.makeup_synced===false?'學習進度已儲存；補課同步未完成，請重新開啟課程清單重試。':'進度已儲存'; }
       return true;
@@ -218,10 +223,10 @@ window.NSP = (() => {
     await stop(); const c=course(id),l=lessons(c).find(l=>l.id===lessonId); if(!l)return;
     if(previewCourse)document.getElementById('nspPreviewDialog').scrollTop=0;else window.scrollTo(0,0);
     const saved=autoplay?null:c.progress.find(p=>p.lesson_id===lessonId);
-    root().innerHTML=`<div class="nsp-learning"><aside class="nsp-outline"><h3>課程內容［學習區］</h3>${c.sections.map(s=>`<details open><summary>${esc(s.title)}</summary>${s.lessons.map(item=>`<button type="button" data-nsp="play" data-id="${id}" data-lesson="${item.id}" ${item.id===lessonId?'aria-current="true"':''}><span data-nsp-marker="${item.id}">${(c.makeup_completed || c.progress.find(p=>p.lesson_id===item.id)?.completed)?'✓':'○'}</span><span>${esc(item.title)}</span><time>${minutes(item.duration)}</time></button>`).join('')}</details>`).join('')}</aside><section class="nsp-screen"><div class="nsp-player-header">${button('←','detail',`data-id="${id}"`,true)}<strong>${esc(c.title)}｜${esc(l.title)}</strong><span id="nspPlayerProgress"></span>${button('✕','detail',`data-id="${id}" aria-label="關閉學習區"`,true)}</div><div class="nsp-video-wrap" id="nspVideo"></div>${!previewCourse && c.makeup_completed && c.makeup_completed_at?`<div class="nsp-completion-notice"><p>${esc(state.user?.name)} 學員 您好！您已於 ${esc(c.makeup_completed_at.replaceAll('-','/').replace('T',' ').slice(0,19))} 完成學習。</p></div>`:''}<div class="nsp-player-footer"><span id="nspSaveStatus" role="status">${previewCourse?'預覽模式，不記錄正式學習進度；播完自動播放下一支。':'觀看進度每 10 秒自動儲存，觀看達影片 100% 後計為完成；播完自動播放下一支。'}</span>${button('返回課程','detail',`data-id="${id}"`,true)}</div></section></div>`;
+    root().innerHTML=`<div class="nsp-learning"><aside class="nsp-outline"><h3>課程內容［學習區］</h3>${c.sections.map(s=>`<details open><summary>${esc(s.title)}</summary>${s.lessons.map(item=>`<button type="button" data-nsp="play" data-id="${id}" data-lesson="${item.id}" ${item.id===lessonId?'aria-current="true"':''}><span data-nsp-marker="${item.id}">${(c.makeup_completed || c.progress.find(p=>p.lesson_id===item.id)?.completed)?'✓':'○'}</span><span>${esc(item.title)}</span><time>${minutes(item.duration)}</time></button>`).join('')}</details>`).join('')}</aside><section class="nsp-screen"><div class="nsp-player-header">${button('←','detail',`data-id="${id}"`,true)}<strong>${esc(c.title)}｜${esc(l.title)}</strong><span id="nspPlayerProgress"></span>${button('✕','detail',`data-id="${id}" aria-label="關閉學習區"`,true)}</div><div class="nsp-video-wrap" id="nspVideo"></div><div id="nspCompletionNotice" class="nsp-completion-notice" role="status" hidden></div><div class="nsp-player-footer"><span id="nspSaveStatus" role="status">${previewCourse?'預覽模式，不記錄正式學習進度；播完自動播放下一支。':'觀看進度每 10 秒自動儲存，觀看達影片 100% 後計為完成；播完自動播放下一支。'}</span>${button('返回課程','detail',`data-id="${id}"`,true)}</div></section></div>`;
     const p={c,l,preview:!!previewCourse,token:state.token,pending:0,sending:false,clock:Date.now(),lastSave:Date.now()}; player=p; updateProgress(c);
     if(!p.preview && !autoplay && !alreadyLearning && c.makeup_completed && c.makeup_completed_at) {
-      window.alert(`${state.user?.name} 學員 您好！歡迎您再次學習，您第一次已於 ${c.makeup_completed_at.replaceAll('-','/').replace('T',' ').slice(0,19)} 完成學習，系統會記錄第一次的學習紀錄。`);
+      window.alert(completionMessage(c));
     }
     const videoId=youtubeId(l.url);
     if(videoId){
