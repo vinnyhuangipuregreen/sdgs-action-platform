@@ -240,7 +240,7 @@ const finishSource=source.slice(source.indexOf('  async function finish('),sourc
 function endingContext(preview=false){
   const first={id:'a'},second={id:'b'},c={id:7,sections:[{lessons:[first]},{lessons:[second]}],progress:[]};
   const p={c,l:first,preview,token:'test'},status={textContent:''},calls=[];
-  const context=vm.createContext({player:p,state:{token:'test'},lessons:c=>c.sections.flatMap(s=>s.lessons),flush:async()=>{calls.push('saved');return true;},play:async(...args)=>calls.push(args),updateProgress(){calls.push('marked');},clearInterval(){},document:{getElementById:()=>status}});
+  const context=vm.createContext({player:p,state:{token:'test'},lessons:c=>c.sections.flatMap(s=>s.lessons),flush:async()=>{calls.push('saved');c.progress.push({lesson_id:p.l.id,completed:1});return true;},play:async(...args)=>calls.push(args),updateProgress(){calls.push('marked');},clearInterval(){},document:{getElementById:()=>status}});
   runInContext(finishSource,context);
   return {context,p,c,calls,status};
 }
@@ -272,11 +272,37 @@ test('last lesson saves and stops with a finished message instead of leaving the
   }
 });
 
+test('an ended event after skipping uncredited parts does not advance or report completion',async()=>{
+  const {context,p,calls,status}=endingContext();
+  context.flush=async()=>true;
+  await context.finish(p);
+  assert.equal(calls.some(Array.isArray),false);
+  assert.equal(p.ending,false);
+  assert.match(status.textContent,/尚未完整觀看/);
+});
+
+test('progress normalizes real media length and only a real ended event carries completion intent',async()=>{
+  const bodies=[],c={id:1,progress:[],learners:0},p={c,l:{id:'a',duration:7},token:'test',pending:6.9,position:()=>6.881,mediaDuration:()=>6.881};
+  const context=vm.createContext({player:p,state:{token:'test'},api:async(path,method,body)=>{bodies.push(body);return {completed:0};},updateProgress(){},document:{getElementById:()=>({})}});
+  runInContext(flushSource,context);
+  await context.flush(p);p.ending=true;await context.flush(p);
+  assert.equal(bodies[0].position,7);assert.equal(bodies[0].ended,false);
+  assert.equal(bodies[1].ended,true);
+});
+
+test('an attendance completion flag cannot synthesize video progress or a success notice',()=>{
+  const notice={},c={id:1,total:2,makeup_completed:true,makeup_completed_at:'2026-10-31 07:03:13',sections:[{lessons:[{id:'a'},{id:'b'}]}],progress:[]};
+  const context=vm.createContext({previewCourse:null,state:{user:{name:'學員甲'}},lessons:c=>c.sections.flatMap(s=>s.lessons),playerElement:id=>id==='nspCompletionNotice'?notice:{},root:()=>({querySelector:()=>null})});
+  runInContext(source.slice(source.indexOf('  function updateProgress('),source.indexOf('  async function flush(')),context);
+  context.updateProgress(c);
+  assert.equal(c.completed,0);assert.equal(c.percent,0);assert.equal(notice.hidden,true);assert.equal(notice.textContent,'');
+});
+
 test('course completion reports makeup sync success or a retry without losing completion',async()=>{
   for(const synced of [true,false]){
     const {context,p,c,status}=endingContext();p.l=c.sections[1].lessons[0];c.makeup_synced=synced;
     await context.finish(p);
-    assert.match(status.textContent,synced?/已同步課程登錄的已補課紀錄/:/學習進度已儲存.*重新開啟課程清單重試/);
+    assert.match(status.textContent,synced?/已同步課程登錄的已補課紀錄/:/學習進度已儲存.*重新播放最後一部影片至結束後重試/);
   }
 });
 
@@ -344,7 +370,7 @@ test('makeup count replaces started-learner totals consistently in cards and adm
 
 test('course cards and detail show date icons and completed makeup lessons',async()=>{
   const elements={},listeners={};
-  const c={id:1,title:'測試課程',category:'分類',instructors:['講師'],course_date:'2026-10-20',makeup_count:12,makeup_completed:true,sections:[{title:'第一章',lessons:[{id:'a',title:'第一支',duration:7},{id:'b',title:'第二支',duration:7}]}],materials:[],progress:[],total:2,completed:2,percent:100,cover_url:'',info_html:'介紹',material_categories:{}};
+  const c={id:1,title:'測試課程',category:'分類',instructors:['講師'],course_date:'2026-10-20',makeup_count:12,makeup_completed:true,sections:[{title:'第一章',lessons:[{id:'a',title:'第一支',duration:7},{id:'b',title:'第二支',duration:7}]}],materials:[],progress:[{lesson_id:'a',completed:1,watched:7},{lesson_id:'b',completed:1,watched:7}],total:2,completed:2,percent:100,cover_url:'',info_html:'介紹',material_categories:{}};
   const context=vm.createContext({window:{addEventListener(){},scrollTo(){}},state:{token:'test',activeTab:'nsp'},
     document:{addEventListener(n,f){listeners[n]=f;},getElementById(id){return elements[id]??={innerHTML:'',value:'',checked:false,addEventListener(){}};}},fetch:async()=>({ok:true,json:async()=>[c]})});
   runInContext(source,context);await context.window.NSP.load();
@@ -360,7 +386,7 @@ test('course cards and detail show date icons and completed makeup lessons',asyn
 
 test('returning makeup students see their completion timestamp and the 100 percent rule',async()=>{
   const elements={},listeners={},alerts=[];
-  const c={id:1,title:'測試',category:'分類',instructors:[],sections:[{title:'章節',lessons:[{id:'a',title:'影片',url:'https://example.invalid/a.mp4',duration:7}]}],materials:[],progress:[],total:1,completed:1,percent:100,makeup_completed:true,makeup_completed_at:'2026-10-25 19:12:59'};
+  const c={id:1,title:'測試',category:'分類',instructors:[],sections:[{title:'章節',lessons:[{id:'a',title:'影片',url:'https://example.invalid/a.mp4',duration:7}]}],materials:[],progress:[{lesson_id:'a',completed:1,watched:7,position:7}],total:1,completed:1,percent:100,makeup_completed:true,makeup_completed_at:'2026-10-25 19:12:59'};
   const context=vm.createContext({URL,window:{addEventListener(){},scrollTo(){},alert(message){alerts.push(message);}},state:{token:'test',activeTab:'nsp',user:{name:'黃雅筠'}},setInterval(){},clearInterval(){},
     document:{addEventListener(n,f){listeners[n]=f;},querySelector(){return null;},getElementById(id){return elements[id]??={querySelector(selector){return elements[selector.slice(1)]??={textContent:'',appendChild(){}};},innerHTML:'',value:'',checked:false,addEventListener(){},appendChild(){}};},createElement(){return {addEventListener(){},pause(){}};}},fetch:async()=>({ok:true,json:async()=>[c]})});
   runInContext(source,context);await context.window.NSP.load();
@@ -431,7 +457,7 @@ test('public and preview attach custom controls and keep YouTube links outside p
   for(const preview of [false,true]){
     const children=[],p={preview,l:{title:'課程影片'}};let events,updates=0;
     const host={appendChild:child=>children.push(child)};
-    const context=vm.createContext({p,l:p.l,player:p,videoId:'M7lc1UVf-VE',saved:null,autoplay:false,
+    const context=vm.createContext({p,l:p.l,player:p,videoId:'M7lc1UVf-VE',saved:null,resume:0,autoplay:false,
       youtubeFrame:()=>({tag:'iframe'}),youtubeControls:(target,mount)=>{assert.equal(target,p);assert.equal(mount,host);return ()=>updates++;},
       youtube:async()=>({Player:function(frame,options){events=options.events;}}),finish(){},flush(){},document:{getElementById:()=>host}});
     await runInContext('(async()=>{'+block+'})()',context);

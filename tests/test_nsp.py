@@ -44,12 +44,12 @@ class NspTests(unittest.TestCase):
         self.assertNotIn('<script',public['info_html'])
         self.assertNotIn('javascript:',public['info_html'])
         self.assertEqual(public['percent'],0)
-        for _ in range(3):
-            result=self.request('PUT',f'/courses/{course_id}/progress/lesson_1',{'position':95,'watched_delta':30},headers=self.student)
+        for position in (30,60,90):
+            result=self.request('PUT',f'/courses/{course_id}/progress/lesson_1',{'position':position,'watched_delta':30},headers=self.student)
         self.assertEqual(result['completed'],0)
         result=self.request('PUT',f'/courses/{course_id}/progress/lesson_1',{'position':99,'watched_delta':9},headers=self.student)
         self.assertEqual(result['completed'],0)
-        result=self.request('PUT',f'/courses/{course_id}/progress/lesson_1',{'position':100,'watched_delta':1},headers=self.student)
+        result=self.request('PUT',f'/courses/{course_id}/progress/lesson_1',{'position':100,'watched_delta':1,'ended':True},headers=self.student)
         self.assertEqual(result['completed'],1)
         public=self.request('GET','/courses',headers=self.student)[0]
         self.assertEqual(public['percent'],100)
@@ -307,7 +307,40 @@ class NspTests(unittest.TestCase):
         with patch('app.nsp.requests.get', side_effect=requests.RequestException):
             self.assertIsNone(self.request('GET','/courses',headers=self.student)[0]['makeup_count'])
 
-    def test_makeup_records_complete_display_only_and_courses_sort_by_date(self):
+    def test_repeated_segments_and_seeking_cannot_complete_or_sync_a_lesson(self):
+        req = self.prepare()
+        cid = self.request('POST', '/admin/courses', req)['id']
+        path = f'/courses/{cid}/progress/lesson_1'
+        for _ in range(6):
+            saved = self.request('PUT', path, {'position':20, 'watched_delta':20}, headers=self.student)
+        self.assertEqual(saved['watched'], 20)
+        self.assertEqual(saved['completed'], 0)
+        saved = self.request('PUT', path, {'position':100, 'watched_delta':1, 'ended':True}, headers=self.student)
+        self.assertEqual(saved['watched'], 20)
+        self.assertEqual(saved['completed'], 0)
+        self.sync_mock.assert_not_called()
+        for position in (40, 60, 80, 100):
+            saved = self.request('PUT', path, {'position':position, 'watched_delta':20}, headers=self.student)
+        self.assertEqual(saved['watched'], 100)
+        self.assertEqual(saved['completed'], 0)  # Pausing at the end is not an ended event.
+        self.sync_mock.assert_not_called()
+        saved = self.request('PUT', path, {'position':100, 'ended':True}, headers=self.student)
+        self.assertEqual(saved['completed'], 1)
+        self.assertTrue(saved['makeup_synced'])
+
+    def test_opening_a_completed_course_never_writes_makeup_and_invalid_flags_do_not_complete_it(self):
+        req = self.prepare()
+        cid = self.request('POST', '/admin/courses', req)['id']
+        with database.get_db(unscoped=True) as conn:
+            conn.execute("INSERT INTO nsp_progress VALUES (1,'student',1,?,'lesson_1',0,0,1,'2026-11-01T10:00:00+08:00')", (cid,))
+        self.assertFalse(self.request('GET', f'/courses/{cid}/completion', headers=self.student)['completed'])
+        self.assertEqual(self.request('GET', '/courses', headers=self.student)[0]['completed'], 0)
+        with database.get_db(unscoped=True) as conn:
+            conn.execute('UPDATE nsp_progress SET watched=100,position=100')
+        self.assertEqual(self.request('GET', '/courses', headers=self.student)[0]['completed'], 1)
+        self.sync_mock.assert_not_called()
+
+    def test_makeup_records_do_not_complete_unwatched_courses_and_courses_sort_by_date(self):
         req=self.prepare()
         first=self.request('POST','/admin/courses',req)['id']
         second=self.request('POST','/admin/courses',{**req,'title':'較早課程'})['id']
@@ -318,9 +351,10 @@ class NspTests(unittest.TestCase):
             rows=self.request('GET','/courses',headers=self.student)
         self.assertEqual([r['id'] for r in rows],[first,second])
         self.assertEqual(rows[0]['course_date'],'2026/10/20')
-        self.assertEqual(rows[0]['makeup_completed_at'],'2026-10-25 19:12:59')
-        self.assertEqual((rows[0]['percent'],rows[0]['completed']),(100,1))
-        self.assertTrue(all(p['completed'] for p in rows[0]['progress']))
+        self.assertEqual(rows[0]['makeup_completed_at'],'')
+        self.assertFalse(rows[0]['makeup_completed'])
+        self.assertEqual((rows[0]['percent'],rows[0]['completed']),(0,0))
+        self.assertEqual(rows[0]['progress'],[])
         self.assertEqual(rows[1]['percent'],0)
         self.sync_mock.assert_not_called()
         with database.get_db(unscoped=True) as conn:
@@ -334,12 +368,12 @@ class NspTests(unittest.TestCase):
         path = f'/courses/{cid}/completion'
         self.assertFalse(self.request('GET',path,headers=self.student)['completed'])
         self.request('GET',path,status=403)
-        self.request('PUT',f'/courses/{cid}/progress/lesson_2',{'position':10,'watched_delta':10},headers=self.student)
+        self.request('PUT',f'/courses/{cid}/progress/lesson_2',{'position':10,'watched_delta':10,'ended':True},headers=self.student)
         self.sync_mock.assert_not_called()
-        for _ in range(3):
-            result = self.request('PUT',f'/courses/{cid}/progress/lesson_1',{'position':100,'watched_delta':30},headers=self.student)
+        for position in (30,60,90):
+            result = self.request('PUT',f'/courses/{cid}/progress/lesson_1',{'position':position,'watched_delta':30},headers=self.student)
         self.assertNotIn('makeup_synced',result)
-        result=self.request('PUT',f'/courses/{cid}/progress/lesson_1',{'position':100,'watched_delta':10},headers=self.student)
+        result=self.request('PUT',f'/courses/{cid}/progress/lesson_1',{'position':100,'watched_delta':10,'ended':True},headers=self.student)
         self.assertTrue(result['makeup_synced'])
         self.assertEqual(result['makeup_completed_at'],'2026-10-26 19:12:59')
         verified = self.request('GET',path,headers=self.student)
@@ -355,8 +389,11 @@ class NspTests(unittest.TestCase):
         self.sync_mock.assert_not_called()
         import requests
         self.sync_mock.side_effect = requests.RequestException('offline')
-        saved = self.request('PUT',f'/courses/{cid}/progress/lesson_2',{'position':10},headers=self.student)
+        saved = self.request('PUT',f'/courses/{cid}/progress/lesson_2',{'position':10,'ended':True},headers=self.student)
         self.assertEqual(saved['completed'],1)
         self.assertFalse(saved['makeup_synced'])
         self.sync_mock.side_effect = None
-        self.assertTrue(self.request('GET','/courses',headers=self.student)[0]['makeup_synced'])
+        self.sync_mock.reset_mock()
+        self.assertFalse(self.request('GET','/courses',headers=self.student)[0]['makeup_synced'])
+        self.sync_mock.assert_not_called()
+        self.assertTrue(self.request('PUT',f'/courses/{cid}/progress/lesson_2',{'position':10,'ended':True},headers=self.student)['makeup_synced'])

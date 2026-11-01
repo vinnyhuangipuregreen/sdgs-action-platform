@@ -210,6 +210,7 @@ class CourseWrite(BaseModel):
 class ProgressWrite(BaseModel):
     position: float = Field(ge=0, le=86400)
     watched_delta: float = Field(default=0, ge=0, le=30)
+    ended: bool = False
 
 
 def identity(user):
@@ -258,10 +259,16 @@ def add_makeup_counts(rows, request):
     return rows
 
 
+def completed_lesson_ids(course, records):
+    durations = {l["id"]: l["duration"] for s in course["sections"] for l in s["lessons"]}
+    return {r["lesson_id"] for r in records if r["completed"] and
+            durations.get(r["lesson_id"], 0) > 0 and r["watched"] >= durations[r["lesson_id"]]}
+
+
 def completion_record(conn, course, user):
     ids = {l["id"] for s in course["sections"] for l in s["lessons"]}
-    records = conn.cursor().execute("SELECT lesson_id,completed,updated_at FROM nsp_progress WHERE year_id=? AND account_type=? AND user_id=? AND course_id=?", (*identity(user), course["id"])).fetchall()
-    done = {r["lesson_id"] for r in records if r["completed"]}
+    records = conn.cursor().execute("SELECT lesson_id,watched,completed,updated_at FROM nsp_progress WHERE year_id=? AND account_type=? AND user_id=? AND course_id=?", (*identity(user), course["id"])).fetchall()
+    done = completed_lesson_ids(course, records)
     complete = bool(ids) and ids <= done
     return {"id": course["id"], "title": course["title"], "completed": complete,
             "completed_at": max((r["updated_at"] for r in records if r["lesson_id"] in ids), default="") if complete else ""}
@@ -425,7 +432,10 @@ def install_nsp(app, require_user, require_admin):
                 course = course_data(row)
                 progress = [r for r in records if r["course_id"] == course["id"]]
                 lesson_ids = {l["id"] for s in course["sections"] for l in s["lessons"]}
-                done = sum(p["completed"] for p in progress if p["lesson_id"] in lesson_ids)
+                verified = completed_lesson_ids(course, progress)
+                for saved in progress:
+                    saved["completed"] = int(saved["lesson_id"] in verified)
+                done = len(verified)
                 course.update(category=terms.get(course["category_id"], ""), instructors=[teachers[i] for i in course["instructor_ids"] if i in teachers], progress=progress, total=len(lesson_ids), completed=done, percent=round(done / len(lesson_ids) * 100) if lesson_ids else 0)
                 course["learners"] = learners.get(course["id"], 0)
                 course["bookmarked"] = course["id"] in bookmarks
@@ -434,19 +444,12 @@ def install_nsp(app, require_user, require_admin):
         result = add_makeup_counts(result, request)
         if get_account_type(user) == "student":
             for course in result:
-                if course["makeup_completed"]:
-                    course["completed"] = course["total"]
-                    course["percent"] = 100
-                    for section in course["sections"]:
-                        for lesson in section["lessons"]:
-                            saved = next((p for p in course["progress"] if p["lesson_id"] == lesson["id"]), None)
-                            if saved:
-                                saved["completed"] = 1
-                            else:
-                                course["progress"].append({"lesson_id": lesson["id"], "completed": 1})
-                elif course["total"] and course["completed"] == course["total"]:
-                    course.update(sync_makeup(request, course["id"]))
-                    course["makeup_completed"] = course["makeup_synced"]
+                all_done = bool(course["total"] and course["completed"] == course["total"])
+                course["makeup_completed"] = bool(all_done and course["makeup_completed"])
+                if not course["makeup_completed"]:
+                    course["makeup_completed_at"] = ""
+                if all_done:
+                    course["makeup_synced"] = course["makeup_completed"]
         return sorted(result, key=lambda c: ("-".join(p.zfill(2) for p in c["course_date"].replace("/", "-").split("-")), c["id"]), reverse=True)
 
     @app.get("/api/nsp/courses/{course_id}/completion")
@@ -466,10 +469,17 @@ def install_nsp(app, require_user, require_admin):
             key = (*identity(user), course_id, lesson_id)
             duration = lesson["duration"]
             delta = min(duration, req.watched_delta)
-            conn.cursor().execute("INSERT INTO nsp_progress VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(year_id,account_type,user_id,course_id,lesson_id) DO UPDATE SET position=excluded.position,watched=MIN(?,nsp_progress.watched+excluded.watched),completed=MAX(nsp_progress.completed,CASE WHEN ?>0 AND ROUND(nsp_progress.watched+excluded.watched,6)>=? THEN 1 ELSE 0 END),updated_at=excluded.updated_at", (*key, min(req.position, duration), delta, int(duration > 0 and round(delta,6) >= duration), now(), duration, duration, duration))
+            previous = conn.cursor().execute("SELECT watched FROM nsp_progress WHERE year_id=? AND account_type=? AND user_id=? AND course_id=? AND lesson_id=?", key).fetchone()
+            watched = previous[0] if previous else 0
+            position = min(req.position, duration)
+            # Credit the contiguous watched prefix, never repeat time or a seek over a gap.
+            if position <= watched + delta + 0.05:
+                watched = max(watched, position)
+            completed = int(req.ended and duration > 0 and watched >= duration and position >= duration)
+            conn.cursor().execute("INSERT INTO nsp_progress VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(year_id,account_type,user_id,course_id,lesson_id) DO UPDATE SET position=excluded.position,watched=MAX(nsp_progress.watched,excluded.watched),completed=MAX(nsp_progress.completed,excluded.completed),updated_at=excluded.updated_at", (*key, position, watched, completed, now()))
             saved = conn.cursor().execute("SELECT watched,completed FROM nsp_progress WHERE year_id=? AND account_type=? AND user_id=? AND course_id=? AND lesson_id=?", key).fetchone()
             watched, completed = saved[0], saved[1]
-            all_done = get_account_type(user) == "student" and completion_record(conn, course, user)["completed"]
+            all_done = req.ended and get_account_type(user) == "student" and completion_record(conn, course, user)["completed"]
         result = {"success": True, "watched": watched, "completed": completed}
         if all_done:
             result.update(sync_makeup(request, course_id))
