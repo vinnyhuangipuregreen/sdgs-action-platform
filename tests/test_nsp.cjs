@@ -510,3 +510,24 @@ test('leaving a player clears both progress and custom control refresh timers',a
   runInContext(source.slice(source.indexOf('  function stop('),source.indexOf('  function youtubeControls(')),context);
   await context.stop(false);assert.deepEqual(cleared,[11,22]);assert.equal(context.player,null);
 });
+
+
+test('old final-frame saves and completed lessons reopen at zero while partial progress resumes',()=>{
+  const code=source.slice(source.indexOf('    const position=saved?'),source.indexOf('    root().innerHTML=',source.indexOf('    const position=saved?')))+';this.resume=resume;';
+  for(const [saved,expected] of [[null,0],[{position:6.881,watched:6.881,completed:0},0],[{position:7,watched:7,completed:1},0],[{position:2,watched:7,completed:1},0],[{position:3,watched:3,completed:0},3],[{position:6,watched:2,completed:0},2]]){
+    const context=vm.createContext({saved,l:{duration:7}});runInContext(code,context);assert.equal(context.resume,expected);
+  }
+});
+
+test('YouTube does not seek an unstarted player for a fresh or restarted lesson',async()=>{
+  const start=source.indexOf('    if(videoId){',source.indexOf('  async function play('));
+  const block=source.slice(start,source.indexOf('    }else{',start))+'    }';
+  for(const resume of [0,3]){
+    let events;const seeks=[],p={l:{title:'影片'},yt:null};
+    const context=vm.createContext({p,l:{duration:7},player:p,videoId:'e8UBVdpAf-E',saved:{position:6.881},resume,autoplay:false,
+      youtubeFrame:()=>({}),youtubeControls:()=>()=>{},playerElement:()=>({appendChild(){}}),
+      youtube:async()=>({Player:function(frame,options){events=options.events;return {getDuration:()=>7,seekTo:value=>seeks.push(value)};}})});
+    await runInContext('(async()=>{'+block+'})()',context);events.onReady();assert.deepEqual(seeks,resume?[3]:[]);
+    context.player=null;events.onReady();assert.equal(seeks.length,resume?1:0);
+  }
+});
