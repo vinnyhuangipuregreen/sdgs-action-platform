@@ -77,6 +77,37 @@ class NspTests(unittest.TestCase):
         finally:
             server.shutdown();server.server_close();thread.join()
 
+    def test_admin_reset_clears_only_matching_student_course_and_year(self):
+        req=self.prepare();cid=self.request('POST','/admin/courses',req)['id']
+        other=self.request('POST','/admin/courses',{**req,'title':'其他課程'})['id']
+        self.request('PUT',f'/courses/{cid}/bookmark',headers=self.student)
+        with database.get_db(unscoped=True) as conn:
+            for year,kind,uid,course in [(1,'student',1,cid),(1,'student',2,cid),(1,'staff',1,cid),(2,'student',1,cid),(1,'student',1,other)]:
+                conn.execute('INSERT INTO nsp_progress VALUES (?,?,?,?,?,?,?,?,?)',(year,kind,uid,course,'lesson_1',100,100,1,'2026-11-01'))
+        body={'course_title':req['title'],'student_id':1,'emails':[],'academic_year_id':1}
+        self.request('POST','/admin/progress/reset',body,headers=self.student,status=403)
+        self.request('POST','/admin/progress/reset',{**body,'academic_year_id':2},status=409)
+        self.assertEqual(self.request('POST','/admin/progress/reset',body)['course_id'],cid)
+        with database.get_db(unscoped=True) as conn:
+            self.assertEqual(conn.execute('SELECT COUNT(*) FROM nsp_progress').fetchone()[0],4)
+        course=next(c for c in self.request('GET','/courses',headers=self.student) if c['id']==cid)
+        self.assertEqual((course['percent'],course['completed'],course['progress']),(0,0,[]))
+        self.assertTrue(course['bookmarked'])
+        self.assertFalse(course['makeup_completed'])
+        self.assertFalse(self.request('GET',f'/courses/{cid}/completion',headers=self.student)['completed'])
+        self.request('POST','/admin/progress/reset',body)
+
+    def test_reset_maps_legacy_email_and_rejects_ambiguous_courses(self):
+        req=self.prepare();cid=self.request('POST','/admin/courses',req)['id']
+        from app.accounts import account_profiles
+        email=account_profiles()[('student',1)]['email']
+        body={'course_title':req['title'],'emails':[email.upper()],'academic_year_id':1}
+        self.assertEqual(self.request('POST','/admin/progress/reset',body)['course_id'],cid)
+        self.request('POST','/admin/progress/reset',{**body,'emails':['missing@example.invalid']},status=409)
+        self.assertIsNone(self.request('POST','/admin/progress/reset',{**body,'course_title':'沒有 NSP 的實體課程'})['course_id'])
+        self.request('POST','/admin/courses',req)
+        self.request('POST','/admin/progress/reset',body,status=409)
+
     def test_authoring_publish_progress_and_account_boundaries(self):
         req=self.prepare()
         course_id=self.request('POST','/admin/courses',req)['id']

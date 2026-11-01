@@ -285,7 +285,39 @@ def sync_makeup(request, course_id):
         return {"makeup_synced": False}
 
 
+class ProgressReset(BaseModel):
+    academic_year_id: int = Field(gt=0)
+    course_title: str = Field(min_length=1)
+    student_id: int | None = Field(default=None, gt=0)
+    emails: list[str] = Field(default_factory=list)
+
+
 def install_nsp(app, require_user, require_admin):
+    @app.post("/api/nsp/admin/progress/reset")
+    def reset_progress(req: ProgressReset, user=Depends(require_admin)):
+        year = current_year_id.get()
+        if req.academic_year_id != year:
+            raise HTTPException(409, "學年度已變更，請重新整理後再操作")
+        with database() as conn:
+            matches = conn.cursor().execute("SELECT id FROM nsp_courses WHERE year_id=? AND title=?", (year, req.course_title)).fetchall()
+            if not matches:
+                return {"success": True, "course_id": None}
+            if len(matches) != 1:
+                raise HTTPException(409, "NSP 同名課程不唯一，無法清除學習紀錄")
+            from app.accounts import account_profiles
+            profiles = account_profiles()
+            if req.student_id is not None:
+                student_ids = [req.student_id] if ("student", req.student_id) in profiles else []
+            else:
+                emails = {e.strip().lower() for e in req.emails if e.strip()}
+                student_ids = [uid for (kind, uid), profile in profiles.items() if kind == "student" and
+                               emails.intersection(str(profile.get(k) or "").strip().lower() for k in ("email", "email_backup"))]
+            if len(student_ids) != 1:
+                raise HTTPException(409, "無法唯一對應 NSP 學員，請確認學員帳號")
+            course_id = matches[0]["id"]
+            conn.cursor().execute("DELETE FROM nsp_progress WHERE year_id=? AND account_type='student' AND user_id=? AND course_id=?", (year, student_ids[0], course_id))
+        return {"success": True, "course_id": course_id}
+
     @app.get("/api/nsp/admin/options")
     def options(user=Depends(require_admin)):
         with database() as conn:
