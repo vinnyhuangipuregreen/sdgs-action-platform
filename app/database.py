@@ -4,6 +4,10 @@ import sqlite3
 import requests
 from contextlib import contextmanager
 from typing import Optional, List, Dict, Any
+from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 # ==============================================================================
 # Turso / LibSQL HTTP Client for Remote Permanent SQLite Cloud Database

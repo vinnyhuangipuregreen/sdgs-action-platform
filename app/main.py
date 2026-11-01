@@ -55,6 +55,25 @@ app.add_middleware(
 )
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+@app.get("/healthz")
+def healthz():
+    try:
+        with get_db(unscoped=True) as connection:
+            connection.cursor().execute("SELECT 1")
+        with get_accounts_db() as connection:
+            connection.cursor().execute("SELECT 1")
+    except Exception as error:
+        raise HTTPException(status_code=503, detail="資料庫連線失敗") from error
+    return {
+        "status": "ok",
+        "environment": os.getenv("ENVIRONMENT", "development"),
+        "database": "turso" if os.getenv("TURSO_DATABASE_URL") else "sqlite",
+        "identity_database": "turso" if os.getenv("ROLE_DATABASE_URL") else "sqlite",
+    }
+
+
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
 
