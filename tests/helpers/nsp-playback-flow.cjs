@@ -22,11 +22,15 @@ vm.runInContext(code,context);
 context.player=playerFor(ordered[0]);
 (async()=>{
   if(input.scenario==='gap'){
-    clock+=500;position=6.881;await context.finish(context.player);
-    assert.equal(course.progress[0].completed,0);assert.equal(transitions.length,0);
-    assert.equal(markers[ordered[0].id].textContent,'○');assert.equal(alerts.length,0);
+    for(const lesson of ordered){
+      clock+=500;position=6.881;await context.finish(context.player);
+      assert.equal(course.progress.find(r=>r.lesson_id===lesson.id).completed,0);
+      assert.equal(markers[lesson.id].textContent,'○');
+    }
+    assert.equal(transitions.length,ordered.length-1);assert.equal(alerts.length,0);
     assert.equal(elements.nspCompletionNotice.hidden,true);
-    process.stdout.write(JSON.stringify({completed:0,autoplayTransitions:0,alerts:0}));return;
+    assert.match(elements.nspSaveStatus.textContent,/尚未完整觀看/);
+    process.stdout.write(JSON.stringify({completed:0,autoplayTransitions:transitions.length,alerts:0}));return;
   }
   for(let i=0;i<ordered.length;i++){
     const p=context.player;

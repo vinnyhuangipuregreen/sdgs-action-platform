@@ -272,13 +272,24 @@ test('last lesson saves and stops with a finished message instead of leaving the
   }
 });
 
-test('an ended event after skipping uncredited parts does not advance or report completion',async()=>{
-  const {context,p,calls,status}=endingContext();
+test('an ended event after seeking advances without marking uncredited content complete',async()=>{
+  const {context,p,c,calls}=endingContext();
   context.flush=async()=>true;
   await context.finish(p);
-  assert.equal(calls.some(Array.isArray),false);
+  assert.deepEqual(calls,[[7,'b',true]]);
+  assert.equal(c.progress.length,0);
+  await context.finish(p);
+  assert.equal(calls.length,1);
+});
+
+test('an incomplete final lesson keeps its incomplete notice without reporting course completion',async()=>{
+  const {context,p,c,calls,status}=endingContext();p.l=c.sections[1].lessons[0];
+  context.flush=async()=>true;context.clearInterval=()=>calls.push('timer stopped');
+  await context.finish(p);
+  assert.deepEqual(calls,[]);
   assert.equal(p.ending,false);
   assert.match(status.textContent,/尚未完整觀看/);
+  assert.equal(c.progress.length,0);
 });
 
 test('progress normalizes real media length and only a real ended event carries completion intent',async()=>{

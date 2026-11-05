@@ -147,11 +147,11 @@ window.NSP = (() => {
       do { if(!await flush(p)){p.ending=false;return;} } while(p.pending>0 && player===p && state.token===p.token);
     }
     if(player!==p || state.token!==p.token)return;
-    if(!p.preview && !p.c.progress.some(row=>row.lesson_id===p.l.id && row.completed)){
+    const ordered=lessons(p.c),next=ordered[ordered.findIndex(l=>l.id===p.l.id)+1];
+    if(!next && !p.preview && !p.c.progress.some(row=>row.lesson_id===p.l.id && row.completed)){
       p.ending=false;playerElement('nspSaveStatus').textContent='此影片尚未完整觀看，請重新開啟影片，從已儲存的觀看進度繼續。';return;
     }
     clearInterval(p.timer);
-    const ordered=lessons(p.c),next=ordered[ordered.findIndex(l=>l.id===p.l.id)+1];
     if(next)await play(p.c.id,next.id,true);
     else playerElement('nspSaveStatus').textContent=p.preview?'本課程影片已全部預覽完畢。':p.c.makeup_synced===true?'已完成學習，已同步課程登錄的已補課紀錄。':p.c.makeup_synced===false?'學習進度已儲存；補課同步未完成，請重新播放最後一部影片至結束後重試。':'影片觀看紀錄已儲存，本課程影片已全部播放完畢。';
   }

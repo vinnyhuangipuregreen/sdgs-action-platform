@@ -62,7 +62,7 @@ class NspTests(unittest.TestCase):
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         try:
-            for scenario, expected in [('gap', {'completed':0,'autoplayTransitions':0,'alerts':0}),
+            for scenario, expected in [('gap', {'completed':0,'autoplayTransitions':2,'alerts':0}),
                                        ('normal', {'completed':3,'autoplayTransitions':2,'alerts':1})]:
                 course = self.request('GET', '/courses', headers=self.student)[0]
                 result = subprocess.run(['node', str(Path(__file__).parent/'helpers/nsp-playback-flow.cjs'),
