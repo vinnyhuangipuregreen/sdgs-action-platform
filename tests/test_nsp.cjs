@@ -272,7 +272,7 @@ test('last lesson saves and stops with a finished message instead of leaving the
   }
 });
 
-test('an ended event after seeking advances without marking uncredited content complete',async()=>{
+test('an ended event advances without fabricating completion when the server returns incomplete',async()=>{
   const {context,p,c,calls}=endingContext();
   context.flush=async()=>true;
   await context.finish(p);
@@ -395,7 +395,7 @@ test('course cards and detail show date icons and completed makeup lessons',asyn
   assert.match(html,/✅ 第一支/);assert.match(html,/✅ 第二支/);
 });
 
-test('returning makeup students see their completion timestamp and the 100 percent rule',async()=>{
+test('returning makeup students see their completion timestamp and playback-ended rule',async()=>{
   const elements={},listeners={},alerts=[];
   const c={id:1,title:'測試',category:'分類',instructors:[],sections:[{title:'章節',lessons:[{id:'a',title:'影片',url:'https://example.invalid/a.mp4',duration:7}]}],materials:[],progress:[{lesson_id:'a',completed:1,watched:7,position:7}],total:1,completed:1,percent:100,makeup_completed:true,makeup_completed_at:'2026-10-25 19:12:59'};
   const context=vm.createContext({URL,window:{addEventListener(){},scrollTo(){},alert(message){alerts.push(message);}},state:{token:'test',activeTab:'nsp',user:{name:'黃雅筠'}},setInterval(){},clearInterval(){},
@@ -404,7 +404,7 @@ test('returning makeup students see their completion timestamp and the 100 perce
   await listeners.click({target:{closest:()=>({dataset:{nsp:'play',id:'1',lesson:'a'}})}});
   assert.equal(elements.nspCompletionNotice.textContent,'黃雅筠 學員 您好！您已於 2026/10/25 19:12:59 完成學習。\n\n已經同步了您的補課紀錄，請至[課程登錄]頁面確認，謝謝。');
   assert.equal(elements.nspCompletionNotice.hidden,false);
-  assert.match(elements.nspApp.innerHTML,/每 10 秒自動儲存，觀看達影片 100% 後計為完成；播完自動播放下一支/);
+  assert.match(elements.nspApp.innerHTML,/每 10 秒自動儲存，影片播放結束後註記完成；播完自動播放下一支/);
   assert.doesNotMatch(elements.nspApp.innerHTML,/90%/);
   assert.deepEqual(alerts,['黃雅筠 學員 您好！您已於 2026/10/25 19:12:59 完成學習。\n\n已經同步了您的補課紀錄，請至[課程登錄]頁面確認，謝謝。']);
   await listeners.click({target:{closest:()=>({dataset:{nsp:'play',id:'1',lesson:'a'}})}});

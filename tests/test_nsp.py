@@ -62,16 +62,18 @@ class NspTests(unittest.TestCase):
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         try:
-            for scenario, expected in [('gap', {'completed':0,'autoplayTransitions':2,'alerts':0}),
+            for scenario, expected in [('gap', {'completed':3,'autoplayTransitions':2,'alerts':1}),
                                        ('normal', {'completed':3,'autoplayTransitions':2,'alerts':1})]:
+                with database.get_db(unscoped=True) as conn:
+                    conn.execute('DELETE FROM nsp_progress WHERE course_id=?', (cid,))
+                self.sync_mock.reset_mock()
                 course = self.request('GET', '/courses', headers=self.student)[0]
                 result = subprocess.run(['node', str(Path(__file__).parent/'helpers/nsp-playback-flow.cjs'),
                     f'http://127.0.0.1:{server.server_port}'], input=json.dumps({'course':course,'scenario':scenario}),
                     capture_output=True, text=True, encoding='utf-8', timeout=30)
                 self.assertEqual(result.returncode,0,result.stderr)
                 self.assertEqual(json.loads(result.stdout), expected)
-                if scenario == 'gap':
-                    self.sync_mock.assert_not_called()
+                self.assertEqual(self.sync_mock.call_count,2)
             self.assertTrue(self.request('GET',f'/courses/{cid}/completion',headers=self.student)['completed'])
             self.assertEqual(self.sync_mock.call_count,2)  # Final completion plus idempotent retry only.
         finally:
@@ -381,26 +383,25 @@ class NspTests(unittest.TestCase):
         with patch('app.nsp.requests.get', side_effect=requests.RequestException):
             self.assertIsNone(self.request('GET','/courses',headers=self.student)[0]['makeup_count'])
 
-    def test_repeated_segments_and_seeking_cannot_complete_or_sync_a_lesson(self):
+    def test_seek_to_end_requires_playback_end_then_persists_completion(self):
         req = self.prepare()
         cid = self.request('POST', '/admin/courses', req)['id']
         path = f'/courses/{cid}/progress/lesson_1'
         for _ in range(6):
             saved = self.request('PUT', path, {'position':20, 'watched_delta':20}, headers=self.student)
-        self.assertEqual(saved['watched'], 20)
-        self.assertEqual(saved['completed'], 0)
-        saved = self.request('PUT', path, {'position':100, 'watched_delta':1, 'ended':True}, headers=self.student)
-        self.assertEqual(saved['watched'], 20)
-        self.assertEqual(saved['completed'], 0)
+        self.assertEqual((saved['watched'],saved['completed']), (20,0))
+        saved = self.request('PUT', path, {'position':100, 'watched_delta':1}, headers=self.student)
+        self.assertEqual((saved['watched'],saved['completed']), (20,0))
         self.sync_mock.assert_not_called()
-        for position in (40, 60, 80, 100):
-            saved = self.request('PUT', path, {'position':position, 'watched_delta':20}, headers=self.student)
-        self.assertEqual(saved['watched'], 100)
-        self.assertEqual(saved['completed'], 0)  # Pausing at the end is not an ended event.
+        saved = self.request('PUT', path, {'position':99, 'ended':True}, headers=self.student)
+        self.assertEqual(saved['completed'],0)
         self.sync_mock.assert_not_called()
         saved = self.request('PUT', path, {'position':100, 'ended':True}, headers=self.student)
-        self.assertEqual(saved['completed'], 1)
+        self.assertEqual((saved['watched'],saved['completed']), (100,1))
         self.assertTrue(saved['makeup_synced'])
+        course=self.request('GET','/courses',headers=self.student)[0]
+        self.assertEqual((course['percent'],course['completed']), (100,1))
+        self.assertEqual(course['progress'][0]['completed'],1)
 
     def test_opening_a_completed_course_never_writes_makeup_and_invalid_flags_do_not_complete_it(self):
         req = self.prepare()

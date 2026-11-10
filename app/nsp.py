@@ -504,10 +504,12 @@ def install_nsp(app, require_user, require_admin):
             previous = conn.cursor().execute("SELECT watched FROM nsp_progress WHERE year_id=? AND account_type=? AND user_id=? AND course_id=? AND lesson_id=?", key).fetchone()
             watched = previous[0] if previous else 0
             position = min(req.position, duration)
-            # Credit the contiguous watched prefix, never repeat time or a seek over a gap.
+            # Keep partial progress contiguous; a playback-ended event completes the lesson.
             if position <= watched + delta + 0.05:
                 watched = max(watched, position)
-            completed = int(req.ended and duration > 0 and watched >= duration and position >= duration)
+            completed = int(req.ended and duration > 0 and position >= duration)
+            if completed:
+                watched = duration
             conn.cursor().execute("INSERT INTO nsp_progress VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(year_id,account_type,user_id,course_id,lesson_id) DO UPDATE SET position=excluded.position,watched=MAX(nsp_progress.watched,excluded.watched),completed=MAX(nsp_progress.completed,excluded.completed),updated_at=excluded.updated_at", (*key, position, watched, completed, now()))
             saved = conn.cursor().execute("SELECT watched,completed FROM nsp_progress WHERE year_id=? AND account_type=? AND user_id=? AND course_id=? AND lesson_id=?", key).fetchone()
             watched, completed = saved[0], saved[1]
