@@ -47,8 +47,11 @@ window.NSP = (() => {
   const lessons = c => c.sections.flatMap(s=>s.lessons);
   const course = id => previewCourse?.id===Number(id)?previewCourse:courses.find(c=>c.id===Number(id));
 
+  let catalogToken=null, catalogSearch="";
+
   async function load() {
     await stop();
+    if(catalogToken!==state.token){catalogToken=state.token;catalogSearch="";}
     const request = ++generation;
     if (!state.token) {
       root().innerHTML = `<div class="nsp-welcome"><span class="eyebrow">NSP 數位學習中心</span><h2>從理解，走向實踐</h2><p>登入後即可開始學習，保存您的課程進度。</p>${button('學員登入','login')}</div>`;
@@ -67,9 +70,9 @@ window.NSP = (() => {
     const total= courses.reduce((a,c)=>a+c.total,0), completed=courses.reduce((a,c)=>a+c.completed,0);
     root().innerHTML=`<section class="nsp-welcome"><span class="eyebrow">NSP 數位學習中心</span><h2>歡迎您，${esc(state.user?.name || '學員')}！</h2><p>這裡是您的 NSP 數位學習中心。讓我們一起積累知識、持續精進，解鎖您的 SDGs 永續智慧力！</p></section>
     <div class="nsp-stats">${[['☘','總堂數',courses.length+' 堂'],['✓','已學習',done+' 堂'],['◷','待學習',(courses.length-done)+' 堂'],['⌛','進度',(total?Math.round(completed/total*100):0)+'%']].map(([icon,name,n])=>`<div class="ds-card"><span>${icon}</span><small>${name}</small><strong>${n}</strong></div>`).join('')}</div>
-    <div class="nsp-catalog-toolbar"><h3>本學年度課程</h3><label>搜尋課程 <input id="nspSearch" placeholder="課程名稱、講師、分類"></label><label><input id="nspFavorites" type="checkbox"> 只看收藏</label></div><div id="nspCourseGrid" class="nsp-course-grid"></div>`;
+    <div class="nsp-catalog-toolbar"><h3>本學年度課程</h3><label>搜尋課程 <input id="nspSearch" type="search" name="nsp_course_query" autocomplete="off" value="${esc(catalogSearch)}" placeholder="課程名稱、講師、分類"></label><label><input id="nspFavorites" type="checkbox"> 只看收藏</label></div><div id="nspCourseGrid" class="nsp-course-grid"></div>`;
     renderCards();
-    document.getElementById('nspSearch').addEventListener('input',renderCards);
+    document.getElementById('nspSearch').addEventListener('input',event=>{catalogSearch=event.target.value;renderCards();});
     document.getElementById('nspFavorites').addEventListener('change',renderCards);
   }
   function renderCards() {
