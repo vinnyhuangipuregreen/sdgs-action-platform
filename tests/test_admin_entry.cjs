@@ -23,7 +23,7 @@ async function run(role, expired = false) {
     handleLogout: () => { state.token = null; state.user = null; },
     loadCenterActions: () => { events.push(['center']); return center; },
     loadMyWorksheets: () => { events.push(['worksheets']); }, loadSDGsData() {}, loadGameSettings() {},
-    fetch: async () => ({ ok: !expired, json: async () => ({ role }) }),
+    fetch: async () => ({ ok: !expired, status: expired ? 401 : 200, json: async () => ({ role }) }),
   });
   vm.runInContext(access + auth + init, context);
   const completion = start();

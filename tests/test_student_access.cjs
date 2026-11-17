@@ -16,6 +16,7 @@ function setup(user, token = null) {
     state, URLSearchParams, location: { pathname: '/', search: '', replace: value => events.push(['redirect', value]) },
     document: { querySelectorAll: () => [], querySelector: () => null, getElementById: id => id === 'worksheetTools' ? tools : id === 'tabPane_worksheet' ? pane : null },
     loadLeaderboard() {}, loadAdminDashboard() {},
+    loadCenterActions() {}, loadSDGsData() {}, loadGameSettings() {},
     showLoginModal: show => events.push(['login', show]),
   });
   vm.runInContext(switching + closing + auth, context);

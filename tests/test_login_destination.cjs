@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const {test} = require('node:test');
 const source = fs.readFileSync(require('node:path').join(__dirname, '../app/static/js/app.js'), 'utf8');
-const handler = source.slice(source.indexOf('async function handleLogin('), source.indexOf('async function handleAdminLogin('));
+const handler = source.slice(source.indexOf('async function requestLogin('), source.indexOf('async function handleAdminLogin('));
 
 function setup({destination = null, sso = false, ok = true, multiple = false} = {}) {
   const events = [];
@@ -11,7 +11,7 @@ function setup({destination = null, sso = false, ok = true, multiple = false} = 
     value: id === 'loginAcademicYear' ? '7' : 'test', classList: {add() {}, remove() {}}, appendChild() {},
   }]));
   const context = vm.createContext({
-    state: {studentDestination: destination}, API_BASE: '/api', URL,
+    state: {studentDestination: destination}, API_BASE: '/api', URL, AbortController, setTimeout, clearTimeout,
     document: {getElementById: id => elements[id], createElement: () => ({})},
     localStorage: {setItem: (...args) => events.push(['stored', ...args])},
     location: {replace: url => events.push(['redirect', url])},

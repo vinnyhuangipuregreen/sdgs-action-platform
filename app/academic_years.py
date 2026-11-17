@@ -21,6 +21,8 @@ _REGISTRY_READY = set()
 
 
 def ensure_registry():
+    if os.getenv("VERCEL") and os.getenv("SDGS_RUN_MIGRATIONS") != "1":
+        return
     init_db()
     from app import database
     key=(str(database.DB_PATH),os.getenv('TURSO_DATABASE_URL'),os.getenv('ROLE_DATABASE_URL'),os.getenv('ROLE_DATABASE_PATH'))

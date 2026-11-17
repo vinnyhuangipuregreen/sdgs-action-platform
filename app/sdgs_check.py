@@ -12,6 +12,8 @@ def ensure_sdgs_seeded(conn):
     Uses single-pipeline batch execution so it completes in < 0.2s on Vercel.
     """
     global _SDGS_VERIFIED
+    if os.getenv("VERCEL") and os.getenv("SDGS_RUN_MIGRATIONS") != "1":
+        return
     if _SDGS_VERIFIED:
         return
     try:

@@ -1,4 +1,7 @@
 import sys
+import time
+import uuid
+import logging
 import os
 import json
 import csv
@@ -16,6 +19,7 @@ from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field, model_validator
 from app.activity_details import ActivityDetails, activity_text
 
+from app.database_http import DatabaseUnavailable, deadline
 from app.database import get_db, init_db, get_game_settings, set_game_settings, DEFAULT_GAME_SETTINGS
 from app.auth import hash_password, verify_password, create_access_token, decode_access_token, get_account_type
 from app.docx_exporter import create_worksheet_docx, create_worksheet_doc
@@ -37,6 +41,47 @@ app = FastAPI(
     description="佛光永續學院 × 佛光大學應用科技與設計學院 專案平台 v3.0",
     version="3.0.0"
 )
+
+
+auth_logger = logging.getLogger("sdgs.auth")
+auth_logger.setLevel(logging.INFO)
+if not auth_logger.handlers:
+    auth_logger.addHandler(logging.StreamHandler())
+auth_logger.propagate = False
+
+
+async def database_request_context(request: Request, call_next):
+    request.state.request_id = uuid.uuid4().hex
+    budget = 12 if request.url.path == "/api/auth/login" else 5 if request.url.path == "/healthz" else None
+    token = deadline.set(time.monotonic() + budget if budget else None)
+    started = time.monotonic()
+    try:
+        try:
+            response = await call_next(request)
+        except DatabaseUnavailable as error:
+            response = await database_unavailable(request, error)
+        response.headers["X-Request-ID"] = request.state.request_id
+        if request.url.path == "/api/auth/login":
+            response.headers["Cache-Control"] = "no-store"
+            auth_logger.info(json.dumps({
+                "event": "login", "request_id": request.state.request_id,
+                "status": response.status_code, "duration_ms": round((time.monotonic()-started)*1000),
+            }))
+        return response
+    finally:
+        deadline.reset(token)
+
+
+@app.exception_handler(DatabaseUnavailable)
+async def database_unavailable(request: Request, error: DatabaseUnavailable):
+    auth_logger.warning(json.dumps({
+        "event": "database_unavailable", "request_id": request.state.request_id,
+        "dependency": error.dependency, "reason": error.reason,
+    }))
+    return JSONResponse(status_code=503, headers={"Retry-After": "2", "Cache-Control": "no-store"}, content={
+        "detail": "系統暫時忙碌，請稍候再試。", "code": "DATABASE_UNAVAILABLE",
+        "request_id": request.state.request_id,
+    })
 
 
 @app.on_event("startup")
@@ -64,10 +109,13 @@ def healthz():
             connection.cursor().execute("SELECT 1")
         with get_accounts_db() as connection:
             connection.cursor().execute("SELECT 1")
+    except DatabaseUnavailable:
+        raise
     except Exception as error:
         raise HTTPException(status_code=503, detail="資料庫連線失敗") from error
     return {
         "status": "ok",
+        "release": "login-resilience-20261117",
         "environment": os.getenv("ENVIRONMENT", "development"),
         "database": "turso" if os.getenv("TURSO_DATABASE_URL") else "sqlite",
         "identity_database": "turso" if os.getenv("ROLE_DATABASE_URL") else "sqlite",
@@ -1242,3 +1290,6 @@ def export_all_worksheets_csv(user: dict = Depends(require_admin)):
         )
 
 install_sso(app, require_user)
+
+# Keep the request budget and error handling outside academic-year middleware.
+app.middleware("http")(database_request_context)

@@ -136,7 +136,7 @@ def session_revoked(session_id):
         cursor = connection.cursor()
         key = schema_key("revocations")
         with _SCHEMA_LOCK:
-            if key not in _SCHEMA_READY:
+            if key not in _SCHEMA_READY and not (os.getenv("VERCEL") and os.getenv("SDGS_RUN_MIGRATIONS") != "1"):
                 cursor.execute("CREATE TABLE IF NOT EXISTS sso_revoked_sessions (session_id TEXT PRIMARY KEY, expires_at INTEGER NOT NULL)")
                 connection.commit()
                 _SCHEMA_READY.add(key)
@@ -145,6 +145,8 @@ def session_revoked(session_id):
 
 
 def ensure_ticket_table(cursor):
+    if os.getenv("VERCEL") and os.getenv("SDGS_RUN_MIGRATIONS") != "1":
+        return
     key = schema_key("tickets")
     with _SCHEMA_LOCK:
         if key in _SCHEMA_READY:

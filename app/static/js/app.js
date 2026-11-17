@@ -118,9 +118,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   switchTab(publicTabs.includes(initialTab) ? initialTab : "home");
   await checkAuth(false);
   if (new URLSearchParams(location.search).get("ui") === "login") document.getElementById("logoutBtn").click();
-  if (!adminEntry) {
-    await loadCenterActions();
-    if (state.user?.role === "student") await loadMyWorksheets(true);
+  if (!adminEntry && state.activeTab === "worksheet" && state.user?.role === "student") {
+    void loadMyWorksheets(true);
   }
   if (new URLSearchParams(location.search).get("sso_logout") === "1") {
     handleLogout();
@@ -133,9 +132,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (initialTab === "admin-matching" && state.user && ["admin", "teacher"].includes(state.user.role)) switchAdminSubTab("matching");
     if (initialTab === "admin-attendance" && state.user && ["admin", "teacher"].includes(state.user.role)) switchAdminSubTab("attendance");
   }
-  if (adminEntry) await loadCenterActions();
-  await loadSDGsData();
-  await loadGameSettings();
+
 });
 
 function initUIEvents() {
@@ -234,6 +231,9 @@ function switchTab(tabId) {
     targetTabBtn.classList.remove("text-slate-600");
   }
 
+  if (tabId === "worksheet") void Promise.all([loadCenterActions(), loadSDGsData()]);
+  if (tabId === "sdgs") void loadSDGsData();
+  if (tabId === "earth_defense") void loadGameSettings();
   if (tabId === "nsp") window.NSP?.load();
   if (tabId === "leaderboard") loadLeaderboard();
   if (tabId === "admin") loadAdminDashboard();
@@ -267,16 +267,44 @@ async function checkAuth(loadWorksheets = true) {
       if (state.studentDestination === "worksheet") switchTab("worksheet");
       if (state.activeTab === "nsp" || state.studentDestination === "nsp") switchTab("nsp");
       if (loadWorksheets && state.user.role === "student") await loadMyWorksheets(true);
-    } else {
+    } else if (res.status === 401 || res.status === 403) {
       handleLogout();
+    } else {
+      showToast("系統暫時忙碌，請稍候重新整理。", "warning");
     }
   } catch (err) {
-    handleLogout();
+    showToast("暫時無法確認登入狀態，請稍候重新整理。", "warning");
   }
+}
+
+async function requestLogin(payload) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 20000);
+  try {
+    const res = await fetch(`${API_BASE}/auth/login`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload), signal: controller.signal
+    });
+    let data;
+    try { data = await res.json(); }
+    catch (_) { throw new Error("系統暫時忙碌，請稍候再試。"); }
+    if (res.status >= 500 || res.status === 429) {
+      throw new Error("系統暫時忙碌，請稍候再試。" + (data.request_id ? `（查詢碼：${data.request_id}）` : ""));
+    }
+    return {res, data};
+  } catch (error) {
+    if (error.name === "AbortError") throw new Error("登入等候逾時，請稍候再試。");
+    if (error instanceof TypeError) throw new Error("無法連線，請確認網路後重試。");
+    throw error;
+  } finally { clearTimeout(timer); }
 }
 
 async function handleLogin(e, explicitStudentId = null) {
   if (e) e.preventDefault();
+  if (state.loginPending) return;
+  state.loginPending = true;
+  const button = e?.submitter;
+  if (button) button.disabled = true;
   const account = document.getElementById("loginAccount").value.trim();
   const password = document.getElementById("loginPassword").value.trim();
   const errorEl = document.getElementById("loginError");
@@ -288,12 +316,7 @@ async function handleLogin(e, explicitStudentId = null) {
     const payload = { account, password, account_type: "student", academic_year_id: Number(document.getElementById('loginAcademicYear').value) };
     if (explicitStudentId) payload.student_id = explicitStudentId;
 
-    const res = await fetch(`${API_BASE}/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-    const data = await res.json();
+    const {res, data} = await requestLogin(payload);
     if (!res.ok) {
       errorEl.textContent = data.detail || "登入失敗，請確認帳號密碼";
       errorEl.classList.remove("hidden");
@@ -318,7 +341,7 @@ async function handleLogin(e, explicitStudentId = null) {
       return;
     }
 
-    if (state.token) await fetch(`${API_BASE}/auth/logout`, {method: "POST", headers: {Authorization: `Bearer ${state.token}`}}).catch(() => {});
+    if (state.token) void fetch(`${API_BASE}/auth/logout`, {method: "POST", headers: {Authorization: `Bearer ${state.token}`}, keepalive: true}).catch(() => {});
     state.token = data.token;
     state.user = data.user;
     localStorage.setItem("sdgs_token", data.token);
@@ -332,40 +355,40 @@ async function handleLogin(e, explicitStudentId = null) {
       location.replace(target.href);
       return;
     }
-    await Promise.all([loadCenterActions(), loadSDGsData(), loadGameSettings()]);
     if (state.studentDestination === "worksheet") {
       state.studentDestination = null;
       switchTab("worksheet");
     }
     if (state.studentDestination === "nsp") { state.studentDestination = null; switchTab("nsp"); }
-    // 切換或登入新帳號時，自動載入該帳號之表單資料
-    await loadMyWorksheets(true);
+    if (state.activeTab === "worksheet") void loadMyWorksheets(true);
   } catch (err) {
-    errorEl.textContent = "連線異常，請稍後再試";
+    errorEl.textContent = err.message || "無法連線，請稍候再試。";
     errorEl.classList.remove("hidden");
+  } finally {
+    state.loginPending = false;
+    if (button) button.disabled = false;
   }
 }
 
 async function handleAdminLogin(e) {
   e.preventDefault();
+  if (state.loginPending) return;
+  state.loginPending = true;
+  const button = e.submitter;
+  if (button) button.disabled = true;
   const account = document.getElementById("adminAccount").value.trim();
   const password = document.getElementById("adminPassword").value.trim();
   const errEl = document.getElementById("adminLoginError");
   errEl.classList.add("hidden");
 
   try {
-    const res = await fetch(`${API_BASE}/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ account, password, account_type: "staff" })
-    });
-    const data = await res.json();
+    const {res, data} = await requestLogin({ account, password, account_type: "staff" });
     if (!res.ok || !['admin', 'teacher'].includes(data.user?.role)) {
       errEl.textContent = data.detail || "管理員驗證失敗，需要管理權限";
       errEl.classList.remove("hidden");
       return;
     }
-    if (state.token) await fetch(`${API_BASE}/auth/logout`, {method: "POST", headers: {Authorization: `Bearer ${state.token}`}}).catch(() => {});
+    if (state.token) void fetch(`${API_BASE}/auth/logout`, {method: "POST", headers: {Authorization: `Bearer ${state.token}`}, keepalive: true}).catch(() => {});
     state.token = data.token;
     state.user = data.user;
     localStorage.setItem("sdgs_token", data.token);
@@ -375,14 +398,16 @@ async function handleAdminLogin(e) {
     updateUserUI();
     showToast(`管理員登入成功，歡迎 ${data.user.name}！`, "success");
     if (resumeCourseSignIn()) return;
-    await Promise.all([loadCenterActions(), loadSDGsData(), loadGameSettings()]);
     switchTab("admin");
     if (location.hash === "#admin-matching") switchAdminSubTab("matching");
     if (location.hash === "#admin-attendance") switchAdminSubTab("attendance");
   } catch (err) {
     document.getElementById("adminPassword").value = "";
-    errEl.textContent = "連線異常，請重試";
+    errEl.textContent = err.message || "無法連線，請稍候再試。";
     errEl.classList.remove("hidden");
+  } finally {
+    state.loginPending = false;
+    if (button) button.disabled = false;
   }
 }
 
@@ -456,6 +481,7 @@ function updateUserUI() {
 // 3. SDGs Reference & Smart Quote Module
 // ==============================================================================
 async function loadSDGsData() {
+  if (state.goals.length && state.targets.length) return;
   try {
     const [resGoals, resTargets] = await Promise.all([
       fetch(`${API_BASE}/sdgs/goals`),

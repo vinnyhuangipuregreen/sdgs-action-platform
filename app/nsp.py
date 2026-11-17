@@ -68,6 +68,8 @@ _ready = set()
 
 
 def initialize():
+    if os.getenv("VERCEL") and os.getenv("SDGS_RUN_MIGRATIONS") != "1":
+        return
     from app import database as db
     key = (db.DB_PATH, os.getenv("TURSO_DATABASE_URL", ""))
     if key in _ready:
